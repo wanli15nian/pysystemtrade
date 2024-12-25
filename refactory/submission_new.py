@@ -288,6 +288,20 @@ def calculate_instrument_pnl(instrument, position_buffered, price):
 
 
 ############################################################################################# 分割线
+def div_mult_single_period(corr, weights, dm_max=2.5):
+    corrmatrix = np.array([[corr[1], corr[0]], [corr[0], corr[1]]])
+    try:
+        variance = weights.dot(corrmatrix).dot(weights)
+        risk = variance ** 0.5
+    except:
+        risk = np.nan
+    if np.isnan(risk):
+        return 1.0
+    if risk < 0.0000001:
+        return 1.0
+    dm = np.min([1.0 / risk, dm_max])
+    return dm
+
 
 def get_turnover_for_list_of_rules(instrument_list, trading_rule_list):
 
@@ -415,10 +429,57 @@ def process_instrument_pnl(instrument_code):
         list_of_forecast.append(forecast_df)
 
     list_of_resampled_forecast = [forecast_df.resample('W').last() for forecast_df in list_of_forecast]
-    pooled_data = combine_instrument_pnl_df(list_of_resampled_forecast)
+    pooled_forecast_data = combine_instrument_pnl_df(list_of_resampled_forecast)
 
-    # for fit_dates in end_list:
-    #     raw_matrix =
+    pooled_fdm = True
+    ew_lookback = 250
+    min_periods = 20
+
+    if pooled_fdm == True:
+        ew_lookback = ew_lookback * len(instruments)
+        min_periods = min_periods * len(instruments)
+
+    raw_correlations = pooled_forecast_data.ewm(span=ew_lookback, min_periods=min_periods,
+                                                ignore_na=True).corr(pairwise=True)
+    size_of_matrix = len(pooled_forecast_data)
+
+    corr_list = []
+    for fit_end in end_list:
+        corr_matrix_values = (raw_correlations[raw_correlations.index.get_level_values(0) < fit_end]
+                              .tail(size_of_matrix)
+                              .values)
+        corr_matrix_values = corr_matrix_values[-1]
+        for corr_value in corr_matrix_values:
+            if corr_value < 0:
+                corr_value = 0
+        corr_list.append(corr_matrix_values)
+    # corr_list.insert(0, np.array([0.99, 1]))  # 为了让corr_list的element和end_list对齐，先不加起始默认matrix
+
+    div_mult_vector = []
+    for corrmatrix, start_of_period in zip(corr_list, end_list):
+        weight_slice = forecast_weights[:start_of_period]
+        if weight_slice.shape[0] == 0:
+            div_mult_vector.append(1.0)
+            continue
+
+        weights_dict = np.array(weight_slice.iloc[-1])
+        div_multiplier = div_mult_single_period(corrmatrix, weights_dict)
+        div_mult_vector.append(div_multiplier)
+    div_mult_df = pd.Series(div_mult_vector, index=end_list)
+    div_mult_df_daily = div_mult_df.reindex(forecast_weights.index, method="ffill")
+    div_mult_df_daily[div_mult_df_daily.isna()] = 1.0
+    div_mult_df_smoothed = div_mult_df_daily.ewm(span=125).mean()
+
+    instrument_forecast = {}
+    for trading_rule in trading_rule_list:
+        forecast = get_capped_forecast(instrument_code, trading_rule)
+        instrument_forecast[trading_rule] = forecast
+    instrument_forecast = pd.DataFrame(instrument_forecast)
+
+    combined_forecast_without_cap = (forecast_weights * instrument_forecast).sum(axis=1) * div_mult_df_smoothed.ffill()
+
+
+
 
     combined_forecast = (forecast_weights * forecast_df).sum(axis=1) * fdm
     final_forecast = combined_forecast.clip(20, -20)
