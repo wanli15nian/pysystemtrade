@@ -99,26 +99,6 @@ def generate_fit_end_list(start_date, end_date):
     return end_list
 
 
-def calculate_forecast_diversify_multiplier(forecasts, forecast_weights):
-    weekly_forecast = forecasts.resample('W').last()
-    fit_end_list = generate_fit_end_list(weekly_forecast.index[0], weekly_forecast.index[-1])
-
-    full_corr = weekly_forecast.ewm(span=250, min_periods=20, ignore_na=True).corr(pairwise=True)
-    size_of_matrix = len(weekly_forecast.columns)
-    dm_list = []
-    for fit_end in fit_end_list:
-        corr = full_corr[full_corr.index.get_level_values(0) < fit_end].tail(size_of_matrix).values
-        w = forecast_weights[:fit_end].iloc[-1].values
-        variance = w.dot(corr).dot(w.transpose())
-        dm = np.min([1 / variance ** 0.5, 2.5])
-        dm_list.append(dm)
-
-    dm_yearly = pd.Series(dm_list, index=fit_end_list)
-    dm_daily = dm_yearly.reindex(forecast_weights.index, method='ffill')
-    dm_daily[dm_daily.isna()] = 1.0
-    dm_smoonth = dm_daily.ewm(span=125).mean()
-    return dm_smoonth
-
 
 def calculate_forecast_weights(pnl_df, fit_end):
     number = len(pnl_df.columns)
