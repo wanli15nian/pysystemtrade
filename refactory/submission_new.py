@@ -3,7 +3,7 @@ import pandas as pd
 
 from refactory.apply_buffer_to_position import apply_buffer
 from refactory.calculate_forecast import get_capped_forecast
-from refactory.data_source import get_daily_price, get_point_size, get_roll_parameters
+from refactory.data_source import get_point_size, get_roll_parameters, get_daily_price
 from refactory.utils import calculate_mixed_volatility, get_corr_estimator_for_instrument_weight, \
     get_stdev_estimator_for_instrument_weight, get_mean_estimator, optimisation, calculate_weighted_average_with_nans, \
     get_cost_per_trade, single_resampled_set_of_returns, calculate_volatility_scalar
@@ -109,9 +109,6 @@ def calculate_forecast_weights(pnl_df, fit_end):
     mean_list = get_mean_estimator(pnl_df, fit_end, span, min_periods)
     norm_mean = [a / b for a, b in zip(mean_list, norm_factor)]
     corr = get_corr_estimator_for_instrument_weight(pnl_df, fit_end, span, min_periods_corr)  # Corr CLEARED
-
-    #FIXME: 所以norm_mean和mean_list是怎么用的
-    #有时候是norm_mean, 有时候是mean_list. 先算出来的mean_list和stdev_list, 然后处理了
     weight = optimisation(number, corr, norm_mean, norm_stdev)
     return weight
 
@@ -154,7 +151,6 @@ def calculate_instrument_pnl(instrument, position_buffered, price):
     return pnl_daily
 
 
-############################################################################################# 分割线
 def div_mult_single_period(corr, weights, dm_max=2.5):
     corrmatrix = np.array([[corr[1], corr[0]], [corr[0], corr[1]]])
     try:
@@ -185,10 +181,8 @@ def get_turnover_for_list_of_rules(instrument_list, trading_rule_list):
 
     return turnover_dict
 
-def process_instrument_pnl(instrument_code):
-    all_instruments = my_config.instruments
 
-    trading_rule_list = ['ewmac32', 'ewmac8']
+def prepare_all_instr_data(all_instruments, trading_rule_list):
     all_instrument_data = {}
     for instrument in all_instruments:
         individual_instr_data = {}
@@ -209,89 +203,31 @@ def process_instrument_pnl(instrument_code):
         individual_instr_data['position_target'] = position_target
 
         all_instrument_data[instrument] = individual_instr_data
+    return all_instrument_data
 
-    # Turnovers CLEARED
+def process_instrument_pnl(instrument_code):
+    all_instruments = my_config.instruments
+    trading_rule_list = ['ewmac32', 'ewmac8']
+    all_instrument_data = prepare_all_instr_data(all_instruments, trading_rule_list)
+
     turnovers = get_turnover_for_list_of_rules(all_instruments, trading_rule_list)
 
-    gross_returns_dict = {}
-    for instrument in all_instruments:
-        price = all_instrument_data[instrument]['price']
-        point_size = all_instrument_data[instrument]['point_size']
-        forecast = all_instrument_data[instrument]['forecast_df']
-        pos_target = all_instrument_data[instrument]['position_target']
+    gross_returns_dict = calc_gross_returns_dict_for_all_instr(all_instrument_data, all_instruments)
 
-        _, gross_returns_series = calculate_gross_daily_pnl(forecast=forecast, point_size=point_size, price=price,
-                                                            position_target=pos_target)
-        gross_returns_single_instrument_df = gross_returns_series.replace(0, np.nan)
-        gross_returns_dict[instrument] = gross_returns_single_instrument_df
-
-
-    dict_of_costs = {}
     forecast_length = [len(all_instrument_data[instrument]['forecast_df']) for instrument in all_instruments]
     total_length = float(sum(forecast_length))
     weights = [forecast_length / total_length for forecast_length in forecast_length]
-    for instrument in all_instruments:
-        SR_dict = {}
-        price = all_instrument_data[instrument]['price']
-        point_size = all_instrument_data[instrument]['point_size']
-        pos_target = all_instrument_data[instrument]['position_target']
-        for trading_rule in trading_rule_list:
-            forecast = all_instrument_data[instrument]['forecast_df'][trading_rule]
+    dict_of_costs = calc_dict_of_costs_for_all_instr(all_instrument_data, all_instruments, trading_rule_list, weights)
 
-            sr_cost = get_SR_cost_for_instrument_forecast(instrument, trading_rule, all_instruments, weights)
-            aligned_avg, gross_returns_series = calculate_gross_daily_pnl(forecast=forecast, point_size=point_size,
-                                                                          price=price, position_target=pos_target)
-            _, cost_curve = calculate_factor_pnl(gross_returns_series=gross_returns_series, aligned_avg=aligned_avg, price=price,
-                                                 point_size=point_size, sr_cost=sr_cost)
-            cost_curve.iloc[:11] = np.nan #QUESTION: 为什么前11个数都是Nan
-            if instrument == 'US10':
-                cost_curve.iloc[:13] = np.nan #QUESTION: 为什么到了US10是前13个数字
-            cost_curve_mean = cost_curve.mean()
-            gross_returns_series = gross_returns_series.replace(0, np.nan)
-            gross_returns_std = gross_returns_series.std()
-            annual_cost_SR = 16 * cost_curve_mean / gross_returns_std
-            SR_dict[trading_rule] = annual_cost_SR
-        dict_of_costs[instrument] = SR_dict
-
-
-    # CLEARED
     #QUESTION: Find out why the cost multiplier is set at 2
+    dict_of_sr_costs = calc_dict_of_sr_costs_for_all_instr(dict_of_costs, instrument_code, trading_rule_list, turnovers)
 
-    cost_multiplier = 2
-    dict_of_sr_costs = {}
-    for trading_rule in trading_rule_list:
-        turnover = turnovers[trading_rule][instrument_code]
-        cost = dict_of_costs[instrument_code][trading_rule]
-        cost_per_turnover_this_asset = cost / turnover
-
-        all_turnovers = turnovers[trading_rule]
-        average_turnover_across_assets = np.nanmean(list(all_turnovers.values()))
-
-        pooled_cost = cost_per_turnover_this_asset * average_turnover_across_assets * cost_multiplier
-        dict_of_sr_costs[trading_rule] = pooled_cost
-
-    net_returns_dict = {}
-    for instrument in gross_returns_dict.keys():
-        gross_returns = gross_returns_dict[instrument]
-        net_returns_single_instrument = {}
-        for column_name in gross_returns.columns:
-            gross_returns_daily_std = gross_returns[column_name].std()
-            daily_sr_cost = dict_of_sr_costs[column_name] / 16
-            daily_returns_cost = (daily_sr_cost * gross_returns_daily_std).item()
-            net_returns_single_instrument_rule = gross_returns[column_name] + daily_returns_cost
-            net_returns_single_instrument[column_name] = net_returns_single_instrument_rule
-        net_returns_single_instrument = pd.DataFrame(net_returns_single_instrument)
-        net_returns_dict[instrument] = net_returns_single_instrument  # CLEARED
-
-    net_returns = single_resampled_set_of_returns(net_returns_dict, frequency='W')  # CLEARED
-
+    net_returns = calc_net_returns_dict_for_all_instr(dict_of_sr_costs, gross_returns_dict)
 
     start_date = net_returns.index[0]
     end_date = net_returns.index[-1]
     end_list = generate_fit_end_list(start_date, end_date)
     weight_df = pd.DataFrame([calculate_forecast_weights(net_returns, end) for end in end_list], index=end_list)
-
-
     # To add the initial weight
     column_num = len(weight_df.columns)
     initial_weight = {col: 1/column_num for col in weight_df.columns}
@@ -305,15 +241,7 @@ def process_instrument_pnl(instrument_code):
     forecast_weights = daily_forecast_weights_fixed_to_forecasts_unsmoothed.ewm(span=125).mean()
 
     # 跳过一个weight normalisation to 1 的函数
-    # fdm = calculate_forecast_diversify_multiplier(forecast, forecast_weights)
-    list_of_forecast = []
-    for instrument in all_instruments:
-        forecast_dict = {}
-        for trading_rule in trading_rule_list:
-            forecast = all_instrument_data[instrument]['forecast_df'][trading_rule]
-            forecast_dict[trading_rule] = forecast
-        forecast_df = pd.DataFrame(forecast_dict)  #TODO: Forecast df 的Index有问题，后期resample有点困难
-        list_of_forecast.append(forecast_df)
+    list_of_forecast = [all_instrument_data[instrument]['forecast_df'] for instrument in all_instruments]
 
     list_of_resampled_forecast = [forecast_df.resample('W').last() for forecast_df in list_of_forecast]
     pooled_forecast_data = combine_instrument_pnl_df(list_of_resampled_forecast)
@@ -373,6 +301,82 @@ def process_instrument_pnl(instrument_code):
     return pnl_daily
 
 
+def calc_net_returns_dict_for_all_instr(dict_of_sr_costs, gross_returns_dict):
+    net_returns_dict = {}
+    for instrument in gross_returns_dict.keys():
+        gross_returns = gross_returns_dict[instrument]
+        net_returns_single_instrument = {}
+        for column_name in gross_returns.columns:
+            gross_returns_daily_std = gross_returns[column_name].std()
+            daily_sr_cost = dict_of_sr_costs[column_name] / 16
+            daily_returns_cost = (daily_sr_cost * gross_returns_daily_std).item()
+            net_returns_single_instrument_rule = gross_returns[column_name] + daily_returns_cost
+            net_returns_single_instrument[column_name] = net_returns_single_instrument_rule
+        net_returns_single_instrument = pd.DataFrame(net_returns_single_instrument)
+        net_returns_dict[instrument] = net_returns_single_instrument  # CLEARED
+    net_returns = single_resampled_set_of_returns(net_returns_dict, frequency='W')  # CLEARED
+    return net_returns
+
+
+def calc_dict_of_sr_costs_for_all_instr(dict_of_costs, instrument_code, trading_rule_list, turnovers):
+    cost_multiplier = 2
+    dict_of_sr_costs = {}
+    for trading_rule in trading_rule_list:
+        turnover = turnovers[trading_rule][instrument_code]
+        cost = dict_of_costs[instrument_code][trading_rule]
+        cost_per_turnover_this_asset = cost / turnover
+
+        all_turnovers = turnovers[trading_rule]
+        average_turnover_across_assets = np.nanmean(list(all_turnovers.values()))
+
+        pooled_cost = cost_per_turnover_this_asset * average_turnover_across_assets * cost_multiplier
+        dict_of_sr_costs[trading_rule] = pooled_cost
+    return dict_of_sr_costs
+
+
+def calc_dict_of_costs_for_all_instr(all_instrument_data, all_instruments, trading_rule_list, weights):
+    dict_of_costs = {}
+    for instrument in all_instruments:
+        SR_dict = {}
+        price = all_instrument_data[instrument]['price']
+        point_size = all_instrument_data[instrument]['point_size']
+        pos_target = all_instrument_data[instrument]['position_target']
+        for trading_rule in trading_rule_list:
+            forecast = all_instrument_data[instrument]['forecast_df'][trading_rule]
+
+            sr_cost = get_SR_cost_for_instrument_forecast(instrument, trading_rule, all_instruments, weights)
+            aligned_avg, gross_returns_series = calculate_gross_daily_pnl(forecast=forecast, point_size=point_size,
+                                                                          price=price, position_target=pos_target)
+            _, cost_curve = calculate_factor_pnl(gross_returns_series=gross_returns_series, aligned_avg=aligned_avg,
+                                                 price=price,
+                                                 point_size=point_size, sr_cost=sr_cost)
+            cost_curve.iloc[:11] = np.nan  # QUESTION: 为什么前11个数都是Nan
+            if instrument == 'US10':
+                cost_curve.iloc[:13] = np.nan  # QUESTION: 为什么到了US10是前13个数字
+            cost_curve_mean = cost_curve.mean()
+            gross_returns_series = gross_returns_series.replace(0, np.nan)
+            gross_returns_std = gross_returns_series.std()
+            annual_cost_SR = 16 * cost_curve_mean / gross_returns_std
+            SR_dict[trading_rule] = annual_cost_SR
+        dict_of_costs[instrument] = SR_dict
+    return dict_of_costs
+
+
+def calc_gross_returns_dict_for_all_instr(all_instrument_data, all_instruments):
+    gross_returns_dict = {}
+    for instrument in all_instruments:
+        price = all_instrument_data[instrument]['price']
+        point_size = all_instrument_data[instrument]['point_size']
+        forecast = all_instrument_data[instrument]['forecast_df']
+        pos_target = all_instrument_data[instrument]['position_target']
+
+        _, gross_returns_series = calculate_gross_daily_pnl(forecast=forecast, point_size=point_size, price=price,
+                                                            position_target=pos_target)
+        gross_returns_single_instrument_df = gross_returns_series.replace(0, np.nan)
+        gross_returns_dict[instrument] = gross_returns_single_instrument_df
+    return gross_returns_dict
+
+
 def calc_instr_daily_pnl_from_buffered_pos(instrument_code, combined_forecast):
     volatility_scalar = calculate_volatility_scalar(instrument_code, capital=500000, annual_percentage_volatility_target=0.25)
     volatility_scalar = volatility_scalar.reindex(combined_forecast.index, method="ffill")
@@ -398,3 +402,5 @@ def main(my_config):
 
 if __name__ == '__main__':
     main(my_config)
+
+

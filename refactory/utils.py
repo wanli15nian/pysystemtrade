@@ -228,3 +228,5 @@ def calculate_volatility_scalar(instrument_code, capital=1000000, annual_percent
     volatility_scalar = cash_volatility_target / value_volatiliity
 
     return volatility_scalar
+
+
