@@ -1,61 +1,17 @@
 import numpy as np
 import pandas as pd
-from copy import copy
 
-from refactory.data_source import get_daily_price, get_raw_carry_data, get_point_size, get_block_value, \
-    get_roll_parameters
-from refactory.utils import get_volatily, ewmac, calculate_mixed_volatility, get_corr_estimator_for_instrument_weight, \
+from refactory.apply_buffer_to_position import apply_buffer
+from refactory.calculate_forecast import get_capped_forecast
+from refactory.data_source import get_daily_price, get_point_size, get_roll_parameters
+from refactory.utils import calculate_mixed_volatility, get_corr_estimator_for_instrument_weight, \
     get_stdev_estimator_for_instrument_weight, get_mean_estimator, optimisation, calculate_weighted_average_with_nans, \
-    get_cost_per_trade, single_resampled_set_of_returns
+    get_cost_per_trade, single_resampled_set_of_returns, calculate_volatility_scalar
 from sysdata.config.configdata import Config
 
 my_config = Config()
 my_config.instruments = ["CORN", "SOFR", "SP500_micro", 'US10']
 
-def get_capped_forecast(instrument_code, rule_name):
-    price = get_daily_price(instrument_code)
-    if rule_name == 'ewmac32':
-        raw_ewmac32 = ewmac(price, 32, 128, 1)
-        ewmac32 = final_forecast('ewmac32', raw_ewmac32, price, 20)
-        return ewmac32
-    if rule_name == 'ewmac8':
-        raw_ewmac8 = ewmac(price, 8, 32, 1)
-        ewmac8 = final_forecast('ewmac8', raw_ewmac8, price, 20)
-        return ewmac8
-    else:
-        raise 'Rule not defined '
-
-
-def final_forecast(name, raw_forecast, price, upper_cap=20):
-    raw_forecast[raw_forecast == 0] = np.nan
-
-    # TODO:为什么有的用价格波动率，有的用收益率波动率？
-    vol = get_volatily(price)
-    adjust_forecast = raw_forecast / vol
-
-    scalar = get_forecast_scalar(adjust_forecast)
-    scaled_forecast = scalar * adjust_forecast
-
-    lower_cap = -upper_cap
-    capped_forecast = scaled_forecast.clip(lower=lower_cap, upper=upper_cap)
-
-    capped_forecast.rename(name, inplace=True)
-
-    return capped_forecast
-
-
-def get_forecast_scalar(raw_forecast, window=250000, min_period=500, target_abs_forecast=10, backfill=True):
-    forecast = copy(raw_forecast)
-    forecast = forecast.abs()
-    ave_abs_value = forecast.rolling(window=window, min_periods=min_period).mean()
-    scaling_factor = target_abs_forecast / ave_abs_value
-    if backfill:
-        scaling_factor = scaling_factor.bfill()
-    return scaling_factor
-
-###################################################################################################################
-
-# FIXME 为何做了两次risk target？
 def get_pos_target_from_risk_target(price, point_size, capital=1000000, risk_target=0.16):
     ret_volatility = calculate_mixed_volatility(price.diff(), slow_vol_years=10)
     daily_risk_target = risk_target / (256 ** 0.5)
@@ -64,7 +20,7 @@ def get_pos_target_from_risk_target(price, point_size, capital=1000000, risk_tar
     return position_target
 
 
-def calculate_daily_pnl_given_pos_prices(positions: pd.Series, prices: pd.Series):
+def calculate_daily_pnl_in_points_given_pos_prices(positions: pd.Series, prices: pd.Series):
     pos_series = positions.groupby(positions.index).last()
     both_series = pd.concat([pos_series, prices], axis=1)
     if len(both_series.columns) == 2:
@@ -96,7 +52,7 @@ def calculate_gross_daily_pnl(capital, forecast, point_size, price, risk_target)
     position_target = get_pos_target_from_risk_target(price, point_size, capital, risk_target)
     position_target = position_target.reindex(forecast.index, method='ffill')
     position = forecast.mul(position_target, axis=0) / 10  #TODO: 其实没看明白这一步
-    pnl_in_points = calculate_daily_pnl_given_pos_prices(positions=position, prices=price)
+    pnl_in_points = calculate_daily_pnl_in_points_given_pos_prices(positions=position, prices=price)
     pnl = pnl_in_points * point_size
     daily_pnl_gross = pnl.resample("B").sum()
     daily_pnl_gross_series = daily_pnl_gross.iloc[:, 0]
@@ -138,22 +94,33 @@ def get_SR_cost_for_instrument_forecast(instrument_code, rule_name):
     trading_cost = transaction_cost + holding_cost
     return trading_cost
 
-# sr_cost = get_SR_cost_for_instrument_forecast('CORN', 'ewmac32')
-#
-# price = get_daily_price("CORN")
-# forecast_get_capped_forecast = get_capped_forecast("CORN", 'ewmac32')
-# capital = 1000000
-# point_size = get_point_size("CORN")
-# risk_target = 0.16
-# daily_pnl, costs = calculate_factor_pnl(forecast_get_capped_forecast, price, capital, point_size, risk_target, sr_cost)
-#
-# print('end')
 
 def generate_fit_end_list(start_date, end_date):
     start_dates_per_period = pd.date_range(end_date, start_date, freq='-365D').to_list()
     start_dates_per_period.reverse()
     end_list = start_dates_per_period[1:-1]
     return end_list
+
+
+def calculate_forecast_diversify_multiplier(forecasts, forecast_weights):
+    weekly_forecast = forecasts.resample('W').last()
+    fit_end_list = generate_fit_end_list(weekly_forecast.index[0], weekly_forecast.index[-1])
+
+    full_corr = weekly_forecast.ewm(span=250, min_periods=20, ignore_na=True).corr(pairwise=True)
+    size_of_matrix = len(weekly_forecast.columns)
+    dm_list = []
+    for fit_end in fit_end_list:
+        corr = full_corr[full_corr.index.get_level_values(0) < fit_end].tail(size_of_matrix).values
+        w = forecast_weights[:fit_end].iloc[-1].values
+        variance = w.dot(corr).dot(w.transpose())
+        dm = np.min([1 / variance ** 0.5, 2.5])
+        dm_list.append(dm)
+
+    dm_yearly = pd.Series(dm_list, index=fit_end_list)
+    dm_daily = dm_yearly.reindex(forecast_weights.index, method='ffill')
+    dm_daily[dm_daily.isna()] = 1.0
+    dm_smoonth = dm_daily.ewm(span=125).mean()
+    return dm_smoonth
 
 
 def calculate_forecast_weights(pnl_df, fit_end):
@@ -184,26 +151,6 @@ def combine_instrument_pnl_df(weekly_ret):
     return stacked_data
 
 
-def calculate_forecast_diversify_multiplier(forecasts, forecast_weights):
-    weekly_forecast = forecasts.resample('W').last()
-    fit_end_list = generate_fit_end_list(weekly_forecast.index[0], weekly_forecast.index[-1])
-
-    full_corr = weekly_forecast.ewm(span=250, min_periods=20, ignore_na=True).corr(pairwise=True)
-    size_of_matrix = len(weekly_forecast.columns)
-    dm_list = []
-    for fit_end in fit_end_list:
-        corr = full_corr[full_corr.index.get_level_values(0) < fit_end].tail(size_of_matrix).values
-        w = forecast_weights[:fit_end].iloc[-1].values
-        variance = w.dot(corr).dot(w.transpose())
-        dm = np.min([1 / variance ** 0.5, 2.5])
-        dm_list.append(dm)
-
-    dm_yearly = pd.Series(dm_list, index=fit_end_list)
-    dm_daily = dm_yearly.reindex(forecast_weights.index, method='ffill')
-    dm_daily[dm_daily.isna()] = 1.0
-    dm_smoonth = dm_daily.ewm(span=125).mean()
-    return dm_smoonth
-
 def calculate_instrument_weights(pnl_df):
     daily_pnl = pnl_df.resample("1B").sum()
     daily_pnl[daily_pnl == 0.0] = np.nan
@@ -222,72 +169,8 @@ def calculate_instrument_weights(pnl_df):
     return weight
 
 
-def calculate_volatility_scalar(instrument_code, capital=1000000, annual_percentage_volatility_target=0.16):
-    block_value = get_block_value(instrument_code)
-    block_value.ffill(inplace=True)
-    # FIXME: 取错数据了
-    price = get_raw_carry_data(instrument_code)
-    price.ffill(inplace=True)
-    price0 = get_daily_price(instrument_code)
-    diff_volatility = calculate_mixed_volatility(price0.diff(), slow_vol_years=10)
-    diff_volatility.ffill(inplace=True)
-
-    percentage_volatility = 100.0 * (diff_volatility / price.abs())
-    (block_value, percentage_volatility) = block_value.align(percentage_volatility, join="inner")
-    currency_volatility = block_value * percentage_volatility  # 小数点后14位没对上，可以接受
-
-    value_volatiliity = currency_volatility * 1
-
-    pecentage_volatility_target = annual_percentage_volatility_target / 16
-    cash_volatility_target = capital * pecentage_volatility_target
-
-    volatility_scalar = cash_volatility_target / value_volatiliity
-
-    return volatility_scalar
-
-
-
-def apply_buffer(position_raw, volatility_scalar, buffer_size):
-    buffer = volatility_scalar * buffer_size
-    top_pos = (position_raw + buffer).round()
-    bottom_pos = (position_raw - buffer).round()
-    position_raw = position_raw.round()
-
-    last = position_raw.values[0]
-    if np.isnan(last):
-        last = 0.0
-    buffered_position_list = [last]
-    for index in range(len(position_raw))[1:]:
-        last = adjust_by_buffer(last, position_raw.values[index],
-                                top_pos.values[index], bottom_pos.values[index])
-        buffered_position_list.append(last)
-    buffered_position = pd.Series(buffered_position_list, index=position_raw.index)
-    # last = position_raw.shift(1).bfill()
-    # df = pd.DataFrame({'last': last, 'current': position_raw, 'top': top_pos, 'bottom': bottom_pos})
-    # buffered_position = df.apply(lambda x: adjust_by_buffer(x['last'], x['current'], x['top'], x['bottom']), axis=1)
-
-    return buffered_position
-
-
-def adjust_by_buffer(last, current, top, bottom, trade_to_edge=True):
-    if np.isnan(top) or np.isnan(bottom) or np.isnan(current):
-        return last
-
-    if last > top:
-        if trade_to_edge:
-            return top
-        else:
-            return current
-    elif last < bottom:
-        if trade_to_edge:
-            return bottom
-        else:
-            return current
-    else:
-        return last
-
 def calculate_instrument_pnl(instrument, position_buffered, price):
-    pnl_in_points = calculate_daily_pnl_given_pos_prices(positions=position_buffered, prices=(price))
+    pnl_in_points = calculate_daily_pnl_in_points_given_pos_prices(positions=position_buffered, prices=(price))
     point_size = get_point_size(instrument)
     pnl_in_ccy = pnl_in_points * point_size
     pnl_daily = pnl_in_ccy.resample("B").sum()
@@ -326,11 +209,8 @@ def get_turnover_for_list_of_rules(instrument_list, trading_rule_list):
     return turnover_dict
 
 def process_instrument_pnl(instrument_code):
-
-
     instruments = my_config.instruments
 
-    # Get the gross returns, CLEARED
     trading_rule_list = ['ewmac32', 'ewmac8']
 
     gross_returns_dict = {}
@@ -487,27 +367,21 @@ def process_instrument_pnl(instrument_code):
 
 
     combined_forecast = combined_forecast_without_cap.clip(20, -20)  # QUESTION: 小数点后8位开始对不上，暂时不管
-    pnl_daily = calc_instr_daily_pnl_from_buffered_pos(instrument_code, price, combined_forecast)
+    position_buffered = calc_instr_daily_pnl_from_buffered_pos(instrument_code, combined_forecast)
 
-    # combined_forecast = (forecast_weights * forecast_df).sum(axis=1) * fdm
-    # final_forecast = combined_forecast.clip(20, -20)
-    # volatility_scalar = calculate_volatility_scalar(instrument)
-    # position_raw = volatility_scalar * final_forecast / 10.0
-    # position_raw.fillna(0.0, inplace=True)
-    # position_buffered = apply_buffer(position_raw, volatility_scalar, 0.10)
+    pnl_daily = calculate_instrument_pnl(instrument_code, position_buffered, price)
+
     # pnl_daily = calculate_instrument_pnl(instrument, position_buffered, price)
 
     return pnl_daily
-def calc_instr_daily_pnl_from_buffered_pos(instrument_code, price, combined_forecast):
-
+def calc_instr_daily_pnl_from_buffered_pos(instrument_code, combined_forecast):
     volatility_scalar = calculate_volatility_scalar(instrument_code, capital=500000, annual_percentage_volatility_target=0.25)
     volatility_scalar = volatility_scalar.reindex(combined_forecast.index, method="ffill")
     position_raw = volatility_scalar * combined_forecast / 10.0  # 小数点后8位开始对不上，暂时不管
     # position_raw[position_raw < 0] = 0
     # position_raw.fillna(0.0, inplace=True)
     position_buffered = apply_buffer(position_raw, volatility_scalar, 0.10)
-    pnl_daily = calculate_instrument_pnl(instrument_code, position_buffered, price)
-    return pnl_daily
+    return position_buffered
 process_instrument_pnl('CORN')
 
 def main(my_config):

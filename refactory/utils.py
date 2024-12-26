@@ -4,7 +4,9 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import minimize
 
-from refactory.data_source import get_point_size, get_spread_cost, get_daily_price, get_instrument_info
+from refactory.data_source import get_point_size, get_spread_cost, get_daily_price, get_instrument_info, \
+    get_block_value, get_raw_carry_data
+
 
 def get_volatily(price, span=35, min_periods=10, vol_floor=True,
                  floor_min_quant=0.05, floor_min_periods=100, floor_days=500):
@@ -202,3 +204,27 @@ def flatten_list(data):
         for item in sublist:
             flattened.append(item)
     return flattened
+
+
+def calculate_volatility_scalar(instrument_code, capital=1000000, annual_percentage_volatility_target=0.16):
+    block_value = get_block_value(instrument_code)
+    block_value.ffill(inplace=True)
+    # FIXME: 取错数据了
+    price = get_raw_carry_data(instrument_code)
+    price.ffill(inplace=True)
+    price0 = get_daily_price(instrument_code)
+    diff_volatility = calculate_mixed_volatility(price0.diff(), slow_vol_years=10)
+    diff_volatility.ffill(inplace=True)
+
+    percentage_volatility = 100.0 * (diff_volatility / price.abs())
+    (block_value, percentage_volatility) = block_value.align(percentage_volatility, join="inner")
+    currency_volatility = block_value * percentage_volatility  # 小数点后14位没对上，可以接受
+
+    value_volatiliity = currency_volatility * 1
+
+    pecentage_volatility_target = annual_percentage_volatility_target / 16
+    cash_volatility_target = capital * pecentage_volatility_target
+
+    volatility_scalar = cash_volatility_target / value_volatiliity
+
+    return volatility_scalar
