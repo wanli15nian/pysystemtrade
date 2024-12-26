@@ -233,7 +233,9 @@ def calculate_volatility_scalar(instrument_code, capital=1000000, annual_percent
     diff_volatility.ffill(inplace=True)
 
     percentage_volatility = 100.0 * (diff_volatility / price.abs())
-    currency_volatility = block_value * percentage_volatility
+    (block_value, percentage_volatility) = block_value.align(percentage_volatility, join="inner")
+    currency_volatility = block_value * percentage_volatility  # 小数点后14位没对上，可以接受
+
     value_volatiliity = currency_volatility * 1
 
     pecentage_volatility_target = annual_percentage_volatility_target / 16
@@ -242,7 +244,6 @@ def calculate_volatility_scalar(instrument_code, capital=1000000, annual_percent
     volatility_scalar = cash_volatility_target / value_volatiliity
 
     return volatility_scalar
-
 
 
 
@@ -267,17 +268,21 @@ def apply_buffer(position_raw, volatility_scalar, buffer_size):
 
 
 def adjust_by_buffer(last, current, top, bottom, trade_to_edge=True):
-    result = last
-    if trade_to_edge:
-        if last > top:
-            result = top
-        elif last < bottom:
-            result = bottom
-    else:
-        if last > top or last < bottom:
-            result = current
-    return result
+    if np.isnan(top) or np.isnan(bottom) or np.isnan(current):
+        return last
 
+    if last > top:
+        if trade_to_edge:
+            return top
+        else:
+            return current
+    elif last < bottom:
+        if trade_to_edge:
+            return bottom
+        else:
+            return current
+    else:
+        return last
 
 def calculate_instrument_pnl(instrument, position_buffered, price):
     pnl_in_points = calculate_daily_pnl_given_pos_prices(positions=position_buffered, prices=(price))
@@ -479,18 +484,28 @@ def process_instrument_pnl(instrument_code):
     combined_forecast_without_cap = (forecast_weights * instrument_forecast).sum(axis=1) * div_mult_df_smoothed.ffill()
 
 
+    combined_forecast = combined_forecast_without_cap.clip(20, -20)  # QUESTION: 小数点后8位开始对不上，暂时不管
+    pnl_daily = calc_instr_daily_pnl_from_buffered_pos(instrument_code, price, combined_forecast)
 
-
-    combined_forecast = (forecast_weights * forecast_df).sum(axis=1) * fdm
-    final_forecast = combined_forecast.clip(20, -20)
-    volatility_scalar = calculate_volatility_scalar(instrument)
-    position_raw = volatility_scalar * final_forecast / 10.0
-    position_raw.fillna(0.0, inplace=True)
-    position_buffered = apply_buffer(position_raw, volatility_scalar, 0.10)
-    pnl_daily = calculate_instrument_pnl(instrument, position_buffered, price)
+    # combined_forecast = (forecast_weights * forecast_df).sum(axis=1) * fdm
+    # final_forecast = combined_forecast.clip(20, -20)
+    # volatility_scalar = calculate_volatility_scalar(instrument)
+    # position_raw = volatility_scalar * final_forecast / 10.0
+    # position_raw.fillna(0.0, inplace=True)
+    # position_buffered = apply_buffer(position_raw, volatility_scalar, 0.10)
+    # pnl_daily = calculate_instrument_pnl(instrument, position_buffered, price)
 
     return pnl_daily
+def calc_instr_daily_pnl_from_buffered_pos(instrument_code, price, combined_forecast):
 
+    volatility_scalar = calculate_volatility_scalar(instrument_code, capital=500000, annual_percentage_volatility_target=0.25)
+    volatility_scalar = volatility_scalar.reindex(combined_forecast.index, method="ffill")
+    position_raw = volatility_scalar * combined_forecast / 10.0  # 小数点后8位开始对不上，暂时不管
+    # position_raw[position_raw < 0] = 0
+    # position_raw.fillna(0.0, inplace=True)
+    position_buffered = apply_buffer(position_raw, volatility_scalar, 0.10)
+    pnl_daily = calculate_instrument_pnl(instrument_code, position_buffered, price)
+    return pnl_daily
 process_instrument_pnl('US10')
 
 def main(my_config):
