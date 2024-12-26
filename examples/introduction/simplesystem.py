@@ -120,36 +120,36 @@ my_system = System(
 )
 
 # print(my_system.combForecast.get_forecast_weights("US10").tail(5))
-print(my_system.combForecast.get_forecast_diversification_multiplier("US10").tail(5))
+# print(my_system.combForecast.get_forecast_diversification_multiplier("US10").tail(5))
 
 # fixed:
-my_config.forecast_weights = dict(ewmac8=0.5, ewmac32=0.5)
-my_config.forecast_div_multiplier = 1.1
-my_config.use_forecast_weight_estimates = False
-my_config.use_forecast_div_mult_estimates = False
+# my_config.forecast_weights = dict(ewmac8=0.5, ewmac32=0.5)
+# my_config.forecast_div_multiplier = 1.1
+my_config.use_forecast_weight_estimates = True
+my_config.use_forecast_div_mult_estimates = True
 
 combiner = ForecastCombine()
 my_system = System(
-    [fcs, empty_rules, combiner, raw_data, position_size], data, my_config
+    [fcs, empty_rules, combiner, raw_data, position_size, my_account], data, my_config
 )  # no need for accounts if no estimation done
-my_system.combForecast.get_combined_forecast("SOFR").tail(5)
+# my_system.combForecast.get_combined_forecast("SOFR").tail(5)
 
 # size positions
 
 possizer = PositionSizing()
 my_config.percentage_vol_target = 25
 my_config.notional_trading_capital = 500000
-my_config.base_currency = "GBP"
+my_config.base_currency = "USD"
 
-my_system = System([fcs, my_rules, combiner, possizer, raw_data], data, my_config)
-
-print(my_system.positionSize.get_price_volatility("SOFR").tail(5))
-print(my_system.positionSize.get_block_value("SOFR").tail(5))
-print(my_system.positionSize.get_underlying_price("SOFR"))
-print(my_system.positionSize.get_instrument_value_vol("SOFR").tail(5))
-print(my_system.positionSize.get_average_position_at_subsystem_level("SOFR").tail(5))
-print(my_system.positionSize.get_vol_target_dict())
-print(my_system.positionSize.get_subsystem_position("SOFR").tail(5))
+# my_system = System([fcs, my_rules, combiner, possizer, raw_data], data, my_config)
+#
+# print(my_system.positionSize.get_price_volatility("SOFR").tail(5))
+# print(my_system.positionSize.get_block_value("SOFR").tail(5))
+# print(my_system.positionSize.get_underlying_price("SOFR"))
+# print(my_system.positionSize.get_instrument_value_vol("SOFR").tail(5))
+# print(my_system.positionSize.get_average_position_at_subsystem_level("SOFR").tail(5))
+# print(my_system.positionSize.get_vol_target_dict())
+# print(my_system.positionSize.get_subsystem_position("SOFR").tail(5))
 
 # portfolio - estimated
 from systems.portfolio import Portfolios

@@ -254,6 +254,8 @@ def apply_buffer(position_raw, volatility_scalar, buffer_size):
     position_raw = position_raw.round()
 
     last = position_raw.values[0]
+    if np.isnan(last):
+        last = 0.0
     buffered_position_list = [last]
     for index in range(len(position_raw))[1:]:
         last = adjust_by_buffer(last, position_raw.values[index],
@@ -506,7 +508,7 @@ def calc_instr_daily_pnl_from_buffered_pos(instrument_code, price, combined_fore
     position_buffered = apply_buffer(position_raw, volatility_scalar, 0.10)
     pnl_daily = calculate_instrument_pnl(instrument_code, position_buffered, price)
     return pnl_daily
-process_instrument_pnl('US10')
+process_instrument_pnl('CORN')
 
 def main(my_config):
     instruments = my_config.instruments
