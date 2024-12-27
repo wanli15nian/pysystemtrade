@@ -199,19 +199,15 @@ def div_mult_single_period(corr, weights, dm_max=2.5):
 
 
 def get_turnover_for_list_of_rules(instrument_list, trading_rule_list):
+    instrument_turnover_dict = dict()
 
-    turnover_dict = dict()
-    for rule_name in trading_rule_list:
-        turnover_as_list = [forecast_turnover_for_individual_instrument(instrument, rule_name) for instrument in instrument_list]
-        turnover_as_dict = dict(
-            [
-                (instrument_code, turnover)
-                for (instrument_code, turnover) in zip(instrument_list, turnover_as_list)
-            ]
-        )
-        turnover_dict[rule_name] = turnover_as_dict
+    for instrument in instrument_list:
+        instrument_turnover_dict[instrument] = {
+            rule_name: forecast_turnover_for_individual_instrument(instrument, rule_name)
+            for rule_name in trading_rule_list
+        }
 
-    return turnover_dict
+    return instrument_turnover_dict
 
 
 def prepare_all_instr_data(all_instruments, trading_rule_list):
@@ -224,6 +220,13 @@ def prepare_all_instr_data(all_instruments, trading_rule_list):
             forecast_df[rule_name] = forecast
         forecast_df = pd.DataFrame(forecast_df)
         individual_instr_data['forecast_df'] = forecast_df
+
+        turnover_dict = {}
+        for rule_name in trading_rule_list:
+            turnover = forecast_turnover_for_individual_instrument(instrument, rule_name)
+            turnover_dict[rule_name] = turnover
+        individual_instr_data['turnover_dict'] = turnover_dict
+
 
         price = get_daily_price(instrument)
         individual_instr_data['price'] = price
@@ -242,8 +245,7 @@ def process_instrument_pnl(instrument_code):
     trading_rule_list = ['ewmac32', 'ewmac8']
     all_instrument_data = prepare_all_instr_data(all_instruments, trading_rule_list)
 
-    turnovers = get_turnover_for_list_of_rules(all_instruments, trading_rule_list)
-
+    turnovers = {instrument: all_instrument_data[instrument]['turnover_dict'] for instrument in all_instrument_data}
     gross_returns_dict = calc_gross_returns_dict_for_all_instr(all_instrument_data, all_instruments)
 
     # 用历史数据的多少来决定每个instrument的权重
@@ -256,7 +258,8 @@ def process_instrument_pnl(instrument_code):
                                                                                              trading_rule_list, weights)
 
     #QUESTION: Find out why the cost multiplier is set at 2
-    dict_of_sr_costs = calc_dict_of_sr_costs_for_all_instr(dict_of_costs_gross_returns_ratio, instrument_code, trading_rule_list, turnovers)
+    dict_of_sr_costs = calc_dict_of_sr_costs_for_all_instr(dict_of_costs_gross_returns_ratio, instrument_code,
+                                                           trading_rule_list, turnovers, all_instruments)
 
     net_returns = calc_net_returns_dict_for_all_instr(dict_of_sr_costs, gross_returns_dict)
 
@@ -361,16 +364,17 @@ def calc_net_returns_dict_for_all_instr(dict_of_sr_costs, gross_returns_dict):
     return net_returns
 
 
-def calc_dict_of_sr_costs_for_all_instr(dict_of_costs_gross_returns_ratio, instrument_code, trading_rule_list, turnovers):
+def calc_dict_of_sr_costs_for_all_instr(dict_of_costs_gross_returns_ratio, instrument_code,
+                                        trading_rule_list, turnovers, all_instruments):
     cost_multiplier = 2
     dict_of_sr_costs = {}
     for trading_rule in trading_rule_list:
-        turnover = turnovers[trading_rule][instrument_code]
+        turnover = turnovers[instrument_code][trading_rule]
         cost = dict_of_costs_gross_returns_ratio[instrument_code][trading_rule]
         cost_per_turnover_this_asset = cost / turnover
 
-        all_turnovers = turnovers[trading_rule]
-        average_turnover_across_assets = np.nanmean(list(all_turnovers.values()))
+        all_turnovers = [turnovers[instrument][trading_rule] for instrument in all_instruments]
+        average_turnover_across_assets = np.nanmean(all_turnovers)
 
         pooled_cost = cost_per_turnover_this_asset * average_turnover_across_assets * cost_multiplier
         dict_of_sr_costs[trading_rule] = pooled_cost
