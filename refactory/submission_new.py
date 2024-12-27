@@ -366,12 +366,16 @@ def calc_net_returns_dict_for_all_instr(dict_of_sr_costs, gross_returns_dict):
 
 def calc_dict_of_sr_costs_for_all_instr(dict_of_costs_gross_returns_ratio, instrument_code,
                                         trading_rule_list, turnovers, all_instruments):
+
+    #FIXME: 首先这个cost_per_turnover_this_asset 算的就很奇怪，毕竟分子并不是真正的cost, 而是个比值
+    # 其次，cost_multiplier是2，没有解释
+
     cost_multiplier = 2
     dict_of_sr_costs = {}
     for trading_rule in trading_rule_list:
         turnover = turnovers[instrument_code][trading_rule]
-        cost = dict_of_costs_gross_returns_ratio[instrument_code][trading_rule]
-        cost_per_turnover_this_asset = cost / turnover
+        costs_gross_returns_ratio = dict_of_costs_gross_returns_ratio[instrument_code][trading_rule]
+        cost_per_turnover_this_asset = costs_gross_returns_ratio / turnover
 
         all_turnovers = [turnovers[instrument][trading_rule] for instrument in all_instruments]
         average_turnover_across_assets = np.nanmean(all_turnovers)
