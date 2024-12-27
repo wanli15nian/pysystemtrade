@@ -48,6 +48,7 @@ def calculate_daily_pnl_in_points_given_pos_prices(positions: pd.Series, prices:
 def calc_cost(pos_target, price, point_size, trading_cost):
     # Actually output in price space to match gross returns
     # These will be annualised figure, make it a small loss every day
+    # FIXME: 完全没有看明白这个calc_cost的计算逻辑
     annualised_price_vol_points = calculate_mixed_volatility(price.diff(), slow_vol_years=10)
     sr_cost_as_annualised_figure = (-trading_cost * pos_target * annualised_price_vol_points * 16).bfill()
     period_intervals_in_seconds = sr_cost_as_annualised_figure.index.to_series().diff().dt.total_seconds()
@@ -90,7 +91,7 @@ def forecast_turnover_for_individual_instrument(instrument_code, rule_name):
     return annual_turnover_for_forecast
 
 
-def get_SR_cost_for_instrument_forecast(instrument_code, rule_name, pooled_instruments, weights):
+def calc_trading_cost(instrument_code, rule_name, pooled_instruments, weights):
     # 单次交易成本，包括slippage和commission
     cost_per_trade = get_cost_per_trade(instrument_code)
 
@@ -250,10 +251,12 @@ def process_instrument_pnl(instrument_code):
     total_length = float(sum(forecast_length))
     weights = [forecast_length / total_length for forecast_length in forecast_length]
 
-    dict_of_costs = calc_dict_of_costs_for_all_instr(all_instrument_data, all_instruments, trading_rule_list, weights)
+    dict_of_costs_gross_returns_ratio = calc_dict_of_costs_gross_returns_ratio_for_all_instr(all_instrument_data,
+                                                                                             all_instruments,
+                                                                                             trading_rule_list, weights)
 
     #QUESTION: Find out why the cost multiplier is set at 2
-    dict_of_sr_costs = calc_dict_of_sr_costs_for_all_instr(dict_of_costs, instrument_code, trading_rule_list, turnovers)
+    dict_of_sr_costs = calc_dict_of_sr_costs_for_all_instr(dict_of_costs_gross_returns_ratio, instrument_code, trading_rule_list, turnovers)
 
     net_returns = calc_net_returns_dict_for_all_instr(dict_of_sr_costs, gross_returns_dict)
 
@@ -358,12 +361,12 @@ def calc_net_returns_dict_for_all_instr(dict_of_sr_costs, gross_returns_dict):
     return net_returns
 
 
-def calc_dict_of_sr_costs_for_all_instr(dict_of_costs, instrument_code, trading_rule_list, turnovers):
+def calc_dict_of_sr_costs_for_all_instr(dict_of_costs_gross_returns_ratio, instrument_code, trading_rule_list, turnovers):
     cost_multiplier = 2
     dict_of_sr_costs = {}
     for trading_rule in trading_rule_list:
         turnover = turnovers[trading_rule][instrument_code]
-        cost = dict_of_costs[instrument_code][trading_rule]
+        cost = dict_of_costs_gross_returns_ratio[instrument_code][trading_rule]
         cost_per_turnover_this_asset = cost / turnover
 
         all_turnovers = turnovers[trading_rule]
@@ -374,8 +377,8 @@ def calc_dict_of_sr_costs_for_all_instr(dict_of_costs, instrument_code, trading_
     return dict_of_sr_costs
 
 
-def calc_dict_of_costs_for_all_instr(all_instrument_data, all_instruments, trading_rule_list, weights):
-    dict_of_costs = {}
+def calc_dict_of_costs_gross_returns_ratio_for_all_instr(all_instrument_data, all_instruments, trading_rule_list, weights):
+    dict_of_costs_gross_returns_ratio = {}
     for instrument in all_instruments:
         SR_dict = {}
         price = all_instrument_data[instrument]['price']
@@ -384,11 +387,17 @@ def calc_dict_of_costs_for_all_instr(all_instrument_data, all_instruments, tradi
         for trading_rule in trading_rule_list:
             forecast = all_instrument_data[instrument]['forecast_df'][trading_rule]
             pos_target = pos_target.reindex(forecast.index, method="ffill")
-            trading_cost = get_SR_cost_for_instrument_forecast(instrument, trading_rule, all_instruments, weights)
+            annual_trading_cost = calc_trading_cost(instrument, trading_rule, all_instruments, weights)
             gross_returns_series = calc_gross_daily_pnl(forecast=forecast, point_size=point_size,
                                                         price=price, position_target=pos_target)
             cost_curve = calc_cost(pos_target=pos_target, price=price,
-                                   point_size=point_size, trading_cost=trading_cost)
+                                   point_size=point_size, trading_cost=annual_trading_cost)
+            '''
+            annual_cost_SR 算出交易成本与gross returns 波动的比例
+            越高，说明成本越难以接受
+            当annual_cost_SR等于1的时候，就算gross returns 总是赚的，也会被交易成本给消耗掉
+            '''
+
             cost_curve.iloc[:11] = np.nan  # QUESTION: 为什么前11个数都是Nan
             if instrument == 'US10':
                 cost_curve.iloc[:13] = np.nan  # QUESTION: 为什么到了US10是前13个数字
@@ -397,8 +406,8 @@ def calc_dict_of_costs_for_all_instr(all_instrument_data, all_instruments, tradi
             gross_returns_std = gross_returns_series.std()
             annual_cost_SR = 16 * cost_curve_mean / gross_returns_std
             SR_dict[trading_rule] = annual_cost_SR
-        dict_of_costs[instrument] = SR_dict
-    return dict_of_costs
+        dict_of_costs_gross_returns_ratio[instrument] = SR_dict
+    return dict_of_costs_gross_returns_ratio
 
 
 def calc_gross_returns_dict_for_all_instr(all_instrument_data, all_instruments):

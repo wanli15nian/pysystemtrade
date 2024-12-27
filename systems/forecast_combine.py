@@ -852,7 +852,7 @@ class ForecastCombine(SystemStage):
             self.log.warning(warn_msg)
             return 0.0
 
-        return accounts.get_SR_cost_for_instrument_forecast(
+        return accounts.calc_trading_cost(
             instrument_code, rule_variation_name
         )
 

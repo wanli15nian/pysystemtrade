@@ -205,9 +205,9 @@ class Test(unittest.TestCase):
 
         system = self.setUpWithEstimatedReturns()
 
-        print(system.combForecast.get_SR_cost_for_instrument_forecast("SOFR", "ewmac8"))
-        print(system.combForecast.get_SR_cost_for_instrument_forecast("BUND", "ewmac8"))
-        print(system.combForecast.get_SR_cost_for_instrument_forecast("US10", "ewmac8"))
+        print(system.combForecast.calc_trading_cost("SOFR", "ewmac8"))
+        print(system.combForecast.calc_trading_cost("BUND", "ewmac8"))
+        print(system.combForecast.calc_trading_cost("US10", "ewmac8"))
 
         print(system.combForecast.has_same_cheap_rules_as_code("SOFR"))
         print(system.combForecast.has_same_cheap_rules_as_code("BUND"))
