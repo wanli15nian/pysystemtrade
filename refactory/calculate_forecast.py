@@ -7,6 +7,11 @@ from refactory.utils import ewmac, get_volatily
 
 
 def get_capped_forecast(instrument_code, rule_name):
+    '''
+    Forecast 不是对当天价格的预判
+    Forecast 根据包括当天在内的价格数据，对未来趋势进行判断
+    究竟趋势如何就根据过去几天的价格变化
+    '''
     price = get_daily_price(instrument_code)
     if rule_name == 'ewmac32':
         raw_ewmac32 = ewmac(price, 32, 128, 1)
