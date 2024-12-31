@@ -232,7 +232,6 @@ def prepare_all_instr_data(all_instruments, trading_rule_list):
             turnover_dict[rule_name] = turnover
         individual_instr_data['turnover_dict'] = turnover_dict
 
-
         price = get_daily_price(instrument)
         individual_instr_data['price'] = price
 
@@ -242,13 +241,20 @@ def prepare_all_instr_data(all_instruments, trading_rule_list):
         position_target = get_pos_target_from_risk_target(price, point_size, capital=1000000, risk_target=0.16)
         individual_instr_data['position_target'] = position_target
 
+        raw_costs = get_raw_cost_data(instrument)
+        individual_instr_data['raw_costs'] = raw_costs
+
+        value_per_point = get_point_size(instrument)
+        individual_instr_data['value_per_point'] = value_per_point
+
+        rolls_per_yr = get_roll_parameters(instrument).rolls_per_year_in_hold_cycle()
+        individual_instr_data['rolls_per_year'] = rolls_per_yr
+
         all_instrument_data[instrument] = individual_instr_data
     return all_instrument_data
 
-def process_instrument_pnl(instrument_code):
-    all_instruments = my_config.instruments
-    trading_rule_list = ['ewmac32', 'ewmac8']
-    all_instrument_data = prepare_all_instr_data(all_instruments, trading_rule_list)
+def calc_buffered_position(instrument_code, all_instrument_data):
+
 
     turnovers = {instrument: all_instrument_data[instrument]['turnover_dict'] for instrument in all_instrument_data}
     gross_returns_dict = calc_gross_returns_dict_for_all_instr(all_instrument_data, all_instruments)
@@ -387,44 +393,41 @@ def process_instrument_pnl(instrument_code):
     combined_forecast = combined_forecast_without_cap.clip(20, -20)  # QUESTION: 小数点后8位开始对不上，暂时不管
     position_buffered = calc_instr_daily_pnl_from_buffered_pos(instrument_code, combined_forecast)
 
-    raw_costs = get_raw_cost_data(instrument_code)
-    price = all_instrument_data[instrument_code]['price']
-    value_per_point = get_point_size(instrument_code)
-    capital = 500000
-    rolls_per_year = get_roll_parameters(instrument_code).rolls_per_year_in_hold_cycle()
+    return position_buffered
 
+
+def calc_pnl_across_subsystem_for_indiv_instr(instrument_code, all_instrument_data):
+    price = all_instrument_data[instrument_code]['price']
+    rolls_per_year = all_instrument_data[instrument_code]['rolls_per_year']
+    raw_costs = all_instrument_data[instrument_code]['raw_costs']
+    value_per_point = all_instrument_data[instrument_code]['value_per_point']
+    position_buffered = calc_buffered_position(instrument_code, all_instrument_data)
 
     adjusted_pos_buffered = position_buffered.shift(1)
     gross_pnl_daily = calc_gross_instr_pnl(instrument_code, position_buffered, price)
-
     list_of_years = list(set([int(idx.year) for idx in adjusted_pos_buffered.index]))
     list_of_years.sort()
-    fills_by_year = [pseudo_fills_for_year(year, rolls_per_year, price, adjusted_pos_buffered) for year in list_of_years]
+    fills_by_year = [pseudo_fills_for_year(year, rolls_per_year, price, adjusted_pos_buffered) for year in
+                     list_of_years]
     list_of_holding_fills = [item for sublist in fills_by_year for item in sublist]
-
     trades = adjusted_pos_buffered.diff()
     trades_without_na = trades[~trades.isna()]
     trades_without_zeros = trades_without_na[trades_without_na != 0]
     prices_aligned_to_trades = price.reindex(trades_without_zeros.index, method="ffill")
-
     trades_as_list = list(trades_without_zeros.values)
     prices_as_list = list(prices_aligned_to_trades.values)
     dates_as_list = list(prices_aligned_to_trades.index)
-
     list_of_trading_fills = [
         Fill(date, qty, price, price_requires_slippage_adjustment=True)
         for date, qty, price in zip(dates_as_list, trades_as_list, prices_as_list)
     ]
-
     list_of_all_fills = list_of_trading_fills + list_of_holding_fills
-
-    instrument_currency_costs = [-calc_cost_instr_currency_for_a_fill(fill, value_per_point, raw_costs) for fill in list_of_all_fills]
-
+    instrument_currency_costs = [-calc_cost_instr_currency_for_a_fill(fill, value_per_point, raw_costs) for fill in
+                                 list_of_all_fills]
     date_index = [fill.date for fill in list_of_all_fills]
     costs_as_pd_series = pd.Series(instrument_currency_costs, date_index)
     costs_as_pd_series = costs_as_pd_series.sort_index()
     costs_as_pd_series = costs_as_pd_series.groupby(costs_as_pd_series.index).sum()
-
     daily_price = price.resample("1B").ffill()
     daily_returns = daily_price.ffill().diff()
     vol_price = daily_returns.rolling(180, min_periods=3).std().ffill()
@@ -432,12 +435,8 @@ def process_instrument_pnl(instrument_code):
     cost_deflator = vol_price / final_vol
     reindexed_deflator = cost_deflator.reindex(costs_as_pd_series.index, method="ffill")
     normalised_costs = reindexed_deflator * costs_as_pd_series
-
-    net_pnl = gross_pnl_daily.add(normalised_costs, fill_value=0)
-
-    end = time.time()
-    print('duration is: ', end - start)
-    return gross_pnl_daily
+    net_pnl = gross_pnl_daily.add(normalised_costs, fill_value=0).resample('B').sum()
+    return net_pnl
 
 
 def calc_cost_instr_currency_for_a_fill(fill, value_per_point, raw_costs):
@@ -578,12 +577,22 @@ def calc_instr_daily_pnl_from_buffered_pos(instrument_code, combined_forecast):
     # position_raw.fillna(0.0, inplace=True)
     position_buffered = apply_buffer(position_raw, volatility_scalar, 0.10)
     return position_buffered
-process_instrument_pnl('CORN')
+
+
+all_instruments = my_config.instruments
+trading_rule_list = ['ewmac32', 'ewmac8']
+all_instrument_data = prepare_all_instr_data(all_instruments, trading_rule_list)
+net_instr_pnl_for_all_instr = {}
+
+for instrument in all_instruments:
+    net_pnl = calc_pnl_across_subsystem_for_indiv_instr(instrument, all_instrument_data)
+    net_instr_pnl_for_all_instr[instrument] = net_pnl
+print('END')
 
 def main(my_config):
     instruments = my_config.instruments
 
-    pnl_list = [process_instrument_pnl(instrument) for instrument in instruments]
+    pnl_list = [calc_buffered_position(instrument) for instrument in instruments]
     pnl_df = pd.concat(pnl_list, axis=1)
     pnl_df.columns = instruments
 
