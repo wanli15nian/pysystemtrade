@@ -184,6 +184,7 @@ def calc_gross_instr_pnl(instrument, position_buffered, price):
     point_size = get_point_size(instrument)
     pnl_in_ccy = pnl_in_points * point_size
     gross_pnl_daily = pnl_in_ccy.resample("B").sum()
+    gross_pnl_daily = gross_pnl_daily.squeeze()
     return gross_pnl_daily
 
 
@@ -394,7 +395,7 @@ def process_instrument_pnl(instrument_code):
 
 
     adjusted_pos_buffered = position_buffered.shift(1)
-    gross_pnl_daily = calc_gross_instr_pnl(instrument_code, adjusted_pos_buffered, price)
+    gross_pnl_daily = calc_gross_instr_pnl(instrument_code, position_buffered, price)
 
     list_of_years = list(set([int(idx.year) for idx in adjusted_pos_buffered.index]))
     list_of_years.sort()
@@ -418,6 +419,21 @@ def process_instrument_pnl(instrument_code):
     list_of_all_fills = list_of_trading_fills + list_of_holding_fills
 
     instrument_currency_costs = [-calc_cost_instr_currency_for_a_fill(fill, value_per_point, raw_costs) for fill in list_of_all_fills]
+
+    date_index = [fill.date for fill in list_of_all_fills]
+    costs_as_pd_series = pd.Series(instrument_currency_costs, date_index)
+    costs_as_pd_series = costs_as_pd_series.sort_index()
+    costs_as_pd_series = costs_as_pd_series.groupby(costs_as_pd_series.index).sum()
+
+    daily_price = price.resample("1B").ffill()
+    daily_returns = daily_price.ffill().diff()
+    vol_price = daily_returns.rolling(180, min_periods=3).std().ffill()
+    final_vol = vol_price.iloc[-1]
+    cost_deflator = vol_price / final_vol
+    reindexed_deflator = cost_deflator.reindex(costs_as_pd_series.index, method="ffill")
+    normalised_costs = reindexed_deflator * costs_as_pd_series
+
+    net_pnl = gross_pnl_daily.add(normalised_costs, fill_value=0)
 
     end = time.time()
     print('duration is: ', end - start)
