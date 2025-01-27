@@ -561,8 +561,7 @@ def calc_buffered_pos_given_combined_forecast(volatility_scalar, position_raw):
     return position_buffered
 
 
-def process_list_of_data(data):
-    data = pd.concat(data, axis=1)
+def process_list_of_data(data):  # Rename the columns
     resampled_data = data.resample('1B').sum()
     resampled_data[resampled_data == 0.0] = np.nan
     return resampled_data
@@ -572,24 +571,24 @@ trading_rule_list = ['ewmac32', 'ewmac8']
 all_instrument_data = prepare_all_instr_data(all_instruments, trading_rule_list)
 net_instr_pnl_for_all_instr = {}
 
-list_of_gross_pandl = []
-list_of_costs = []
+dict_of_gross_pandl = {}
+dict_of_costs = {}
 
 for instrument in all_instruments:
     net_pnl, gross_instr_pnl, costs = calc_pnl_across_subsystem_for_indiv_instr(instrument, all_instrument_data)
     net_instr_pnl_for_all_instr[instrument] = net_pnl
-    list_of_gross_pandl.append(gross_instr_pnl)
-    list_of_costs.append(costs)
-df_of_gross_pandl = pd.concat(list_of_gross_pandl, axis=1, sort=True)
+    dict_of_gross_pandl[instrument] = gross_instr_pnl
+    dict_of_costs[instrument] = costs
+df_of_gross_pandl = pd.DataFrame(dict_of_gross_pandl)
 summed_gross_pandl = df_of_gross_pandl.sum(axis=1)
-df_of_costs = pd.concat(list_of_costs, axis=1, sort=True)
+df_of_costs = pd.DataFrame(dict_of_costs)
 summed_costs = df_of_costs.sum(axis=1)
 
 net = summed_gross_pandl.add(summed_costs, fill_value=0)
 net = net.resample('B').sum()
 
-gross_pnl = process_list_of_data(data=list_of_gross_pandl)
-costs = process_list_of_data(data=list_of_costs)
+gross_pnl = process_list_of_data(data=df_of_gross_pandl)
+costs = process_list_of_data(data=df_of_costs)
 
 capital = 500000
 
