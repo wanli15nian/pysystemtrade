@@ -34,6 +34,23 @@ def get_raw_carry_data(instrument_code):
     return daily_carry_price
 
 
+def get_raw_data_from_csv_file(instrument_code):
+    filename = '..\\data\\futures\\multiple_prices_csv\\' + instrument_code + '.csv'
+    carry_data = pd.read_csv(filename)
+
+    date_index = carry_data['DATETIME']
+    date_index = date_index.astype(str)
+
+    def left(x: str, n):
+        return x[:n]
+
+    date_index = date_index.apply(left, n=19)  #QUESTION: Why 19
+    carry_data.index = pd.to_datetime(date_index, format='%Y-%m-%d %H:%M:%S').values
+    del carry_data['DATETIME']
+    carry_data.index.name = None
+
+    return carry_data
+
 def get_rolls_per_year(instrument):
     roll_parameters = get_roll_parameters(instrument)
     rolls_per_year = roll_parameters.rolls_per_year_in_hold_cycle()

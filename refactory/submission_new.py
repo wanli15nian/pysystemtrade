@@ -6,7 +6,8 @@ import pandas as pd
 from refactory.Fill import Fill
 from refactory.apply_buffer_to_position import calc_buffered_pos_given_raw_pos
 from refactory.calculate_forecast import get_capped_forecast
-from refactory.data_source import get_point_size, get_roll_parameters, get_daily_price, get_raw_cost_data
+from refactory.data_source import get_point_size, get_roll_parameters, get_daily_price, get_raw_cost_data, \
+    get_raw_data_from_csv_file
 from refactory.utils import calculate_mixed_volatility, get_corr_estimator_for_instrument_weight, \
     get_stdev_estimator_for_instrument_weight, get_mean_estimator, optimisation, calculate_weighted_average_with_nans, \
     get_cost_per_trade, single_resampled_set_of_returns, calculate_volatility_scalar
@@ -574,23 +575,56 @@ net_instr_pnl_for_all_instr = {}
 dict_of_gross_pandl = {}
 dict_of_costs = {}
 
-for instrument in all_instruments:
-    net_pnl, gross_instr_pnl, costs = calc_pnl_across_subsystem_for_indiv_instr(instrument, all_instrument_data)
-    net_instr_pnl_for_all_instr[instrument] = net_pnl
-    dict_of_gross_pandl[instrument] = gross_instr_pnl
-    dict_of_costs[instrument] = costs
-df_of_gross_pandl = pd.DataFrame(dict_of_gross_pandl)
-summed_gross_pandl = df_of_gross_pandl.sum(axis=1)
-df_of_costs = pd.DataFrame(dict_of_costs)
-summed_costs = df_of_costs.sum(axis=1)
-
-net = summed_gross_pandl.add(summed_costs, fill_value=0)
-net = net.resample('B').sum()
-
-gross_pnl = process_list_of_data(data=df_of_gross_pandl)
-costs = process_list_of_data(data=df_of_costs)
+# for instrument in all_instruments:
+#     net_pnl, gross_instr_pnl, costs = calc_pnl_across_subsystem_for_indiv_instr(instrument, all_instrument_data)
+#     net_instr_pnl_for_all_instr[instrument] = net_pnl
+#     dict_of_gross_pandl[instrument] = gross_instr_pnl
+#     dict_of_costs[instrument] = costs
+# df_of_gross_pandl = pd.DataFrame(dict_of_gross_pandl)
+# summed_gross_pandl = df_of_gross_pandl.sum(axis=1)
+# df_of_costs = pd.DataFrame(dict_of_costs)
+# summed_costs = df_of_costs.sum(axis=1)
+#
+# net = summed_gross_pandl.add(summed_costs, fill_value=0)
+# net = net.resample('B').sum()
+#
+# gross_pnl = process_list_of_data(data=df_of_gross_pandl)
+# costs = process_list_of_data(data=df_of_costs)
 
 capital = 500000
+
+
+def get_instrument_raw_carry_data(instrument_code):
+    start_date = datetime.datetime(1900, 1, 1)
+    start_date = datetime.datetime.combine(start_date, datetime.datetime.min.time())
+
+    multiple_prices = get_raw_data_from_csv_file(instrument_code)
+
+    def str_of_int(x):
+        if isinstance(x, int):
+            return str(x)
+        else:
+            return str(int(x))
+
+    list_of_contract_column_names = ['CARRY_CONTRACT', 'FORWARD_CONTRACT', 'PRICE_CONTRACT']
+    for contract_col_name in list_of_contract_column_names:
+        multiple_prices[contract_col_name] = multiple_prices[
+            contract_col_name
+        ].apply(str_of_int)
+
+    all_price_data = multiple_prices[start_date:]
+    carry_data = all_price_data[['PRICE', 'CARRY', 'PRICE_CONTRACT', 'CARRY_CONTRACT']]
+    return carry_data
+
+
+
+def calc_daily_perc_volatility(instrument_code):
+    denom_price = get_instrument_raw_carry_data(instrument_code).PRICE
+    denom_price = denom_price.resample('1B').last()
+    return_vol = self.daily_returns_volatility(instrument_code)
+    (denom_price, return_vol) = denom_price.align(return_vol, join="right")
+    perc_vol = 100.0 * (return_vol / denom_price.ffill().abs())
+    return perc_vol
 
 def calc_subsystem_turnover(instrument_code, all_instr_data):
     positions, volatility_scalar = calc_subsystem_position(instrument_code, all_instr_data)
@@ -599,7 +633,7 @@ def calc_subsystem_turnover(instrument_code, all_instr_data):
     )
 
     block_value = all_instr_data[instrument_code]['value_per_point']
-    daily_perc_vol = self.get_price_volatility(instrument_code)
+    daily_perc_vol = calc_daily_perc_volatility(instrument_code)
     (block_value, daily_perc_vol) = block_value.align(daily_perc_vol, join="inner")
     instr_ccy_vol = block_value.ffill() * daily_perc_vol
     instr_value_vol = instr_ccy_vol.ffill()
