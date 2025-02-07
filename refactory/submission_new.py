@@ -27,6 +27,7 @@ def get_pos_target_from_risk_target(price, point_size, capital=1000000, risk_tar
     daily_risk_target = risk_target / (256 ** 0.5)
     daily_cash_vol_target = daily_risk_target * capital
     position_target = daily_cash_vol_target / (ret_volatility * point_size)
+    print('get_pos_target_from_risk_target')
     return position_target
 
 
@@ -46,6 +47,7 @@ def calculate_daily_pnl_in_points_given_pos_prices(positions: pd.Series, prices:
     adjusted_both_series = both_series.loc[:, both_series.columns != 'price'].shift(1)
     daily_pnl = adjusted_both_series.mul(daily_price_change, axis=0)
     daily_pnl[daily_pnl.isna()] = 0.0
+    print("calc_daily_pnl_in_points_given_pos_prices")
     return daily_pnl
 
 
@@ -58,6 +60,7 @@ def calc_cost(pos_target, price, point_size, trading_cost):
     period_intervals_in_seconds = sr_cost_as_annualised_figure.index.to_series().diff().dt.total_seconds()
     costs_in_points = sr_cost_as_annualised_figure * period_intervals_in_seconds / (365.25 * 24 * 60 * 60)
     costs = costs_in_points * point_size  # 后续有个fx 的序列，但目前不加
+    print('calc_cost')
 
     return costs
 
@@ -79,6 +82,7 @@ def calc_gross_daily_pnl(forecast, point_size, price, position_target):
     # 计算过程中，我们本质上是把每个rule当成了单独的portfolio来算的，所以才有了用position_target直接乘上去
     # 得出的daily_pnl_gross不能是直接相加吧，如果是的话就不合理了
     # 举例，两个forecast 给出了很弱的信号，所以实际持仓都是目标持仓的60%, 如果直接相加的，反而会导致最终持仓到了目标持仓的120%
+    print('calc_gross_daily_pnl')
     return daily_pnl_gross
 
 
@@ -92,6 +96,7 @@ def forecast_turnover_for_individual_instrument(instrument_code, rule_name):
     x_normalised_for_y = daily_forecast / daily_y.ffill()
     avg_daily = float(x_normalised_for_y.diff().abs().mean())
     annual_turnover_for_forecast = avg_daily * 256
+    print('forecast_turnover_for_individual_instrument')
     return annual_turnover_for_forecast
 
 
@@ -125,6 +130,7 @@ def calc_trading_cost(instrument_code, rule_name, pooled_instruments, weights):
     '''
 
     trading_cost = transaction_cost + holding_cost
+    print('calc_trading_cost')
     return trading_cost
 
 
@@ -132,6 +138,7 @@ def generate_fit_end_list(start_date, end_date):
     start_dates_per_period = pd.date_range(end_date, start_date, freq='-365D').to_list()
     start_dates_per_period.reverse()
     end_list = start_dates_per_period[1:-1]
+    print('generate_fit_end_list')
     return end_list
 
 
@@ -146,6 +153,7 @@ def calculate_forecast_weights(pnl_df, fit_end):
     norm_mean = [a / b for a, b in zip(mean_list, norm_factor)]
     corr = get_corr_estimator_for_instrument_weight(pnl_df, fit_end, span, min_periods_corr)  # Corr CLEARED
     weight = optimisation(number, corr, norm_mean, norm_stdev)
+    print('calc_forecast_weights')
     return weight
 
 
@@ -158,6 +166,7 @@ def combine_instrument_pnl_df(weekly_ret):
         data_item.index = data_item.index + pd.Timedelta("%dus" % offset_value)
     stacked_data = pd.concat(data_reindexed, axis=0)
     stacked_data = stacked_data.sort_index()
+    print('combine_instrument_pnl_df')
     return stacked_data
 
 
@@ -176,6 +185,7 @@ def calculate_instrument_weights(pnl_df):
     corr = get_corr_estimator_for_instrument_weight(weekly_ret, fit_end, span, min_periods)
 
     weight = optimisation(number, corr, norm_mean, norm_stdev)
+    print('calc_instrument_weights')
     return weight
 
 
@@ -186,6 +196,7 @@ def calc_gross_instr_pnl(instrument, position_buffered, price):
     pnl_in_ccy = pnl_in_points * point_size
     gross_pnl_daily = pnl_in_ccy.resample("B").sum()
     gross_pnl_daily = gross_pnl_daily.squeeze()
+    print('calc_gross_instr_pnl')
     return gross_pnl_daily
 
 
@@ -212,6 +223,7 @@ def get_turnover_for_list_of_rules(instrument_list, trading_rule_list):
             rule_name: forecast_turnover_for_individual_instrument(instrument, rule_name)
             for rule_name in trading_rule_list
         }
+    print('get_turnover_for_list_of_rules')
 
     return instrument_turnover_dict
 
@@ -377,6 +389,7 @@ def calc_subsystem_position(instrument_code, all_instrument_data):
                                                     annual_percentage_volatility_target=0.25)
     volatility_scalar = volatility_scalar.reindex(combined_forecast.index, method="ffill")
     position_raw = volatility_scalar * combined_forecast / 10.0
+    print('calc_subsystem_position')
     return position_raw, volatility_scalar
 
 
@@ -421,6 +434,7 @@ def calc_pnl_across_subsystem_for_indiv_instr(instrument_code, all_instrument_da
     reindexed_deflator = cost_deflator.reindex(costs_as_pd_series.index, method="ffill")
     normalised_costs = reindexed_deflator * costs_as_pd_series
     net_pnl = gross_pnl_daily.add(normalised_costs, fill_value=0).resample('B').sum()
+    print('calc_pnl_across_subsytem_for_indiv_instr')
     return net_pnl, gross_pnl_daily, normalised_costs
 
 
@@ -444,6 +458,7 @@ def calc_cost_instr_currency_for_a_fill(fill, value_per_point, raw_costs):
     commission_costs = max([per_trade_commission, block_commission, perc_commission])
 
     total_cost = slippage_costs + commission_costs
+    print('calc_cost_instr_currency_for_a_fill')
     return total_cost
 
 def pseudo_fills_for_year(year, rolls_per_year, price, adjusted_pos_buffered):
@@ -476,6 +491,7 @@ def pseudo_fills_for_year(year, rolls_per_year, price, adjusted_pos_buffered):
             price=fill.price) for fill in opening_fills_this_year]
 
     fills_this_year = opening_fills_this_year + closing_fills_this_year
+    print('pseudo_fills_for_year')
 
     return fills_this_year
 
@@ -504,6 +520,7 @@ def calc_avg_holding_within_a_year(year, rolls_per_year, adjusted_pos_buffered):
         if np.isnan(avg_holding):
             avg_holding = 0.0
         list_of_average_holdings.append(avg_holding)
+    print('calc_avg_holding_within_a_year')
     return list_of_average_holdings
 
 
@@ -519,6 +536,7 @@ def generate_equal_dates_within_year(year, rolls_per_year, false_start_of_year_a
     delta_for_each_period = datetime.timedelta(days=days_between_periods)
     all_dates = [first_date + (delta_for_each_period * period_count)
                  for period_count in range(rolls_per_year)]
+    print('generate_equal_dates_within_year')
     return all_dates
 
 
@@ -536,6 +554,7 @@ def calc_net_returns_dict_for_all_instr(dict_of_sr_costs, gross_returns_dict):
         net_returns_single_instrument = pd.DataFrame(net_returns_single_instrument)
         net_returns_dict[instrument] = net_returns_single_instrument  # CLEARED
     net_returns = single_resampled_set_of_returns(net_returns_dict, frequency='W')  # CLEARED
+    print('calc_net_returns_dict_for_all_instr')
     return net_returns
 
 
@@ -551,6 +570,7 @@ def calc_gross_returns_dict_for_all_instr(all_instrument_data, all_instruments):
                                                     position_target=pos_target)
         gross_returns_single_instrument_df = gross_returns_series.replace(0, np.nan)
         gross_returns_dict[instrument] = gross_returns_single_instrument_df
+    print('calc_gross_returns_dict_for_all_instr')
     return gross_returns_dict
 
 
@@ -614,31 +634,62 @@ def get_instrument_raw_carry_data(instrument_code):
 
     all_price_data = multiple_prices[start_date:]
     carry_data = all_price_data[['PRICE', 'CARRY', 'PRICE_CONTRACT', 'CARRY_CONTRACT']]
+    print("get_instrument_raw_carry_data")
     return carry_data
 
 
 
-def calc_daily_perc_volatility(instrument_code):
+def calc_daily_perc_volatility(instrument_code, all_instr_data):
     denom_price = get_instrument_raw_carry_data(instrument_code).PRICE
     denom_price = denom_price.resample('1B').last()
-    return_vol = self.daily_returns_volatility(instrument_code)
+
+    instr_daily_price = all_instr_data[instrument_code]['price']
+    price_returns = instr_daily_price.diff()
+    vol_mult = 1.0
+    raw_vol = calculate_mixed_volatility(price_returns, slow_vol_years=10)
+    return_vol = vol_mult * raw_vol
+
     (denom_price, return_vol) = denom_price.align(return_vol, join="right")
     perc_vol = 100.0 * (return_vol / denom_price.ffill().abs())
     return perc_vol
 
-def calc_subsystem_turnover(instrument_code, all_instr_data):
-    positions, volatility_scalar = calc_subsystem_position(instrument_code, all_instr_data)
-    average_position_for_turnover = self.get_average_position_at_subsystem_level(
-        instrument_code
-    )
+# perc_vol = calc_daily_perc_volatility('CORN')
+def turnover_x_y(x, y, smooth_y_days: int = 250) -> float:
+    '''
+    Give the turnover of x normalised for y
+    '''
 
-    block_value = all_instr_data[instrument_code]['value_per_point']
-    daily_perc_vol = calc_daily_perc_volatility(instrument_code)
+    daily_x = x.resample("1B").last()
+    if isinstance(y, float) or isinstance(y, int):
+        daily_y = pd.Series(np.full(daily_x.shape[0], float(y)), daily_x.index)
+    else:
+        daily_y = y.reindex(daily_x.index, method="ffill")
+        daily_y = daily_y.ewm(smooth_y_days, min_periods=2).mean()
+
+    x_normalised_for_y = daily_x / daily_y.ffill()
+    avg_daily = float(x_normalised_for_y.diff().abs().mean())
+    return avg_daily * 256
+def calc_subsystem_turnover(instrument_code, all_instr_data, notional_trading_capital=500000, risk_target=0.25):
+    positions, volatility_scalar = calc_subsystem_position(instrument_code, all_instr_data)
+
+
+    annual_cash_vol_target = (notional_trading_capital*risk_target)
+    daily_cash_vol_target = annual_cash_vol_target/16
+
+    block_move_value = all_instr_data[instrument_code]['value_per_point']
+    underlying_price = get_instrument_raw_carry_data(instrument_code).PRICE
+    daily_prices = underlying_price.resample('1B').last()
+    block_value = block_move_value * daily_prices.ffill() *0.01
+
+    daily_perc_vol = calc_daily_perc_volatility(instrument_code, all_instr_data)
     (block_value, daily_perc_vol) = block_value.align(daily_perc_vol, join="inner")
     instr_ccy_vol = block_value.ffill() * daily_perc_vol
     instr_value_vol = instr_ccy_vol.ffill()
+    average_position_for_turnover = daily_cash_vol_target/instr_value_vol
 
-    subsystem_turnover = turnover(positions, average_position_for_turnover)
+
+    subsystem_turnover = turnover_x_y(positions, average_position_for_turnover)
+    print('calc_subsystem_turnover')
     return subsystem_turnover
 calc_subsystem_turnover('CORN', all_instrument_data)
 print('END')
