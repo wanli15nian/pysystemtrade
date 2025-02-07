@@ -587,31 +587,7 @@ def process_list_of_data(data):  # Rename the columns
     resampled_data[resampled_data == 0.0] = np.nan
     return resampled_data
 
-all_instruments = my_config.instruments
-trading_rule_list = ['ewmac32', 'ewmac8']
-all_instrument_data = prepare_all_instr_data(all_instruments, trading_rule_list)
-net_instr_pnl_for_all_instr = {}
 
-dict_of_gross_pandl = {}
-dict_of_costs = {}
-
-# for instrument in all_instruments:
-#     net_pnl, gross_instr_pnl, costs = calc_pnl_across_subsystem_for_indiv_instr(instrument, all_instrument_data)
-#     net_instr_pnl_for_all_instr[instrument] = net_pnl
-#     dict_of_gross_pandl[instrument] = gross_instr_pnl
-#     dict_of_costs[instrument] = costs
-# df_of_gross_pandl = pd.DataFrame(dict_of_gross_pandl)
-# summed_gross_pandl = df_of_gross_pandl.sum(axis=1)
-# df_of_costs = pd.DataFrame(dict_of_costs)
-# summed_costs = df_of_costs.sum(axis=1)
-#
-# net = summed_gross_pandl.add(summed_costs, fill_value=0)
-# net = net.resample('B').sum()
-#
-# gross_pnl = process_list_of_data(data=df_of_gross_pandl)
-# costs = process_list_of_data(data=df_of_costs)
-
-capital = 500000
 
 
 def get_instrument_raw_carry_data(instrument_code):
@@ -672,7 +648,6 @@ def turnover_x_y(x, y, smooth_y_days: int = 250) -> float:
 def calc_subsystem_turnover(instrument_code, all_instr_data, notional_trading_capital=500000, risk_target=0.25):
     positions, volatility_scalar = calc_subsystem_position(instrument_code, all_instr_data)
 
-
     annual_cash_vol_target = (notional_trading_capital*risk_target)
     daily_cash_vol_target = annual_cash_vol_target/16
 
@@ -691,7 +666,36 @@ def calc_subsystem_turnover(instrument_code, all_instr_data, notional_trading_ca
     subsystem_turnover = turnover_x_y(positions, average_position_for_turnover)
     print('calc_subsystem_turnover')
     return subsystem_turnover
-calc_subsystem_turnover('CORN', all_instrument_data)
+
+all_instruments = my_config.instruments
+trading_rule_list = ['ewmac32', 'ewmac8']
+all_instrument_data = prepare_all_instr_data(all_instruments, trading_rule_list)
+net_instr_pnl_for_all_instr = {}
+
+dict_of_gross_pandl = {}
+dict_of_costs = {}
+
+for instrument in all_instruments:
+    net_pnl, gross_instr_pnl, costs = calc_pnl_across_subsystem_for_indiv_instr(instrument, all_instrument_data)
+    net_instr_pnl_for_all_instr[instrument] = net_pnl
+    dict_of_gross_pandl[instrument] = gross_instr_pnl
+    dict_of_costs[instrument] = costs
+df_of_gross_pandl = pd.DataFrame(dict_of_gross_pandl)
+summed_gross_pandl = df_of_gross_pandl.sum(axis=1)
+df_of_costs = pd.DataFrame(dict_of_costs)
+summed_costs = df_of_costs.sum(axis=1)
+
+net_PNL = summed_gross_pandl.add(summed_costs, fill_value=0)
+net_PNL = net_PNL.resample('B').sum()
+
+gross_pnl = process_list_of_data(data=df_of_gross_pandl)
+costs = process_list_of_data(data=df_of_costs)
+
+turnover_as_list = [calc_subsystem_turnover(instrument_code, all_instrument_data) for instrument_code in all_instruments]
+turnover_as_dict = dict([(instrument_code, turnover) for (instrument_code, turnover) in zip(all_instruments, turnover_as_list)])
+turnovers = {'asset': turnover_as_dict}
+
+
 print('END')
 
 def main(my_config):
