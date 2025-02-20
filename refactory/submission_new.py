@@ -835,6 +835,41 @@ weights = pd.DataFrame(weights_dict, index=weight_index)
 
 ## 在这里跳过add zero
 
+
+subsystem_positions = []
+for instrument_code in instruments_used:
+    raw_pos, vol_scalar = calc_subsystem_position(instrument_code, all_instrument_data)
+    # pos_buffered = calc_buffered_pos_given_raw_pos(raw_pos, vol_scalar, buffer_size=0.1)
+    subsystem_positions.append(raw_pos)
+subsystem_positions = pd.concat(subsystem_positions, axis=1).ffill()
+subsystem_positions.columns = instruments_used
+
+position_or_forecast = subsystem_positions
+pdm_ffill = position_or_forecast.ffill()
+
+## Set leading all nan to zero so weights not set to zero
+p_or_f_notnan = ~pdm_ffill.isna()
+pdm_ffill[p_or_f_notnan.sum(axis=1) == 0] = 0
+
+adj_weights = weights.groupby(level=0).last()
+adj_weights = adj_weights.reindex(pdm_ffill.index, method="ffill")
+instrument_weights = adj_weights[position_or_forecast.columns]
+instrument_weights[np.isnan(pdm_ffill)] = 0.0
+daily_unsmoothed_instr_weights = instrument_weights.resample('1B').mean()
+
+
+smooth_weighting = 125
+smoothed_instr_weights = daily_unsmoothed_instr_weights.ewm(span=smooth_weighting).mean()
+
+sum_weights = smoothed_instr_weights.sum(axis=1)
+zero_rows = sum_weights == 0.0
+sum_weights[zero_rows] = 0.0001  ## avoid Inf
+weight_multiplier = 1.0 / sum_weights
+weight_multiplier_array = np.array([weight_multiplier] * len(smoothed_instr_weights.columns))
+weight_values = smoothed_instr_weights.values
+
+normalised_weights_np = weight_multiplier_array.transpose() * weight_values
+normalised_weights = pd.DataFrame(normalised_weights_np, columns=smoothed_instr_weights.columns, index=smoothed_instr_weights.index)
 print('END')
 
 def main(my_config):
