@@ -1,4 +1,5 @@
 import datetime
+from copy import copy
 
 import numpy as np
 import pandas as pd
@@ -13,6 +14,10 @@ from refactory.utils import calculate_mixed_volatility, get_corr_estimator_for_i
     get_cost_per_trade, single_resampled_set_of_returns, calculate_volatility_scalar
 from sysdata.config.configdata import Config
 import time
+
+import joblib
+import types
+
 start = time.time()
 
 my_config = Config()
@@ -180,7 +185,7 @@ def calculate_instrument_weights(pnl_df):
     span = 500000
     min_periods = 10
 
-    norm_stdev, _ = get_stdev_estimator_for_instrument_weight(weekly_ret, fit_end, span, min_periods)
+    norm_stdev, _, _ = get_stdev_estimator_for_instrument_weight(weekly_ret, fit_end, span, min_periods)
     norm_mean = [0.5 * asset_stdev for asset_stdev in norm_stdev]
     corr = get_corr_estimator_for_instrument_weight(weekly_ret, fit_end, span, min_periods)
 
@@ -437,7 +442,6 @@ def calc_pnl_across_subsystem_for_indiv_instr(instrument_code, all_instrument_da
     print('calc_pnl_across_subsytem_for_indiv_instr')
     return net_pnl, gross_pnl_daily, normalised_costs
 
-
 def calc_cost_instr_currency_for_a_fill(fill, value_per_point, raw_costs):
     blocks_traded = fill.qty
     price = fill.price
@@ -666,7 +670,7 @@ def calc_subsystem_turnover(instrument_code, all_instr_data, notional_trading_ca
     subsystem_turnover = turnover_x_y(positions, average_position_for_turnover)
     print('calc_subsystem_turnover')
     return subsystem_turnover
-
+'''
 all_instruments = my_config.instruments
 trading_rule_list = ['ewmac32', 'ewmac8']
 all_instrument_data = prepare_all_instr_data(all_instruments, trading_rule_list)
@@ -696,6 +700,107 @@ turnover_as_dict = dict([(instrument_code, turnover) for (instrument_code, turno
 turnovers = {'asset': turnover_as_dict}
 
 
+
+'''
+'''
+df_of_gross_pandl.replace(0.0, np.nan) 后就是需要的gross curve
+df_of_costs resample方式不同的"relevant curve", sum 都是一样的
+'''
+# dict_of_cost_SR = self.get_dict_of_unadjusted_cost_SR_for_asset_name(asset_name)
+# cost_multiplier = self.cost_multiplier
+# if cost_multiplier != 1.0:
+#     self.log.debug("Applying cost multiplier of %f" % cost_multiplier)
+#     dict_of_cost_SR = dict_of_cost_SR.apply_cost_multiplier(
+#         cost_multiplier=cost_multiplier
+#     )
+
+# joblib.dump({k: v for k, v in globals().items() if not k.startswith('__') and not isinstance(v, (types.ModuleType, types.FunctionType))}, 'project_checkpoint.pkl')
+loaded_var = joblib.load('project_checkpoint.pkl')
+globals().update(loaded_var)
+print('variables loaded')
+df_of_costs = loaded_var.get('df_of_costs')
+df_of_gross_pandl = loaded_var.get('df_of_gross_pandl').replace(0.0, np.nan)
+all_instruments = loaded_var.get('all_instruments')
+all_instrument_data = loaded_var.get('all_instrument_data')
+net_PNL = loaded_var.get('net_PNL')
+
+
+# SR 的Index 问题还是没有处理好，源代码为resample("B"), 现为很奇怪的resample
+SR_dict = {}
+for instrument in all_instruments:
+    cost_curve = df_of_costs[instrument]
+    gross_pandl = df_of_gross_pandl[instrument]
+    daily_returns = cost_curve.mean()
+    daily_std = gross_pandl.std()
+    annual_SR = 16 * daily_returns / daily_std
+    SR_dict[instrument] = annual_SR
+
+net_return_as_dict = {}
+for instrument in all_instruments:
+    daily_gross_returns_for_asset = df_of_gross_pandl[instrument]
+    daily_gross_return_std = daily_gross_returns_for_asset.std()
+    daily_asset_sr_cost = SR_dict[instrument]/16
+    daily_returns_cost = daily_gross_return_std * daily_asset_sr_cost
+    daily_returns_cost_as_list = [daily_returns_cost] * len(daily_gross_returns_for_asset.index)
+    daily_returns_cost_as_ts = pd.Series(daily_returns_cost_as_list, daily_gross_returns_for_asset.index)
+    net_returns = daily_gross_returns_for_asset + daily_returns_cost_as_ts
+    net_return_as_dict[instrument] = net_returns
+
+net_return_as_df = pd.DataFrame(net_return_as_dict)
+net_return_dict = {'asset': net_return_as_df}
+net_return = single_resampled_set_of_returns(net_return_dict, 'W')
+
+
+start = net_return.index[0]
+end = net_return.index[-1]
+
+# sample method is INSAMPLE
+fit_dates = f'Fit from {start} to {end}, use from {start} to {end}'
+# print(calculate_instrument_weights(net_return))
+
+corr = net_return.ewm(span=500000, min_periods=10, ignore_na=True).corr(pairwise=True)
+
+size_of_matrix = len(corr.columns)
+corr_matrix_values = (
+    corr[corr.index.get_level_values(0) < end]
+    .tail(size_of_matrix)
+    .values)
+corr_matrix_values[corr_matrix_values<0.0] = 0.0
+
+exponential_mean = net_return.ewm(span=50000, min_periods=5).mean()
+matching_index_size = net_return.index[net_return.index < end].size
+last_index = matching_index_size-1
+mean = exponential_mean.iloc[last_index]
+mean = mean * 365.25/7.0 # Number of weeks in a year
+
+exponential_std = net_return.ewm(span=50000, min_periods=5).std()
+std = exponential_std.iloc[last_index]
+std = std * (365.25/7.0)**0.5
+
+data_length = len(net_return.index)
+frequency = 'W'
+
+
+# Shrinkage
+corr_matrix_values = pd.DataFrame(corr_matrix_values)
+new_corr_values = copy(corr_matrix_values.values)
+np.fill_diagonal(new_corr_values, np.nan)
+avg_corr = np.nanmean(new_corr_values)
+
+
+size_index = range(corr_matrix_values.size)
+
+def _od(i, j, offdiag, diag):
+    if i == j:
+        return diag
+    else:
+        return offdiag
+
+
+corr_matrix_values_as_list = [
+    [_od(i, j, offdiag=avg_corr, diag=1.0) for i in size_index] for j in size_index
+]
+corr_matrix_values = np.array(corr_matrix_values_as_list)
 print('END')
 
 def main(my_config):
