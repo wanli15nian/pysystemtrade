@@ -209,11 +209,17 @@ def calc_forecast_weights(pnl_df, fit_end, span_multiple=50000,
     return weight
 
 
-def combine_instrument_pnl_df(weekly_ret):
+def reindex_and_stack_list_of_df(list_of_df):
+    '''
+    提取所有的list中所有df的index
+    remove duplicates，把所有数据都reindex
+    加毫秒进行区分，然后stack起来
+    '''
+
     from itertools import chain
-    all_indices_flattened = list(chain.from_iterable(data_item.index for data_item in weekly_ret))
+    all_indices_flattened = list(chain.from_iterable(data_item.index for data_item in list_of_df))
     common_unique_index = sorted(set(all_indices_flattened))
-    data_reindexed = [data_item.reindex(common_unique_index) for data_item in weekly_ret]
+    data_reindexed = [data_item.reindex(common_unique_index) for data_item in list_of_df]
     for offset_value, data_item in enumerate(data_reindexed):
         data_item.index = data_item.index + pd.Timedelta("%dus" % offset_value)
     stacked_data = pd.concat(data_reindexed, axis=0)
@@ -377,13 +383,15 @@ def calc_subsystem_position(instrument_code, all_instrument_data, trading_rule_l
 
     # 把按年的Index ffill成按天的Index
     weight_df = weight_df.reindex(universal_index, method='ffill').fillna(1 / column_num)
-    end = time.time()
-    daily_forecast_weights_fixed_to_forecasts_unsmoothed = weight_df.resample('1B').mean()
-    forecast_weights = daily_forecast_weights_fixed_to_forecasts_unsmoothed.ewm(span=125).mean()
+    daily_forecast_weights_resampled_unsmoothed = weight_df.resample('1B').mean()
+    forecast_weights_for_rules = daily_forecast_weights_resampled_unsmoothed.ewm(span=125).mean()
     # 跳过一个weight normalisation to 1 的函数
-    list_of_forecast = [all_instrument_data[instrument]['forecast_df'] for instrument in all_instruments]
-    list_of_resampled_forecast = [forecast_df.resample('W').last() for forecast_df in list_of_forecast]
-    pooled_forecast_data = combine_instrument_pnl_df(list_of_resampled_forecast)
+    list_of_forecast_df = [all_instrument_data[instrument]['forecast_df'] for instrument in all_instruments]
+    list_of_resampled_forecast = [forecast_df.resample('W').last() for forecast_df in list_of_forecast_df]
+    end = time.time()
+    pooled_forecast_data = reindex_and_stack_list_of_df(list_of_resampled_forecast)
+
+
     pooled_fdm = True
     ew_lookback = 250
     min_periods = 20
@@ -392,6 +400,7 @@ def calc_subsystem_position(instrument_code, all_instrument_data, trading_rule_l
         min_periods = min_periods * len(all_instruments)
     raw_correlations = pooled_forecast_data.ewm(span=ew_lookback, min_periods=min_periods,
                                                 ignore_na=True).corr(pairwise=True)
+
     size_of_matrix = len(pooled_forecast_data)
     corr_list = []
     for fit_end in end_list:
@@ -406,7 +415,7 @@ def calc_subsystem_position(instrument_code, all_instrument_data, trading_rule_l
     # corr_list.insert(0, np.array([0.99, 1]))  # 为了让corr_list的element和end_list对齐，先不加起始默认matrix
     div_mult_vector = []
     for corrmatrix, start_of_period in zip(corr_list, end_list):
-        weight_slice = forecast_weights[:start_of_period]
+        weight_slice = forecast_weights_for_rules[:start_of_period]
         if weight_slice.shape[0] == 0:
             div_mult_vector.append(1.0)
             continue
@@ -415,11 +424,11 @@ def calc_subsystem_position(instrument_code, all_instrument_data, trading_rule_l
         div_multiplier = div_mult_single_period(corrmatrix, weights_dict)
         div_mult_vector.append(div_multiplier)
     div_mult_df = pd.Series(div_mult_vector, index=end_list)
-    div_mult_df_daily = div_mult_df.reindex(forecast_weights.index, method="ffill")
+    div_mult_df_daily = div_mult_df.reindex(forecast_weights_for_rules.index, method="ffill")
     div_mult_df_daily[div_mult_df_daily.isna()] = 1.0
     div_mult_df_smoothed = div_mult_df_daily.ewm(span=125).mean()
     instrument_forecast = all_instrument_data[instrument_code]['forecast_df']
-    combined_forecast_without_cap = (forecast_weights * instrument_forecast).sum(axis=1) * div_mult_df_smoothed.ffill()
+    combined_forecast_without_cap = (forecast_weights_for_rules * instrument_forecast).sum(axis=1) * div_mult_df_smoothed.ffill()
     combined_forecast = combined_forecast_without_cap.clip(20, -20)  # QUESTION: 小数点后8位开始对不上，暂时不管
     volatility_scalar = calculate_volatility_scalar(instrument_code, capital=500000,
                                                     annual_percentage_volatility_target=0.25)
