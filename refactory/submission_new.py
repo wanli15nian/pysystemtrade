@@ -7,9 +7,9 @@ import pandas as pd
 from refactory.Fill import Fill
 from refactory.apply_buffer_to_position import calc_buffered_pos_given_raw_pos
 from refactory.calculate_forecast import get_capped_forecast
-from refactory.data_source import get_point_size, get_roll_parameters, get_raw_data_from_csv_file
-from refactory.temp import generate_fit_end_list
-from refactory.temp import calc_daily_gross_pnl_in_points
+from refactory.data_source import get_point_size, get_roll_parameters, get_raw_data_from_csv_file, get_daily_price, \
+    get_raw_cost_data
+from refactory.temp import calc_pos_target_from_risk_target
 from refactory.utils import calculate_mixed_volatility, get_corr_estimator_for_instrument_weight, \
     get_stdev_estimator_for_instrument_weight, get_mean_estimator, optimisation, calculate_weighted_average_with_nans, \
     get_cost_per_trade, single_resampled_set_of_returns, calculate_volatility_scalar
@@ -22,6 +22,93 @@ my_config = Config()
 my_config.instruments = ["CORN", "SOFR", "SP500_micro", 'US10']
 trading_rule_list = ['ewmac32', 'ewmac8']
 
+def prepare_all_instr_data(all_instruments, trading_rule_list):
+    all_instrument_data = {}
+    for instrument in all_instruments:
+        individual_instr_data = {}
+        forecast_df = {}
+        for rule_name in trading_rule_list:
+            forecast = get_capped_forecast(instrument, rule_name)
+            forecast_df[rule_name] = forecast
+        forecast_df = pd.DataFrame(forecast_df)
+        individual_instr_data['forecast_df'] = forecast_df
+
+        turnover_dict = {}
+        for rule_name in trading_rule_list:
+            turnover = forecast_turnover_for_indiv_instr(instrument, rule_name)
+            turnover_dict[rule_name] = turnover
+        individual_instr_data['turnover_dict'] = turnover_dict
+
+        price = get_daily_price(instrument)
+        individual_instr_data['price'] = price
+
+        point_size = get_point_size(instrument)
+        individual_instr_data['point_size'] = point_size
+
+        position_target = calc_pos_target_from_risk_target(price, point_size, capital=1000000, risk_target=0.16)
+        individual_instr_data['position_target'] = position_target
+
+        raw_costs = get_raw_cost_data(instrument)
+        individual_instr_data['raw_costs'] = raw_costs
+
+        value_per_point = get_point_size(instrument)
+        individual_instr_data['value_per_point'] = value_per_point
+
+        rolls_per_yr = get_roll_parameters(instrument).rolls_per_year_in_hold_cycle()
+        individual_instr_data['rolls_per_year'] = rolls_per_yr
+
+        all_instrument_data[instrument] = individual_instr_data
+    return all_instrument_data
+
+
+def calc_daily_gross_pnl_in_points(positions: pd.Series, prices: pd.Series):
+    '''
+    持仓单位为 “手"
+    实际持仓再往后调一天，然后乘以价格变化
+    因为实际持仓和价格变化都是当天收盘之后算出来的
+    所以第一天的实际持仓算出来后，第二天会那么持仓，然后吃满第二天的价格变化
+    pnl也会算进第二天里
+
+    需要去算具体金额的盈亏，还得乘以point_size, 也就是比如说一手多少吨
+    '''
+    pos_series = positions.groupby(positions.index).last()  # 得到当天最后的持仓
+    pos_price_series = pd.concat([pos_series, prices], axis=1)
+    if len(pos_price_series.columns) == 2:
+        pos_price_series.columns = ["positions", "price"]
+    pos_price_series = pos_price_series.ffill()
+    daily_price_change = pos_price_series.price.diff()
+    adjusted_pos_price_series = pos_price_series.loc[:, pos_price_series.columns != 'price'].shift(1)
+    daily_pnl_in_points = adjusted_pos_price_series.mul(daily_price_change, axis=0)
+    daily_pnl_in_points[daily_pnl_in_points.isna()] = 0.0
+    print("calc_daily_pnl_in_points_given_pos_prices")
+    return daily_pnl_in_points
+
+
+def calc_gross_daily_pnl_dict_for_all_instr(all_instrument_data, all_instruments):
+    gross_daily_pnl_dict = {}
+    for instrument in all_instruments:
+        price = all_instrument_data[instrument]['price']
+        point_size = all_instrument_data[instrument]['point_size']
+        forecast = all_instrument_data[instrument]['forecast_df']
+        pos_target = all_instrument_data[instrument]['position_target']
+
+        gross_daily_pnl = calc_gross_daily_pnl(forecast=forecast, point_size=point_size, price=price,
+                                                    position_target=pos_target)
+        gross_daily_pnl_single_instrument_df = gross_daily_pnl.replace(0, np.nan)
+        gross_daily_pnl_dict[instrument] = gross_daily_pnl_single_instrument_df
+    print('calc_gross_returns_dict_for_all_instr')
+    return gross_daily_pnl_dict
+
+
+def generate_fit_end_list(start_date, end_date):
+    '''
+    从结束日期开始倒推，然后reverse()
+    '''
+    start_dates_per_period = pd.date_range(end_date, start_date, freq='-365D').to_list()
+    start_dates_per_period.reverse()
+    end_list = start_dates_per_period[1:-1]
+    print('generate_fit_end_list')
+    return end_list
 
 def calc_cost(pos_target, price, point_size, trading_cost):
     # Actually output in price space to match gross returns
@@ -72,7 +159,7 @@ def forecast_turnover_for_indiv_instr(instrument_code, rule_name):
     return annual_turnover_for_forecast
 
 
-def calc_trading_cost(instrument_code, rule_name, pooled_instruments, weights):
+def calc_annual_trading_cost(instrument_code, rule_name, pooled_instruments, forecast_length_weights):
     # 单次交易成本，包括slippage和commission
     cost_per_trade = get_cost_per_trade(instrument_code)
 
@@ -82,7 +169,7 @@ def calc_trading_cost(instrument_code, rule_name, pooled_instruments, weights):
     turnovers = [forecast_turnover_for_indiv_instr(instrument_code, rule_name)
                  for instrument_code in pooled_instruments]
 
-    weighted_avg_turnover = calculate_weighted_average_with_nans(weights, turnovers)
+    weighted_avg_turnover = calculate_weighted_average_with_nans(forecast_length_weights, turnovers)
     transaction_cost = cost_per_trade * weighted_avg_turnover
     '''
     交易频率和历史数据线性相关，历史数据越多，交易频率可以越高
@@ -96,7 +183,7 @@ def calc_trading_cost(instrument_code, rule_name, pooled_instruments, weights):
     holding_cost = hold_turnovers * cost_per_trade
 
     '''
-    期货合约进行换仓的时候，有卖出旧合约和卖出新合约两个操作，所以乘2
+    期货合约进行换仓的时候，有卖出旧合约和Buy新合约两个操作，所以乘2
     然后乘上单次交易成本
     所以属于持仓成本
     '''
@@ -194,6 +281,8 @@ def get_turnover_for_list_of_rules(instrument_list, trading_rule_list):
 
 
 def calc_subsystem_position(instrument_code, all_instrument_data, trading_rule_list):
+    all_instruments = [instrument for instrument in all_instrument_data.keys()]
+
     turnovers = {instrument: all_instrument_data[instrument]['turnover_dict'] for instrument in all_instrument_data}
     gross_daily_pnl_dict = calc_gross_daily_pnl_dict_for_all_instr(all_instrument_data, all_instruments)
     # 用历史数据的多少来决定每个instrument的权重
@@ -209,9 +298,12 @@ def calc_subsystem_position(instrument_code, all_instrument_data, trading_rule_l
         for trading_rule in trading_rule_list:
             forecast = all_instrument_data[instrument]['forecast_df'][trading_rule]
             pos_target = pos_target.reindex(forecast.index, method="ffill")
-            annual_trading_cost = calc_trading_cost(instrument, trading_rule, all_instruments, forecast_length_weights)
-            gross_returns_series = calc_gross_daily_pnl(forecast=forecast, point_size=point_size,
-                                                        price=price, position_target=pos_target)
+
+            # Annual trading cost is calculated using pooled instruments, hence "all_instruments" is passed
+            # Trading cost is the sum of holding and transaction cost
+            annual_trading_cost = calc_annual_trading_cost(instrument, trading_rule, all_instruments, forecast_length_weights)
+
+            gross_daily_pnl_series = gross_daily_pnl_dict[instrument][trading_rule]
             cost_curve = calc_cost(pos_target=pos_target, price=price,
                                    point_size=point_size, trading_cost=annual_trading_cost)
             '''
@@ -224,8 +316,8 @@ def calc_subsystem_position(instrument_code, all_instrument_data, trading_rule_l
             if instrument == 'US10':
                 cost_curve.iloc[:13] = np.nan  # QUESTION: 为什么到了US10是前13个数字
             cost_curve_mean = cost_curve.mean()
-            gross_returns_series = gross_returns_series.replace(0, np.nan)
-            gross_returns_std = gross_returns_series.std()
+            gross_daily_pnl_series = gross_daily_pnl_series.replace(0, np.nan)
+            gross_returns_std = gross_daily_pnl_series.std()
             annual_cost_SR = 16 * cost_curve_mean / gross_returns_std
             SR_dict[trading_rule] = annual_cost_SR
         dict_of_costs_gross_returns_ratio[instrument] = SR_dict
@@ -261,6 +353,7 @@ def calc_subsystem_position(instrument_code, all_instrument_data, trading_rule_l
     end_date = net_returns.index[-1]
     end_list = generate_fit_end_list(start_date, end_date)
     weight_df = pd.DataFrame([calc_forecast_weights(net_returns, end) for end in end_list], index=end_list)
+    end = time.time()
     # To add the initial weight
     column_num = len(weight_df.columns)
     initial_weight = {col: 1 / column_num for col in weight_df.columns}
@@ -318,6 +411,12 @@ def calc_subsystem_position(instrument_code, all_instrument_data, trading_rule_l
     position_raw = volatility_scalar * combined_forecast / 10.0
     print('calc_subsystem_position')
     return position_raw, volatility_scalar
+
+import time
+start = time.time()
+instruments = my_config.instruments
+all_instrument_data = prepare_all_instr_data(instruments, trading_rule_list=trading_rule_list)
+calc_subsystem_position('CORN', all_instrument_data, trading_rule_list)
 
 def calc_pnl_across_subsystem_for_indiv_instr(instrument_code, all_instrument_data, trading_rule_list):
     price = all_instrument_data[instrument_code]['price']
@@ -483,20 +582,7 @@ def calc_net_returns_dict_for_all_instr(dict_of_sr_costs, gross_returns_dict):
     return net_returns
 
 
-def calc_gross_daily_pnl_dict_for_all_instr(all_instrument_data, all_instruments):
-    gross_daily_pnl_dict = {}
-    for instrument in all_instruments:
-        price = all_instrument_data[instrument]['price']
-        point_size = all_instrument_data[instrument]['point_size']
-        forecast = all_instrument_data[instrument]['forecast_df']
-        pos_target = all_instrument_data[instrument]['position_target']
 
-        gross_daily_pnl = calc_gross_daily_pnl(forecast=forecast, point_size=point_size, price=price,
-                                                    position_target=pos_target)
-        gross_daily_pnl_single_instrument_df = gross_daily_pnl.replace(0, np.nan)
-        gross_daily_pnl_dict[instrument] = gross_daily_pnl_single_instrument_df
-    print('calc_gross_returns_dict_for_all_instr')
-    return gross_daily_pnl_dict
 
 
 def calc_buffered_pos_given_combined_forecast(volatility_scalar, position_raw):
@@ -810,5 +896,6 @@ def main(my_config):
 
 if __name__ == '__main__':
     main(my_config)
+
 
 
