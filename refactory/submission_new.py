@@ -365,16 +365,19 @@ def calc_subsystem_position(instrument_code, all_instrument_data, trading_rule_l
     start_date = net_returns_stacked_for_all_instr.index[0]
     end_date = net_returns_stacked_for_all_instr.index[-1]
     end_list = generate_fit_end_list(start_date, end_date)
-    weight_df = pd.DataFrame([calc_forecast_weights(net_returns_stacked_for_all_instr, end) for end in end_list], index=end_list)
-    end = time.time()
+    weight_df = pd.DataFrame([calc_forecast_weights(net_returns_stacked_for_all_instr, end) for end in end_list],
+                             index=end_list, columns=net_returns_stacked_for_all_instr.columns)
+
+
     # To add the initial weight
+    universal_index = all_instrument_data[instrument_code]['price'].index
     column_num = len(weight_df.columns)
-    initial_weight = {col: 1 / column_num for col in weight_df.columns}
-    initial_weight = pd.DataFrame(initial_weight, index=[start_date])
+    initial_weight = pd.DataFrame({col: 1 / column_num for col in weight_df.columns}, index=[start_date])
     weight_df = pd.concat([initial_weight, weight_df], axis=0)
-    weight_df.columns = net_returns_stacked_for_all_instr.columns
-    weight_df = weight_df.reindex(all_instrument_data[instrument_code]['price'].index, method='ffill')
-    weight_df = weight_df.fillna(1 / len(weight_df.columns))
+
+    # 把按年的Index ffill成按天的Index
+    weight_df = weight_df.reindex(universal_index, method='ffill').fillna(1 / column_num)
+    end = time.time()
     daily_forecast_weights_fixed_to_forecasts_unsmoothed = weight_df.resample('1B').mean()
     forecast_weights = daily_forecast_weights_fixed_to_forecasts_unsmoothed.ewm(span=125).mean()
     # 跳过一个weight normalisation to 1 的函数
