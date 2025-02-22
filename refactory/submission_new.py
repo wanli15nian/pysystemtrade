@@ -440,14 +440,14 @@ def calc_subsystem_position(instrument_code, all_instrument_data, trading_rule_l
     instrument_forecast = all_instrument_data[instrument_code]['forecast_df']
     combined_forecast_without_cap = (forecast_weights_for_rules * instrument_forecast).sum(axis=1) * div_mult.ffill()
     combined_forecast = combined_forecast_without_cap.clip(20, -20)  # QUESTION: 小数点后8位开始对不上，暂时不管
-    volatility_scalar = calc_volatility_scalar(instrument_code, all_instrument_data,
+    vol_scalar = calc_volatility_scalar(instrument_code, all_instrument_data,
                                                annual_perc_vol_target=0.25,
                                                capital=500000)
-    volatility_scalar = volatility_scalar.reindex(universal_index, method="ffill")
-    position_raw = volatility_scalar * combined_forecast / 10.0
+    vol_scalar = vol_scalar.reindex(universal_index, method="ffill")
+    subsystem_position_raw = vol_scalar * combined_forecast / 10.0
     print('calc_subsystem_position')
     end = time.time()
-    return position_raw, volatility_scalar
+    return subsystem_position_raw, vol_scalar
 
 import time
 start = time.time()
