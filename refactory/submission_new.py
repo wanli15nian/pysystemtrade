@@ -398,30 +398,29 @@ def calc_subsystem_position(instrument_code, all_instrument_data, trading_rule_l
     if pooled_fdm == True:
         ew_lookback = ew_lookback * len(all_instruments)
         min_periods = min_periods * len(all_instruments)
-    raw_correlations = pooled_forecast_data.ewm(span=ew_lookback, min_periods=min_periods,
+    raw_pooled_correlations = pooled_forecast_data.ewm(span=ew_lookback, min_periods=min_periods,
                                                 ignore_na=True).corr(pairwise=True)
 
     size_of_matrix = len(pooled_forecast_data)
-    corr_list = []
+
+    pooled_forecast_corr_list_for_fdm = []
     for fit_end in end_list:
-        corr_matrix_values = (raw_correlations[raw_correlations.index.get_level_values(0) < fit_end]
+        corr_matrix_values = (raw_pooled_correlations[raw_pooled_correlations.index.get_level_values(0) < fit_end]
                               .tail(size_of_matrix)
                               .values)
         corr_matrix_values = corr_matrix_values[-1]
-        for corr_value in corr_matrix_values:
-            if corr_value < 0:
-                corr_value = 0
-        corr_list.append(corr_matrix_values)
-    # corr_list.insert(0, np.array([0.99, 1]))  # 为了让corr_list的element和end_list对齐，先不加起始默认matrix
+        corr_matrix_values = [max(0, value) for value in corr_matrix_values]
+        pooled_forecast_corr_list_for_fdm.append(corr_matrix_values)
+    # pooled_forecast_corr_list_for_fdm.insert(0, np.array([0.99, 1]))  # 为了让corr_list的element和end_list对齐，先不加起始默认matrix
     div_mult_vector = []
-    for corrmatrix, start_of_period in zip(corr_list, end_list):
+    for corrmatrix, start_of_period in zip(pooled_forecast_corr_list_for_fdm, end_list):
         weight_slice = forecast_weights_for_rules[:start_of_period]
         if weight_slice.shape[0] == 0:
             div_mult_vector.append(1.0)
             continue
 
-        weights_dict = np.array(weight_slice.iloc[-1])
-        div_multiplier = div_mult_single_period(corrmatrix, weights_dict)
+        last_weight_for_period = np.array(weight_slice.iloc[-1])
+        div_multiplier = div_mult_single_period(corrmatrix, last_weight_for_period)
         div_mult_vector.append(div_multiplier)
     div_mult_df = pd.Series(div_mult_vector, index=end_list)
     div_mult_df_daily = div_mult_df.reindex(forecast_weights_for_rules.index, method="ffill")
