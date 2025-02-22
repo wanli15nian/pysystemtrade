@@ -12,7 +12,7 @@ from refactory.data_source import get_point_size, get_roll_parameters, get_raw_d
 from refactory.temp import calc_pos_target_from_risk_target
 from refactory.utils import calculate_mixed_volatility, get_corr_estimator_for_instrument_weight, \
     get_stdev_estimator_for_instrument_weight, get_mean_estimator, optimisation, calculate_weighted_average_with_nans, \
-    get_cost_per_trade, single_resampled_set_of_returns, calculate_volatility_scalar
+    get_cost_per_trade, single_resampled_set_of_returns, calc_volatility_scalar
 from sysdata.config.configdata import Config
 
 import joblib
@@ -258,7 +258,12 @@ def calc_gross_instr_pnl(instrument, position_buffered, price):
     return gross_pnl_daily
 
 
-def div_mult_single_period(corr, weights, dm_max=2.5):
+def calc_div_mult_single_period(corr, weights, dm_max=2.5):
+    '''
+    计算Portfolio variance in correlation space
+    且设Limit
+    '''
+    # TODO: 查背后原理
     corrmatrix = np.array([[corr[1], corr[0]], [corr[0], corr[1]]])
     try:
         variance = weights.dot(corrmatrix).dot(weights)
@@ -388,7 +393,6 @@ def calc_subsystem_position(instrument_code, all_instrument_data, trading_rule_l
     # 跳过一个weight normalisation to 1 的函数
     list_of_forecast_df = [all_instrument_data[instrument]['forecast_df'] for instrument in all_instruments]
     list_of_resampled_forecast = [forecast_df.resample('W').last() for forecast_df in list_of_forecast_df]
-    end = time.time()
     pooled_forecast_data = reindex_and_stack_list_of_df(list_of_resampled_forecast)
 
 
@@ -411,6 +415,7 @@ def calc_subsystem_position(instrument_code, all_instrument_data, trading_rule_l
         corr_matrix_values = corr_matrix_values[-1]
         corr_matrix_values = [max(0, value) for value in corr_matrix_values]
         pooled_forecast_corr_list_for_fdm.append(corr_matrix_values)
+
     # pooled_forecast_corr_list_for_fdm.insert(0, np.array([0.99, 1]))  # 为了让corr_list的element和end_list对齐，先不加起始默认matrix
     div_mult_vector = []
     for corrmatrix, start_of_period in zip(pooled_forecast_corr_list_for_fdm, end_list):
@@ -420,20 +425,25 @@ def calc_subsystem_position(instrument_code, all_instrument_data, trading_rule_l
             continue
 
         last_weight_for_period = np.array(weight_slice.iloc[-1])
-        div_multiplier = div_mult_single_period(corrmatrix, last_weight_for_period)
+        div_multiplier = calc_div_mult_single_period(corrmatrix, last_weight_for_period)
         div_mult_vector.append(div_multiplier)
-    div_mult_df = pd.Series(div_mult_vector, index=end_list)
-    div_mult_df_daily = div_mult_df.reindex(forecast_weights_for_rules.index, method="ffill")
-    div_mult_df_daily[div_mult_df_daily.isna()] = 1.0
-    div_mult_df_smoothed = div_mult_df_daily.ewm(span=125).mean()
+    div_mult = pd.Series(div_mult_vector, index=end_list)
+
+    # forecast_weights_for_rules.index 是fitting period的start dates
+    div_mult_unsmoothed_daily = div_mult.reindex(forecast_weights_for_rules.index, method="ffill")
+    div_mult_unsmoothed_daily[div_mult_unsmoothed_daily.isna()] = 1.0
+    div_mult = div_mult_unsmoothed_daily.ewm(span=125).mean()
+
     instrument_forecast = all_instrument_data[instrument_code]['forecast_df']
-    combined_forecast_without_cap = (forecast_weights_for_rules * instrument_forecast).sum(axis=1) * div_mult_df_smoothed.ffill()
+    combined_forecast_without_cap = (forecast_weights_for_rules * instrument_forecast).sum(axis=1) * div_mult.ffill()
     combined_forecast = combined_forecast_without_cap.clip(20, -20)  # QUESTION: 小数点后8位开始对不上，暂时不管
-    volatility_scalar = calculate_volatility_scalar(instrument_code, capital=500000,
-                                                    annual_percentage_volatility_target=0.25)
-    volatility_scalar = volatility_scalar.reindex(combined_forecast.index, method="ffill")
+    volatility_scalar = calc_volatility_scalar(instrument_code, all_instrument_data,
+                                               annual_percentage_volatility_target=0.25,
+                                               capital=500000)
+    volatility_scalar = volatility_scalar.reindex(universal_index, method="ffill")
     position_raw = volatility_scalar * combined_forecast / 10.0
     print('calc_subsystem_position')
+    end = time.time()
     return position_raw, volatility_scalar
 
 import time
@@ -441,6 +451,7 @@ start = time.time()
 instruments = my_config.instruments
 all_instrument_data = prepare_all_instr_data(instruments, trading_rule_list=trading_rule_list)
 calc_subsystem_position('CORN', all_instrument_data, trading_rule_list)
+
 
 def calc_pnl_across_subsystem_for_indiv_instr(instrument_code, all_instrument_data, trading_rule_list):
     price = all_instrument_data[instrument_code]['price']
