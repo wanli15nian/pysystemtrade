@@ -8,9 +8,9 @@ from refactory.Fill import Fill
 from refactory.apply_buffer_to_position import calc_buffered_pos_given_raw_pos
 from refactory.calculate_forecast import get_capped_forecast
 from refactory.data_source import get_point_size, get_roll_parameters, get_raw_data_from_csv_file, get_daily_price, \
-    get_raw_cost_data
+    get_raw_cost_data, get_raw_carry_price
 from refactory.temp import calc_pos_target_from_risk_target
-from refactory.utils import calculate_mixed_volatility, get_corr_estimator_for_instrument_weight, \
+from refactory.utils import calc_mixed_volatility, get_corr_estimator_for_instrument_weight, \
     get_stdev_estimator_for_instrument_weight, get_mean_estimator, optimisation, calculate_weighted_average_with_nans, \
     get_cost_per_trade, single_resampled_set_of_returns, calc_volatility_scalar
 from sysdata.config.configdata import Config
@@ -41,6 +41,9 @@ def prepare_all_instr_data(all_instruments, trading_rule_list):
 
         price = get_daily_price(instrument)
         individual_instr_data['price'] = price
+
+        carry_price = get_raw_carry_price(instrument)
+        individual_instr_data['carry_price'] = carry_price
 
         point_size = get_point_size(instrument)
         individual_instr_data['point_size'] = point_size
@@ -114,7 +117,7 @@ def calc_cost(pos_target, price, point_size, trading_cost):
     # Actually output in price space to match gross returns
     # These will be annualised figure, make it a small loss every day
     # FIXME: 完全没有看明白这个calc_cost的计算逻辑
-    annualised_price_vol_points = calculate_mixed_volatility(price.diff(), slow_vol_years=10)
+    annualised_price_vol_points = calc_mixed_volatility(price.diff(), slow_vol_years=10)
     sr_cost_as_annualised_figure = (-trading_cost * pos_target * annualised_price_vol_points * 16).bfill()
     period_intervals_in_seconds = sr_cost_as_annualised_figure.index.to_series().diff().dt.total_seconds()
     costs_in_points = sr_cost_as_annualised_figure * period_intervals_in_seconds / (365.25 * 24 * 60 * 60)
@@ -438,7 +441,7 @@ def calc_subsystem_position(instrument_code, all_instrument_data, trading_rule_l
     combined_forecast_without_cap = (forecast_weights_for_rules * instrument_forecast).sum(axis=1) * div_mult.ffill()
     combined_forecast = combined_forecast_without_cap.clip(20, -20)  # QUESTION: 小数点后8位开始对不上，暂时不管
     volatility_scalar = calc_volatility_scalar(instrument_code, all_instrument_data,
-                                               annual_percentage_volatility_target=0.25,
+                                               annual_perc_vol_target=0.25,
                                                capital=500000)
     volatility_scalar = volatility_scalar.reindex(universal_index, method="ffill")
     position_raw = volatility_scalar * combined_forecast / 10.0
@@ -668,7 +671,7 @@ def calc_daily_perc_volatility(instrument_code, all_instr_data):
     instr_daily_price = all_instr_data[instrument_code]['price']
     price_returns = instr_daily_price.diff()
     vol_mult = 1.0
-    raw_vol = calculate_mixed_volatility(price_returns, slow_vol_years=10)
+    raw_vol = calc_mixed_volatility(price_returns, slow_vol_years=10)
     return_vol = vol_mult * raw_vol
 
     (denom_price, return_vol) = denom_price.align(return_vol, join="right")

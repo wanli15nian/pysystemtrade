@@ -5,7 +5,7 @@ import pandas as pd
 from scipy.optimize import minimize
 
 from refactory.data_source import get_point_size, get_spread_cost, get_daily_price, get_instrument_info, \
-    get_block_value, get_raw_carry_data
+    get_block_value, get_raw_carry_price
 
 
 def get_volatily(price, span=35, min_periods=10, vol_floor=True,
@@ -29,9 +29,9 @@ def ewmac(price, Lfast, Lslow, min_periods=1):
     return raw_ewm
 
 
-def calculate_mixed_volatility(daily_returns, days=35, min_periods=10, slow_vol_years=20,
-                               proportion_of_slow_vol=0.3, vol_abs_min=0.0000000001,
-                               vol_multiplier=1.0, backfill=False):
+def calc_mixed_volatility(daily_returns, days=35, min_periods=10, slow_vol_years=20,
+                          proportion_of_slow_vol=0.3, vol_abs_min=0.0000000001,
+                          vol_multiplier=1.0, backfill=False):
     # 长期和短期波动进行权重处理
     vol = daily_returns.ewm(adjust=True, span=days, min_periods=min_periods).std()
     slow_vol_days = slow_vol_years * 256
@@ -157,7 +157,7 @@ def get_cost_per_trade(instrument_code):
     # FIXME: 在这里作者使用了pd.DateOffset来进行年份计算，而在rolling window中是用365天，原因存疑
     average_price = float(get_daily_price(instrument_code)[start_date:].mean())
     price_returns = get_daily_price(instrument_code).diff()    # FIXME: 又重复get了一次价格， 虽然源代码也是这么写的
-    daily_vol = calculate_mixed_volatility(price_returns, slow_vol_years=10)  # TODO: 后续看是否完全复用
+    daily_vol = calc_mixed_volatility(price_returns, slow_vol_years=10)  # TODO: 后续看是否完全复用
     average_vol = float(daily_vol[start_date:].mean())
     ann_stdev_price_units = average_vol * 16
     value_per_block = average_price * block_price_multiplier
@@ -206,30 +206,46 @@ def flatten_list(data):
     return flattened
 
 
-def calc_volatility_scalar(instrument_code, all_instrument_data, annual_percentage_volatility_target=0.16,
+def calc_volatility_scalar(instrument_code, all_instrument_data, annual_perc_vol_target=0.16,
                            capital=1000000):
-    block_value = get_block_value(instrument_code)
+    '''
+    Gets daily prices for use with % volatility
+    This won't always be the same as the normal 'price'
+    try:
+        prices = self.get_instrument_raw_carry_data(instrument_code).PRICE
+    except missingData:
+        self.log.warning(
+            "No carry data found for %s, using adjusted prices to calculate percentage returns"
+            % instrument_code
+        )
+        return self.get_daily_prices(instrument_code)
+    '''
+    carry_price = all_instrument_data[instrument_code]['carry_price']
+    point_size = all_instrument_data[instrument_code]['point_size']
+    block_value = carry_price.ffill() * 0.01 * point_size
     block_value.ffill(inplace=True)
 
-    # FIXME: 取错数据了
-    price = get_raw_carry_data(instrument_code)
-    price = price.resample('1B').last()
-    price0 = get_daily_price(instrument_code)
-    diff_volatility = calculate_mixed_volatility(price0.diff(), slow_vol_years=10)
-    diff_volatility.ffill(inplace=True)
-    (price, diff_volatility) = price.align(diff_volatility, join='right')
-    percentage_volatility = 100.0 * (diff_volatility / price.ffill().abs())
+    # FIXME: When to use carry_price and when to use price, the logic of computation here is unknown
+    resampled_carry_price = carry_price.resample('1B').last()
 
-    (block_value, percentage_volatility) = block_value.align(percentage_volatility, join="inner")
-    currency_volatility = block_value * percentage_volatility  # 小数点后14位没对上，可以接受
+    price = all_instrument_data[instrument_code]['price']
+    annualised_price_vol_points = calc_mixed_volatility(price.diff(), slow_vol_years=10)
+    annualised_price_vol_points.ffill(inplace=True)
 
-    value_volatiliity = currency_volatility * 1
+    (resampled_carry_price, annualised_price_vol_points) = resampled_carry_price.align(annualised_price_vol_points, join='right')
+    percentage_vol = 100.0 * (annualised_price_vol_points / resampled_carry_price.ffill().abs())
 
-    percentage_volatility_target = annual_percentage_volatility_target / 16
-    cash_volatility_target = capital * percentage_volatility_target
+    (block_value, percentage_vol) = block_value.align(percentage_vol, join="inner")
+    currency_vol = block_value * percentage_vol
 
-    volatility_scalar = cash_volatility_target / value_volatiliity
+    # It is to multiply by fx_rate, which is taken to be 1 here
+    value_vol = currency_vol.ffill() * 1
 
-    return volatility_scalar
+    perc_vol_target = annual_perc_vol_target / 16
+    cash_vol_target = capital * perc_vol_target
+
+    vol_scalar = cash_vol_target / value_vol
+
+    return vol_scalar
 
 
