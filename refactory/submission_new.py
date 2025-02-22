@@ -327,45 +327,52 @@ def calc_subsystem_position(instrument_code, all_instrument_data, trading_rule_l
         dict_of_instr_cost_sr[instrument] = cost_SR_dict
 
 
-    # FIXME: 首先这个cost_per_turnover_this_asset 算的就很奇怪，毕竟分子并不是真正的cost, 而是个比值
+    # FIXME: 首先这个instr_cost_per_turnover 算的就很奇怪，毕竟分子并不是真正的cost, 而是个比值
     # 其次，cost_multiplier是2，没有解释
     cost_multiplier = 2
-    dict_of_sr_costs = {}
+    dict_of_instr_cost_sr_with_pooling = {}
     for rule in trading_rule_list:
         turnover = turnovers[instrument_code][rule]
-        costs_gross_returns_ratio = dict_of_instr_cost_sr[instrument_code][rule]
-        cost_per_turnover_this_asset = costs_gross_returns_ratio / turnover
+        instr_annual_cost_sr = dict_of_instr_cost_sr[instrument_code][rule]
+        instr_cost_per_turnover = instr_annual_cost_sr / turnover
 
         all_turnovers = [turnovers[instrument][rule] for instrument in all_instruments]
         average_turnover_across_assets = np.nanmean(all_turnovers)
 
-        pooled_cost = cost_per_turnover_this_asset * average_turnover_across_assets * cost_multiplier
-        dict_of_sr_costs[rule] = pooled_cost
+        pooled_cost = instr_cost_per_turnover * average_turnover_across_assets * cost_multiplier
+        dict_of_instr_cost_sr_with_pooling[rule] = pooled_cost
+
+
     # TODO: 其实这里的步骤就是把第一个循环的内容重复反方向算了一遍而已，完全可以合并
-    net_returns_dict = {}
+    net_returns_of_rules_for_all_instr_dict = {}
     for instrument in gross_daily_pnl_dict.keys():
-        gross_returns = gross_daily_pnl_dict[instrument]
+        gross_daily_pnl = gross_daily_pnl_dict[instrument]
         net_returns_single_instrument = {}
-        for column_name in gross_returns.columns:
-            gross_returns_daily_std = gross_returns[column_name].std()
-            daily_sr_cost = dict_of_sr_costs[column_name] / 16
-            daily_returns_cost = (daily_sr_cost * gross_returns_daily_std).item()
-            net_returns_single_instrument_rule = gross_returns[column_name] + daily_returns_cost
+
+        # FIXME: dict_of_instr_cost_with_pooling is specific to the target instrument, how can it be applied widely
+        for column_name in gross_daily_pnl.columns:
+            gross_daily_pnl_std = gross_daily_pnl[column_name].std()
+            daily_cost_sr = dict_of_instr_cost_sr_with_pooling[column_name] / 16
+            daily_cost = (daily_cost_sr * gross_daily_pnl_std).item()
+
+            net_returns_single_instrument_rule = gross_daily_pnl[column_name] + daily_cost
             net_returns_single_instrument[column_name] = net_returns_single_instrument_rule
+
         net_returns_single_instrument = pd.DataFrame(net_returns_single_instrument)
-        net_returns_dict[instrument] = net_returns_single_instrument  # CLEARED
-    net_returns = single_resampled_set_of_returns(net_returns_dict, frequency='W')  # CLEARED
-    start_date = net_returns.index[0]
-    end_date = net_returns.index[-1]
+        net_returns_of_rules_for_all_instr_dict[instrument] = net_returns_single_instrument
+
+    net_returns_stacked_for_all_instr = single_resampled_set_of_returns(net_returns_of_rules_for_all_instr_dict, frequency='W')
+    start_date = net_returns_stacked_for_all_instr.index[0]
+    end_date = net_returns_stacked_for_all_instr.index[-1]
     end_list = generate_fit_end_list(start_date, end_date)
-    weight_df = pd.DataFrame([calc_forecast_weights(net_returns, end) for end in end_list], index=end_list)
+    weight_df = pd.DataFrame([calc_forecast_weights(net_returns_stacked_for_all_instr, end) for end in end_list], index=end_list)
     end = time.time()
     # To add the initial weight
     column_num = len(weight_df.columns)
     initial_weight = {col: 1 / column_num for col in weight_df.columns}
     initial_weight = pd.DataFrame(initial_weight, index=[start_date])
     weight_df = pd.concat([initial_weight, weight_df], axis=0)
-    weight_df.columns = net_returns.columns
+    weight_df.columns = net_returns_stacked_for_all_instr.columns
     weight_df = weight_df.reindex(all_instrument_data[instrument_code]['price'].index, method='ffill')
     weight_df = weight_df.fillna(1 / len(weight_df.columns))
     daily_forecast_weights_fixed_to_forecasts_unsmoothed = weight_df.resample('1B').mean()
