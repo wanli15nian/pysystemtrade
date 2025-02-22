@@ -206,24 +206,27 @@ def flatten_list(data):
     return flattened
 
 
-def calculate_volatility_scalar(instrument_code, capital=1000000, annual_percentage_volatility_target=0.16):
+def calc_volatility_scalar(instrument_code, all_instrument_data, annual_percentage_volatility_target=0.16,
+                           capital=1000000):
     block_value = get_block_value(instrument_code)
     block_value.ffill(inplace=True)
+
     # FIXME: 取错数据了
     price = get_raw_carry_data(instrument_code)
-    price.ffill(inplace=True)
+    price = price.resample('1B').last()
     price0 = get_daily_price(instrument_code)
     diff_volatility = calculate_mixed_volatility(price0.diff(), slow_vol_years=10)
     diff_volatility.ffill(inplace=True)
+    (price, diff_volatility) = price.align(diff_volatility, join='right')
+    percentage_volatility = 100.0 * (diff_volatility / price.ffill().abs())
 
-    percentage_volatility = 100.0 * (diff_volatility / price.abs())
     (block_value, percentage_volatility) = block_value.align(percentage_volatility, join="inner")
     currency_volatility = block_value * percentage_volatility  # 小数点后14位没对上，可以接受
 
     value_volatiliity = currency_volatility * 1
 
-    pecentage_volatility_target = annual_percentage_volatility_target / 16
-    cash_volatility_target = capital * pecentage_volatility_target
+    percentage_volatility_target = annual_percentage_volatility_target / 16
+    cash_volatility_target = capital * percentage_volatility_target
 
     volatility_scalar = cash_volatility_target / value_volatiliity
 
