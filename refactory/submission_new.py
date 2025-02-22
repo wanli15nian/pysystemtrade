@@ -159,7 +159,7 @@ def forecast_turnover_for_indiv_instr(instrument_code, rule_name):
     return annual_turnover_for_forecast
 
 
-def calc_annual_trading_cost(instrument_code, rule_name, pooled_instruments, forecast_length_weights):
+def calc_annual_trading_cost_per_contract(instrument_code, rule_name, pooled_instruments, forecast_length_weights):
     # 单次交易成本，包括slippage和commission
     cost_per_trade = get_cost_per_trade(instrument_code)
 
@@ -289,9 +289,9 @@ def calc_subsystem_position(instrument_code, all_instrument_data, trading_rule_l
     forecast_length = [len(all_instrument_data[instrument]['forecast_df']) for instrument in all_instruments]
     total_length = float(sum(forecast_length))
     forecast_length_weights = [forecast_length / total_length for forecast_length in forecast_length]
-    dict_of_costs_gross_returns_ratio = {}
+    dict_of_instr_cost_sr = {}
     for instrument in all_instruments:
-        SR_dict = {}
+        cost_SR_dict = {}
         price = all_instrument_data[instrument]['price']
         point_size = all_instrument_data[instrument]['point_size']
         pos_target = all_instrument_data[instrument]['position_target']
@@ -301,11 +301,13 @@ def calc_subsystem_position(instrument_code, all_instrument_data, trading_rule_l
 
             # Annual trading cost is calculated using pooled instruments, hence "all_instruments" is passed
             # Trading cost is the sum of holding and transaction cost
-            annual_trading_cost = calc_annual_trading_cost(instrument, trading_rule, all_instruments, forecast_length_weights)
+            annual_trading_cost_per_contract = calc_annual_trading_cost_per_contract(instrument, trading_rule, all_instruments, forecast_length_weights)
 
             gross_daily_pnl_series = gross_daily_pnl_dict[instrument][trading_rule]
+
+            ##PROBLEM: cost curve calc remains to be checked
             cost_curve = calc_cost(pos_target=pos_target, price=price,
-                                   point_size=point_size, trading_cost=annual_trading_cost)
+                                   point_size=point_size, trading_cost=annual_trading_cost_per_contract)
             '''
             annual_cost_SR 算出交易成本与gross returns 波动的比例
             越高，说明成本越难以接受
@@ -316,18 +318,22 @@ def calc_subsystem_position(instrument_code, all_instrument_data, trading_rule_l
             if instrument == 'US10':
                 cost_curve.iloc[:13] = np.nan  # QUESTION: 为什么到了US10是前13个数字
             cost_curve_mean = cost_curve.mean()
+
+
             gross_daily_pnl_series = gross_daily_pnl_series.replace(0, np.nan)
-            gross_returns_std = gross_daily_pnl_series.std()
-            annual_cost_SR = 16 * cost_curve_mean / gross_returns_std
-            SR_dict[trading_rule] = annual_cost_SR
-        dict_of_costs_gross_returns_ratio[instrument] = SR_dict
+            gross_daily_pnl_std = gross_daily_pnl_series.std()
+            annual_cost_SR = 16 * cost_curve_mean / gross_daily_pnl_std
+            cost_SR_dict[trading_rule] = annual_cost_SR
+        dict_of_instr_cost_sr[instrument] = cost_SR_dict
+
+
     # FIXME: 首先这个cost_per_turnover_this_asset 算的就很奇怪，毕竟分子并不是真正的cost, 而是个比值
     # 其次，cost_multiplier是2，没有解释
     cost_multiplier = 2
     dict_of_sr_costs = {}
     for rule in trading_rule_list:
         turnover = turnovers[instrument_code][rule]
-        costs_gross_returns_ratio = dict_of_costs_gross_returns_ratio[instrument_code][rule]
+        costs_gross_returns_ratio = dict_of_instr_cost_sr[instrument_code][rule]
         cost_per_turnover_this_asset = costs_gross_returns_ratio / turnover
 
         all_turnovers = [turnovers[instrument][rule] for instrument in all_instruments]
