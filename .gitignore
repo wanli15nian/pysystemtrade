@@ -15,7 +15,7 @@ restats
 .coverage.*
 
 # editor 
-.idea
+.idea/*.xml
 .project
 .pydevproject
 
@@ -28,3 +28,4 @@ venv/
 
 # libreoffice
 .~lock.*
+/.idea
