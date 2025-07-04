@@ -6,7 +6,7 @@ from copy import copy
 from refactory.Fill import Fill
 from refactory.apply_buffer_to_position import calc_buffered_pos_given_raw_pos
 from refactory.data_source import get_point_size, get_roll_parameters, get_raw_data_from_csv_file
-from refactory.refactory_v2.prepare_all_instr_data import prepare_all_instr_data
+from refactory.prepare_all_instr_data import prepare_all_instr_data
 from refactory.utils import calc_mixed_volatility, get_corr_estimator_for_instrument_weight, \
     get_stdev_estimator_for_instrument_weight, get_mean_estimator, optimisation, calculate_weighted_average_with_nans, \
     get_cost_per_trade, single_resampled_set_of_returns, calc_volatility_scalar, forecast_turnover_for_indiv_instr
