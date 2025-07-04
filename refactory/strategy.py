@@ -640,9 +640,11 @@ def turnover_x_y(x, y, smooth_y_days: int = 250) -> float:
     return avg_daily * 256
 
 
-def calc_subsystem_turnover(instrument_code, all_instr_data, trading_rule_list, notional_trading_capital=500000,
+def calc_subsystem_turnover(instruments, instrument_code, all_instr_data, trading_rule_list,
+                            notional_trading_capital=500000,
                             risk_target=0.25):
-    positions, volatility_scalar = calc_subsystem_position(instrument_code, all_instr_data, trading_rule_list)
+    positions, volatility_scalar = calc_subsystem_position(instruments, instrument_code, all_instr_data,
+                                                           trading_rule_list)
 
     annual_cash_vol_target = (notional_trading_capital * risk_target)
     daily_cash_vol_target = annual_cash_vol_target / 16
@@ -688,8 +690,10 @@ net_PNL = net_PNL.resample('B').sum()
 gross_pnl = process_list_of_data(data=df_of_gross_pandl)
 costs = process_list_of_data(data=df_of_costs)
 
-turnover_as_list = [calc_subsystem_turnover(instrument_code, all_instrument_data, trading_rule_list) for instrument_code
-                    in all_instruments]
+turnover_as_list = [
+    calc_subsystem_turnover(trading_instruments, instrument_code, all_instrument_data, trading_rule_list) for
+    instrument_code
+    in all_instruments]
 turnover_as_dict = dict(
     [(instrument_code, turnover) for (instrument_code, turnover) in zip(all_instruments, turnover_as_list)])
 turnovers = {'asset': turnover_as_dict}
