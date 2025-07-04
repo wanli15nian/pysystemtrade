@@ -45,8 +45,6 @@ df_of_gross_pandl.replace(0.0, np.nan) 后就是需要的gross curve
 df_of_costs resample方式不同的"relevant curve", sum 都是一样的
 '''
 
-all_instrument_data = prepare_all_instr_data(trading_instruments, trading_rule_list)
-
 # SR 的Index 问题还是没有处理好，源代码为resample("B"), 现为很奇怪的resample
 SR_dict = {}
 for instrument in trading_instruments:
