@@ -1,6 +1,7 @@
+from copy import copy
+
 import numpy as np
 import pandas as pd
-from copy import copy
 
 from refactory.data_source import get_daily_price, get_raw_carry_data, get_point_size, get_block_value
 from refactory.utils import get_volatily, ewmac, calculate_mixed_volatility, get_corr_estimator_for_instrument_weight, \
@@ -8,6 +9,7 @@ from refactory.utils import get_volatily, ewmac, calculate_mixed_volatility, get
 from sysdata.config.configdata import Config
 
 my_config = Config()
+g_instruments = ["CORN", "SOFR", "SP500_micro", 'US10']
 my_config.instruments = ["CORN", "SOFR", "SP500_micro", 'US10']
 
 
@@ -215,11 +217,12 @@ def process_forecast_pnls(instrument_code, capital=1000000, risk_target=0.16, ta
     return daily_forecast_pnls
 
 
-def calculate_forecast_weights(pnl_df, fit_end):
+def calculate_forecast_weights(pnl_df, fit_end, instruments):
+    # instruments = my_config.instruments
     number = len(pnl_df.columns)
-    span = len(my_config.instruments) * 50000
-    min_periods_corr = len(my_config.instruments) * 10
-    min_periods = len(my_config.instruments) * 5
+    span = len(instruments) * 50000
+    min_periods_corr = len(instruments) * 10
+    min_periods = len(instruments) * 5
     norm_stdev, norm_factor = get_stdev_estimator_for_instrument_weight(pnl_df, fit_end, span, min_periods)
     mean_list = get_mean_estimator(pnl_df, fit_end, span, min_periods)
     norm_mean = [a / b for a, b in zip(mean_list, norm_factor)]
@@ -228,15 +231,15 @@ def calculate_forecast_weights(pnl_df, fit_end):
     return weight
 
 
-def get_forecast_weights():
-    instruments = my_config.instruments
+def get_forecast_weights(instruments):
     daily_forecast_pnls = [process_forecast_pnls(it) for it in instruments]
     weekly_forecast_pnls = [p.resample('W').sum() for p in daily_forecast_pnls]
     returns = combine_instrument_pnl_df(weekly_forecast_pnls)
     start_date = returns.index[0]
     end_date = returns.index[-1]
     end_list = generate_end_list(start_date, end_date)
-    weight_df = pd.DataFrame([calculate_forecast_weights(returns, end) for end in end_list], index=end_list)
+    weight_df = pd.DataFrame([calculate_forecast_weights(returns, end, instruments) for end in end_list],
+                             index=end_list)
     weight_df.columns = returns.columns
     return weight_df
 
@@ -245,7 +248,8 @@ def process_instrument_pnl(instrument):
     price = get_daily_price(instrument)
     forecast_df = calculate_forecasts(price)
 
-    forecast_weights_full = get_forecast_weights()
+    instruments = my_config.instruments
+    forecast_weights_full = get_forecast_weights(instruments)
     forecast_weights = forecast_weights_full.reindex(forecast_df.index, method='ffill').fillna(
         1 / len(forecast_weights_full.columns))
     # TODO: 平滑为什么不放在全量weight里面做？
@@ -263,18 +267,14 @@ def process_instrument_pnl(instrument):
     return pnl_daily
 
 
-def main(my_config):
-    instruments = my_config.instruments
-
+def main(instruments):
     pnl_list = [process_instrument_pnl(instrument) for instrument in instruments]
     pnl_df = pd.concat(pnl_list, axis=1)
     pnl_df.columns = instruments
-
     weight = calculate_instrument_weights(pnl_df)
     print(weight)
-
     return
 
 
 if __name__ == '__main__':
-    main(my_config)
+    main(g_instruments)
