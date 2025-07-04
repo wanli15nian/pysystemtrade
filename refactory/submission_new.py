@@ -698,13 +698,7 @@ turnovers = {'asset': turnover_as_dict}
 df_of_gross_pandl.replace(0.0, np.nan) 后就是需要的gross curve
 df_of_costs resample方式不同的"relevant curve", sum 都是一样的
 '''
-# dict_of_cost_SR = self.get_dict_of_unadjusted_cost_SR_for_asset_name(asset_name)
-# cost_multiplier = self.cost_multiplier
-# if cost_multiplier != 1.0:
-#     self.log.debug("Applying cost multiplier of %f" % cost_multiplier)
-#     dict_of_cost_SR = dict_of_cost_SR.apply_cost_multiplier(
-#         cost_multiplier=cost_multiplier
-#     )
+
 
 # joblib.dump({k: v for k, v in globals().items() if not k.startswith('__') and not isinstance(v, (types.ModuleType, types.FunctionType))}, 'project_checkpoint.pkl')
 # loaded_var = joblib.load('project_checkpoint.pkl')
