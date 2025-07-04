@@ -10,20 +10,12 @@ from refactory.utils import optimisation, single_resampled_set_of_returns
 trading_instruments = ["CORN", "SOFR", "SP500_micro", 'US10']
 trading_rule_list = ['ewmac32', 'ewmac8']
 
-import time
+all_instrument_data = prepare_all_instr_data(trading_instruments, trading_rule_list)
 
-start = time.time()
-all_instrument_data = prepare_all_instr_data(trading_instruments, trading_rule_list=trading_rule_list)
-
-all_instruments = trading_instruments
-trading_rule_list = ['ewmac32', 'ewmac8']
-all_instrument_data = prepare_all_instr_data(all_instruments, trading_rule_list)
 net_instr_pnl_for_all_instr = {}
-
 dict_of_gross_pandl = {}
 dict_of_costs = {}
-
-for instrument in all_instruments:
+for instrument in trading_instruments:
     net_pnl, gross_instr_pnl, costs = calc_pnl_across_subsystem_for_indiv_instr(trading_instruments, instrument,
                                                                                 all_instrument_data, trading_rule_list)
     net_instr_pnl_for_all_instr[instrument] = net_pnl
@@ -43,9 +35,9 @@ costs = process_list_of_data(data=df_of_costs)
 turnover_as_list = [
     calc_subsystem_turnover(trading_instruments, instrument_code, all_instrument_data, trading_rule_list) for
     instrument_code
-    in all_instruments]
+    in trading_instruments]
 turnover_as_dict = dict(
-    [(instrument_code, turnover) for (instrument_code, turnover) in zip(all_instruments, turnover_as_list)])
+    [(instrument_code, turnover) for (instrument_code, turnover) in zip(trading_instruments, turnover_as_list)])
 turnovers = {'asset': turnover_as_dict}
 
 '''
@@ -57,7 +49,7 @@ all_instrument_data = prepare_all_instr_data(trading_instruments, trading_rule_l
 
 # SR 的Index 问题还是没有处理好，源代码为resample("B"), 现为很奇怪的resample
 SR_dict = {}
-for instrument in all_instruments:
+for instrument in trading_instruments:
     cost_curve = df_of_costs[instrument]
     gross_pandl = df_of_gross_pandl[instrument]
     daily_returns = cost_curve.mean()
@@ -66,7 +58,7 @@ for instrument in all_instruments:
     SR_dict[instrument] = annual_SR
 
 net_return_as_dict = {}
-for instrument in all_instruments:
+for instrument in trading_instruments:
     daily_gross_returns_for_asset = df_of_gross_pandl[instrument]
     daily_gross_return_std = daily_gross_returns_for_asset.std()
     daily_asset_sr_cost = SR_dict[instrument] / 16
