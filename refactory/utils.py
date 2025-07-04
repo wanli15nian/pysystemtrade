@@ -3,7 +3,8 @@ import pandas as pd
 from copy import copy
 from scipy.optimize import minimize
 
-from refactory.data_source import get_point_size, get_spread_cost, get_daily_price, get_instrument_info
+from refactory.data_source import get_point_size, get_percentage, get_per_block, get_per_trade, get_spread_cost, \
+    get_daily_price
 
 
 def get_volatily(price, span=35, min_periods=10, vol_floor=True,
@@ -160,10 +161,10 @@ def get_cost_per_trade(instrument_code):
     ann_stdev_price_units = average_vol * 16
     value_per_block = average_price * block_price_multiplier
 
-    per_trade = get_instrument_info(instrument_code).meta_data.PerTrade
-    per_block = get_instrument_info(instrument_code).meta_data.PerBlock
-    percentage = get_instrument_info(instrument_code).meta_data.Percentage
-    
+    per_trade = get_per_trade(instrument_code)
+    per_block = get_per_block(instrument_code)
+    percentage = get_percentage(instrument_code)
+
     per_block_commission = notional_blocks_traded * per_block
     percentage_commission = (notional_blocks_traded * value_per_block * percentage)
     commission = max([per_trade, per_block_commission, percentage_commission])

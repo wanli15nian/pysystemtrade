@@ -6,17 +6,28 @@ from sysobjects.instruments import instrumentCosts
 source_data = csvFuturesSimData()
 
 
-def get_spread_cost(instrument_code):
-    return source_data.db_spread_cost_data.get_spread_cost(instrument_code)
-
-
 def get_instrument_info(instrument_code):
     return source_data.db_futures_instrument_data.get_instrument_data(instrument_code)
 
 
+def get_percentage(instrument_code):
+    return get_instrument_info(instrument_code).meta_data.Percentage
+
+
+def get_per_block(instrument_code):
+    return get_instrument_info(instrument_code).meta_data.PerBlock
+
+
+def get_per_trade(instrument_code):
+    return get_instrument_info(instrument_code).meta_data.PerTrade
+
+
 def get_point_size(instrument_code):
-    instrument = get_instrument_info(instrument_code)  # 基础品种信息
-    return instrument.meta_data.Pointsize
+    return get_instrument_info(instrument_code).meta_data.Pointsize
+
+
+def get_spread_cost(instrument_code):
+    return source_data.db_spread_cost_data.get_spread_cost(instrument_code)
 
 
 def get_raw_cost_data(instrument_code):
