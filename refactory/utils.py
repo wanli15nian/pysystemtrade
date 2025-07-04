@@ -209,6 +209,8 @@ def flatten_list(data):
 def calc_volatility_scalar(instrument_code, all_instrument_data, annual_perc_vol_target=0.16,
                            capital=1000000):
     '''
+    Get ratio of required volatility vs volatility of instrument in instrument's own currency
+
     Gets daily prices for use with % volatility
     This won't always be the same as the normal 'price'
     try:
@@ -249,3 +251,62 @@ def calc_volatility_scalar(instrument_code, all_instrument_data, annual_perc_vol
     return vol_scalar
 
 
+def forecast_turnover_for_indiv_instr(instrument_code, rule_name):
+    forecast = get_capped_forecast(instrument_code, rule_name)
+
+    average_forecast_for_turnover = 10.0
+    y = average_forecast_for_turnover
+    daily_forecast = forecast.resample("1B").last()
+    daily_y = pd.Series(np.full(daily_forecast.shape[0], float(y)), daily_forecast.index)
+    x_normalised_for_y = daily_forecast / daily_y.ffill()
+    avg_daily = float(x_normalised_for_y.diff().abs().mean())
+    annual_turnover_for_forecast = avg_daily * 256
+    print('forecast_turnover_for_individual_instrument')
+    return annual_turnover_for_forecast
+
+
+def get_capped_forecast(instrument_code, rule_name):
+    '''
+    Forecast 不是对当天价格的预判
+    Forecast 根据包括当天在内的价格数据，对未来趋势进行判断
+    究竟趋势如何就根据过去几天的价格变化
+    '''
+    price = get_daily_price(instrument_code)
+    if rule_name == 'ewmac32':
+        raw_ewmac32 = ewmac(price, 32, 128, 1)
+        ewmac32 = final_forecast('ewmac32', raw_ewmac32, price, 20)
+        return ewmac32
+    if rule_name == 'ewmac8':
+        raw_ewmac8 = ewmac(price, 8, 32, 1)
+        ewmac8 = final_forecast('ewmac8', raw_ewmac8, price, 20)
+        return ewmac8
+    else:
+        raise 'Rule not defined '
+
+
+def final_forecast(name, raw_forecast, price, upper_cap=20):
+    raw_forecast[raw_forecast == 0] = np.nan
+
+    # TODO:为什么有的用价格波动率，有的用收益率波动率？
+    vol = get_volatily(price)
+    adjust_forecast = raw_forecast / vol
+
+    scalar = get_forecast_scalar(adjust_forecast)
+    scaled_forecast = scalar * adjust_forecast
+
+    lower_cap = -upper_cap
+    capped_forecast = scaled_forecast.clip(lower=lower_cap, upper=upper_cap)
+
+    capped_forecast.rename(name, inplace=True)
+
+    return capped_forecast
+
+
+def get_forecast_scalar(raw_forecast, window=250000, min_period=500, target_abs_forecast=10, backfill=True):
+    forecast = copy(raw_forecast)
+    forecast = forecast.abs()
+    ave_abs_value = forecast.rolling(window=window, min_periods=min_period).mean()
+    scaling_factor = target_abs_forecast / ave_abs_value
+    if backfill:
+        scaling_factor = scaling_factor.bfill()
+    return scaling_factor
