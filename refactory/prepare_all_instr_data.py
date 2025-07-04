@@ -1,9 +1,9 @@
 import pandas as pd
 
 from refactory.data_source import get_daily_price, get_raw_carry_price, get_point_size, get_raw_cost_data, \
-    get_roll_parameters
-from refactory.utils import forecast_turnover_for_indiv_instr, get_capped_forecast
+    get_rolls_per_year
 from refactory.temp import calc_pos_target_from_risk_target
+from refactory.utils import forecast_turnover_for_indiv_instr, get_capped_forecast
 
 
 def prepare_all_instr_data(all_instruments, trading_rule_list):
@@ -41,7 +41,7 @@ def prepare_all_instr_data(all_instruments, trading_rule_list):
         value_per_point = get_point_size(instrument)
         individual_instr_data['value_per_point'] = value_per_point
 
-        rolls_per_yr = get_roll_parameters(instrument).rolls_per_year_in_hold_cycle()
+        rolls_per_yr = get_rolls_per_year(instrument)
         individual_instr_data['rolls_per_year'] = rolls_per_yr
 
         all_instrument_data[instrument] = individual_instr_data

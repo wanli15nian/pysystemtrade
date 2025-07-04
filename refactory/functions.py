@@ -4,7 +4,7 @@ import pandas as pd
 
 from refactory.Fill import Fill
 from refactory.apply_buffer_to_position import calc_buffered_pos_given_raw_pos
-from refactory.data_source import get_roll_parameters, get_point_size, get_raw_data_from_csv_file
+from refactory.data_source import get_point_size, get_instrument_raw_carry_data, get_rolls_per_year
 from refactory.utils import calc_mixed_volatility, get_cost_per_trade, forecast_turnover_for_indiv_instr, \
     calculate_weighted_average_with_nans, get_stdev_estimator_for_instrument_weight, get_mean_estimator, \
     get_corr_estimator_for_instrument_weight, optimisation, single_resampled_set_of_returns, calc_volatility_scalar
@@ -77,8 +77,7 @@ def calc_annual_trading_cost_per_contract(instrument_code, rule_name, pooled_ins
     '''
 
     # holding cost
-    roll_parameters = get_roll_parameters(instrument_code)
-    hold_turnovers = roll_parameters.rolls_per_year_in_hold_cycle() * 2.0
+    hold_turnovers = get_rolls_per_year(instrument_code) * 2.0
     holding_cost = hold_turnovers * cost_per_trade
 
     '''
@@ -325,30 +324,6 @@ def process_list_of_data(data):  # Rename the columns
     resampled_data = data.resample('1B').sum()
     resampled_data[resampled_data == 0.0] = np.nan
     return resampled_data
-
-
-def get_instrument_raw_carry_data(instrument_code):
-    start_date = datetime.datetime(1900, 1, 1)
-    start_date = datetime.datetime.combine(start_date, datetime.datetime.min.time())
-
-    multiple_prices = get_raw_data_from_csv_file(instrument_code)
-
-    def str_of_int(x):
-        if isinstance(x, int):
-            return str(x)
-        else:
-            return str(int(x))
-
-    list_of_contract_column_names = ['CARRY_CONTRACT', 'FORWARD_CONTRACT', 'PRICE_CONTRACT']
-    for contract_col_name in list_of_contract_column_names:
-        multiple_prices[contract_col_name] = multiple_prices[
-            contract_col_name
-        ].apply(str_of_int)
-
-    all_price_data = multiple_prices[start_date:]
-    carry_data = all_price_data[['PRICE', 'CARRY', 'PRICE_CONTRACT', 'CARRY_CONTRACT']]
-    print("get_instrument_raw_carry_data")
-    return carry_data
 
 
 def calc_daily_perc_volatility(instrument_code, all_instr_data):

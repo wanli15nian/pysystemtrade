@@ -1,3 +1,4 @@
+import datetime
 import pandas as pd
 
 from sysdata.sim.csv_futures_sim_data import csvFuturesSimData
@@ -46,14 +47,8 @@ def get_block_value(instrument_code):
     return block_value
 
 
-def get_roll_parameters(instrument_code):
-    return source_data.db_roll_parameters.get_roll_parameters(instrument_code)
-
-
 def get_rolls_per_year(instrument):
-    roll_parameters = get_roll_parameters(instrument)
-    rolls_per_year = roll_parameters.rolls_per_year_in_hold_cycle()
-    return rolls_per_year
+    return source_data.db_roll_parameters.get_roll_parameters(instrument).rolls_per_year_in_hold_cycle()
 
 
 def get_daily_price(instrument_code):
@@ -87,4 +82,28 @@ def get_raw_data_from_csv_file(instrument_code):
     del carry_data['DATETIME']
     carry_data.index.name = None
 
+    return carry_data
+
+
+def get_instrument_raw_carry_data(instrument_code):
+    start_date = datetime.datetime(1900, 1, 1)
+    start_date = datetime.datetime.combine(start_date, datetime.datetime.min.time())
+
+    multiple_prices = get_raw_data_from_csv_file(instrument_code)
+
+    def str_of_int(x):
+        if isinstance(x, int):
+            return str(x)
+        else:
+            return str(int(x))
+
+    list_of_contract_column_names = ['CARRY_CONTRACT', 'FORWARD_CONTRACT', 'PRICE_CONTRACT']
+    for contract_col_name in list_of_contract_column_names:
+        multiple_prices[contract_col_name] = multiple_prices[
+            contract_col_name
+        ].apply(str_of_int)
+
+    all_price_data = multiple_prices[start_date:]
+    carry_data = all_price_data[['PRICE', 'CARRY', 'PRICE_CONTRACT', 'CARRY_CONTRACT']]
+    print("get_instrument_raw_carry_data")
     return carry_data
