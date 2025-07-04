@@ -15,12 +15,6 @@ import time
 start = time.time()
 all_instrument_data = prepare_all_instr_data(trading_instruments, trading_rule_list=trading_rule_list)
 
-# calc_pnl_across_subsystem_for_indiv_instr('CORN', all_instrument_data, trading_rule_list)
-
-
-# perc_vol = calc_daily_perc_volatility('CORN')
-
-
 all_instruments = trading_instruments
 trading_rule_list = ['ewmac32', 'ewmac8']
 all_instrument_data = prepare_all_instr_data(all_instruments, trading_rule_list)
@@ -59,17 +53,7 @@ df_of_gross_pandl.replace(0.0, np.nan) 后就是需要的gross curve
 df_of_costs resample方式不同的"relevant curve", sum 都是一样的
 '''
 
-# joblib.dump({k: v for k, v in globals().items() if not k.startswith('__') and not isinstance(v, (types.ModuleType, types.FunctionType))}, 'project_checkpoint.pkl')
-# loaded_var = joblib.load('project_checkpoint.pkl')
-# globals().update(loaded_var)
-# print('variables loaded')
-# df_of_costs = loaded_var.get('df_of_costs')
-# df_of_gross_pandl = loaded_var.get('df_of_gross_pandl').replace(0.0, np.nan)
-# all_instruments = loaded_var.get('all_instruments')
-# all_instrument_data = loaded_var.get('all_instrument_data')
 all_instrument_data = prepare_all_instr_data(trading_instruments, trading_rule_list)
-# net_PNL = loaded_var.get('net_PNL')
-
 
 # SR 的Index 问题还是没有处理好，源代码为resample("B"), 现为很奇怪的resample
 SR_dict = {}
@@ -217,20 +201,3 @@ normalised_weights = pd.DataFrame(normalised_weights_np, columns=smoothed_instr_
                                   index=smoothed_instr_weights.index)
 
 print('END')
-
-
-def main():
-    # instruments = my_config.instruments
-    #
-    # pnl_list = [calc_buffered_position(instrument) for instrument in instruments]
-    # pnl_df = pd.concat(pnl_list, axis=1)
-    # pnl_df.columns = instruments
-    #
-    # weight = calculate_instrument_weights(pnl_df)
-    # print(weight)
-
-    return
-
-
-if __name__ == '__main__':
-    main()
