@@ -58,27 +58,6 @@ def calc_cost(pos_target, price, point_size, trading_cost):
     return costs
 
 
-def calc_gross_daily_pnl(forecast, point_size, price, position_target):
-    '''
-    根据品种价格，以及设的波动率目标，有对应的目标仓位
-    根据当天的Position target 和对未来的Forecast, 算出来第二天应该有的实际持仓，所以会shift(1)
-    '''
-    # FIXME: 其次，当forecast信号强烈的时候，是不是意味着实际持仓可以超出Position_target, 从而导致风险暴露超出目标风险暴露
-    position = forecast.mul(position_target, axis=0) / 10
-    position = position.shift(1)
-
-    pnl_in_points = calc_daily_gross_pnl_in_points(positions=position, prices=price)
-    pnl = pnl_in_points * point_size
-    daily_pnl_gross = pnl.resample("B").sum()
-    # FIXME: 鉴于forecast是个两列的df, daily_pnl_gross也是个两列的df
-    # 这就有问题了，应该如何理解这两列的实际持仓呢
-    # 计算过程中，我们本质上是把每个rule当成了单独的portfolio来算的，所以才有了用position_target直接乘上去
-    # 得出的daily_pnl_gross不能是直接相加吧，如果是的话就不合理了
-    # 举例，两个forecast 给出了很弱的信号，所以实际持仓都是目标持仓的60%, 如果直接相加的，反而会导致最终持仓到了目标持仓的120%
-    print('calc_gross_daily_pnl')
-    return daily_pnl_gross
-
-
 def calc_annual_trading_cost_per_contract(instrument_code, rule_name, pooled_instruments, forecast_length_weights):
     # 单次交易成本，包括slippage和commission
     cost_per_trade = get_cost_per_trade(instrument_code)
@@ -427,6 +406,27 @@ def calc_subsystem_turnover(instruments, instrument_code, all_instr_data, tradin
     subsystem_turnover = turnover_x_y(positions, average_position_for_turnover)
     print('calc_subsystem_turnover')
     return subsystem_turnover
+
+
+def calc_gross_daily_pnl(forecast, point_size, price, position_target):
+    '''
+    根据品种价格，以及设的波动率目标，有对应的目标仓位
+    根据当天的Position target 和对未来的Forecast, 算出来第二天应该有的实际持仓，所以会shift(1)
+    '''
+    # FIXME: 其次，当forecast信号强烈的时候，是不是意味着实际持仓可以超出Position_target, 从而导致风险暴露超出目标风险暴露
+    position = forecast.mul(position_target, axis=0) / 10
+    position = position.shift(1)
+
+    pnl_in_points = calc_daily_gross_pnl_in_points(positions=position, prices=price)
+    pnl = pnl_in_points * point_size
+    daily_pnl_gross = pnl.resample("B").sum()
+    # FIXME: 鉴于forecast是个两列的df, daily_pnl_gross也是个两列的df
+    # 这就有问题了，应该如何理解这两列的实际持仓呢
+    # 计算过程中，我们本质上是把每个rule当成了单独的portfolio来算的，所以才有了用position_target直接乘上去
+    # 得出的daily_pnl_gross不能是直接相加吧，如果是的话就不合理了
+    # 举例，两个forecast 给出了很弱的信号，所以实际持仓都是目标持仓的60%, 如果直接相加的，反而会导致最终持仓到了目标持仓的120%
+    print('calc_gross_daily_pnl')
+    return daily_pnl_gross
 
 
 def calc_gross_daily_pnl_dict_for_all_instr(all_instrument_data, all_instruments):
