@@ -134,9 +134,9 @@ def calc_annual_trading_cost_per_contract(instrument_code, rule_name, pooled_ins
     return trading_cost
 
 
-def calc_forecast_weights(pnl_df, fit_end, span_multiple=50000,
+def calc_forecast_weights(instruments, pnl_df, fit_end, span_multiple=50000,
                           min_periods_corr_multiple=10, min_periods_multiple=5):
-    instruments = trading_instruments
+    # instruments = trading_instruments
 
     number_of_rules = len(pnl_df.columns)
     span = len(instruments) * span_multiple
@@ -233,7 +233,8 @@ def get_turnover_for_list_of_rules(instrument_list, trading_rule_list):
     return instrument_turnover_dict
 
 
-def calc_subsystem_position(instrument_code, all_instrument_data, trading_rule_list):
+def calc_subsystem_position(instruments, instrument_code, all_instrument_data, trading_rule_list):
+    # instruments = trading_instruments
     all_instruments = [instrument for instrument in all_instrument_data.keys()]
 
     turnovers = {instrument: all_instrument_data[instrument]['turnover_dict'] for instrument in all_instrument_data}
@@ -318,8 +319,9 @@ def calc_subsystem_position(instrument_code, all_instrument_data, trading_rule_l
     start_date = net_returns_stacked_for_all_instr.index[0]
     end_date = net_returns_stacked_for_all_instr.index[-1]
     end_list = generate_fit_end_list(start_date, end_date)
-    weight_df = pd.DataFrame([calc_forecast_weights(net_returns_stacked_for_all_instr, end) for end in end_list],
-                             index=end_list, columns=net_returns_stacked_for_all_instr.columns)
+    weight_df = pd.DataFrame(
+        [calc_forecast_weights(instruments, net_returns_stacked_for_all_instr, end) for end in end_list],
+        index=end_list, columns=net_returns_stacked_for_all_instr.columns)
 
     # To add the initial weight
     universal_index = all_instrument_data[instrument_code]['price'].index
@@ -387,13 +389,16 @@ def calc_subsystem_position(instrument_code, all_instrument_data, trading_rule_l
     return subsystem_position_raw, vol_scalar
 
 
-def calc_pnl_across_subsystem_for_indiv_instr(instrument_code, all_instrument_data, trading_rule_list):
+def calc_pnl_across_subsystem_for_indiv_instr(instruments, instrument_code, all_instrument_data, trading_rule_list):
+    # instruments = trading_instruments
+
     price = all_instrument_data[instrument_code]['price']
     rolls_per_year = all_instrument_data[instrument_code]['rolls_per_year']
     raw_costs = all_instrument_data[instrument_code]['raw_costs']
     value_per_point = all_instrument_data[instrument_code]['value_per_point']
 
-    position_raw, vol_scalar = calc_subsystem_position(instrument_code, all_instrument_data, trading_rule_list)
+    position_raw, vol_scalar = calc_subsystem_position(instruments, instrument_code, all_instrument_data,
+                                                       trading_rule_list)
     position_buffered = calc_buffered_pos_given_raw_pos(position_raw, vol_scalar, 0.10)
 
     adjusted_pos_buffered = position_buffered.shift(1)
@@ -667,8 +672,8 @@ dict_of_gross_pandl = {}
 dict_of_costs = {}
 
 for instrument in all_instruments:
-    net_pnl, gross_instr_pnl, costs = calc_pnl_across_subsystem_for_indiv_instr(instrument, all_instrument_data,
-                                                                                trading_rule_list)
+    net_pnl, gross_instr_pnl, costs = calc_pnl_across_subsystem_for_indiv_instr(trading_instruments, instrument,
+                                                                                all_instrument_data, trading_rule_list)
     net_instr_pnl_for_all_instr[instrument] = net_pnl
     dict_of_gross_pandl[instrument] = gross_instr_pnl
     dict_of_costs[instrument] = costs
@@ -817,7 +822,8 @@ weights = pd.DataFrame(weights_dict, index=weight_index)
 
 subsystem_positions = []
 for instrument_code in instruments_used:
-    raw_pos, vol_scalar = calc_subsystem_position(instrument_code, all_instrument_data, trading_rule_list)
+    raw_pos, vol_scalar = calc_subsystem_position(trading_instruments, instrument_code, all_instrument_data,
+                                                  trading_rule_list)
     # pos_buffered = calc_buffered_pos_given_raw_pos(raw_pos, vol_scalar, buffer_size=0.1)
     subsystem_positions.append(raw_pos)
 subsystem_positions = pd.concat(subsystem_positions, axis=1).ffill()
