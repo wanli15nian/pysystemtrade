@@ -1,11 +1,9 @@
-from copy import copy
-
 import numpy as np
 import pandas as pd
+from copy import copy
 from scipy.optimize import minimize
 
-from refactory.data_source import get_point_size, get_spread_cost, get_daily_price, get_instrument_info, \
-    get_block_value, get_raw_carry_price
+from refactory.data_source import get_point_size, get_spread_cost, get_daily_price, get_instrument_info
 
 
 def get_volatily(price, span=35, min_periods=10, vol_floor=True,
@@ -46,15 +44,14 @@ def calc_mixed_volatility(daily_returns, days=35, min_periods=10, slow_vol_years
 
 
 def robust_vol_calc(daily_returns: pd.Series,
-    days: int = 35,
-    min_periods: int = 10,
-    vol_abs_min: float = 0.0000000001,
-    vol_floor: bool = True,
-    floor_min_quant: float = 0.05,
-    floor_min_periods: int = 100,
-    floor_days: int = 500,
-    backfill: bool = False,):
-
+                    days: int = 35,
+                    min_periods: int = 10,
+                    vol_abs_min: float = 0.0000000001,
+                    vol_floor: bool = True,
+                    floor_min_quant: float = 0.05,
+                    floor_min_periods: int = 100,
+                    floor_days: int = 500,
+                    backfill: bool = False, ):
     vol = daily_returns.ewm(adjust=True, span=days, min_periods=min_periods).std()
     vol[vol < vol_abs_min] = vol_abs_min
 
@@ -65,7 +62,7 @@ def robust_vol_calc(daily_returns: pd.Series,
         vol = np.maximum(vol, vol_min)
     if backfill:
         # use the first vol in the past, sort of cheating
-        vol_forward_fill =vol.ffill()
+        vol_forward_fill = vol.ffill()
         vol = vol_forward_fill.bfill()
     return vol
 
@@ -82,7 +79,6 @@ def get_stdev_estimator_for_instrument_weight(data_for_analysis, fit_end, span=5
     norm_stdev = [ave_stdev] * len(stdev_list)
     norm_factor = [stdev / ave_stdev for stdev in stdev_list]
     return norm_stdev, norm_factor, stdev_list
-
 
 
 def get_mean_estimator(data, fit_end, span=50000, min_periods=10):
@@ -125,7 +121,9 @@ def optimisation(number, corr, norm_mean, norm_stdev):
     ans = minimize(neg_SR, start_weights, (sigma, mus), method='SLSQP', constraints=cdict, bounds=bounds, tol=0.00001)
     weight = ans['x']
     return weight
-def calculate_weighted_average_with_nans(weights, list_of_values, sum_of_weights_should_be = 1.0):
+
+
+def calculate_weighted_average_with_nans(weights, list_of_values, sum_of_weights_should_be=1.0):
     ## easier to work in np space
     np_weights = np.array(weights)
     np_values = np.array(list_of_values)
@@ -156,17 +154,19 @@ def get_cost_per_trade(instrument_code):
     start_date = get_daily_price(instrument_code).index[-1] - pd.DateOffset(years=1)
     # FIXME: 在这里作者使用了pd.DateOffset来进行年份计算，而在rolling window中是用365天，原因存疑
     average_price = float(get_daily_price(instrument_code)[start_date:].mean())
-    price_returns = get_daily_price(instrument_code).diff()    # FIXME: 又重复get了一次价格， 虽然源代码也是这么写的
+    price_returns = get_daily_price(instrument_code).diff()  # FIXME: 又重复get了一次价格， 虽然源代码也是这么写的
     daily_vol = calc_mixed_volatility(price_returns, slow_vol_years=10)  # TODO: 后续看是否完全复用
     average_vol = float(daily_vol[start_date:].mean())
     ann_stdev_price_units = average_vol * 16
     value_per_block = average_price * block_price_multiplier
 
-    per_trade_commission = get_instrument_info(instrument_code).meta_data.PerTrade
-    per_block_commission = notional_blocks_traded * get_instrument_info(instrument_code).meta_data.PerBlock
-    percentage_commission = (notional_blocks_traded * value_per_block
-                             * get_instrument_info(instrument_code).meta_data.Percentage)
-    commission = max([per_trade_commission, per_block_commission, percentage_commission])
+    per_trade = get_instrument_info(instrument_code).meta_data.PerTrade
+    per_block = get_instrument_info(instrument_code).meta_data.PerBlock
+    percentage = get_instrument_info(instrument_code).meta_data.Percentage
+    
+    per_block_commission = notional_blocks_traded * per_block
+    percentage_commission = (notional_blocks_traded * value_per_block * percentage)
+    commission = max([per_trade, per_block_commission, percentage_commission])
 
     cost_instrument_currency = commission + slippage
     ann_stdev_instrument_currency = ann_stdev_price_units * block_price_multiplier
@@ -234,7 +234,8 @@ def calc_volatility_scalar(instrument_code, all_instrument_data, annual_perc_vol
     annualised_price_vol_points = calc_mixed_volatility(price.diff(), slow_vol_years=10)
     annualised_price_vol_points.ffill(inplace=True)
 
-    (resampled_carry_price, annualised_price_vol_points) = resampled_carry_price.align(annualised_price_vol_points, join='right')
+    (resampled_carry_price, annualised_price_vol_points) = resampled_carry_price.align(annualised_price_vol_points,
+                                                                                       join='right')
     percentage_vol = 100.0 * (annualised_price_vol_points / resampled_carry_price.ffill().abs())
 
     (block_value, percentage_vol) = block_value.align(percentage_vol, join="inner")
