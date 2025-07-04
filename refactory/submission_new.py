@@ -10,10 +10,6 @@ from refactory.refactory_v2.prepare_all_instr_data import prepare_all_instr_data
 from refactory.utils import calc_mixed_volatility, get_corr_estimator_for_instrument_weight, \
     get_stdev_estimator_for_instrument_weight, get_mean_estimator, optimisation, calculate_weighted_average_with_nans, \
     get_cost_per_trade, single_resampled_set_of_returns, calc_volatility_scalar, forecast_turnover_for_indiv_instr
-from sysdata.config.configdata import Config
-
-my_config = Config()
-my_config.instruments = ["CORN", "SOFR", "SP500_micro", 'US10']
 
 trading_instruments = ["CORN", "SOFR", "SP500_micro", 'US10']
 trading_rule_list = ['ewmac32', 'ewmac8']
@@ -662,7 +658,7 @@ def calc_subsystem_turnover(instrument_code, all_instr_data, trading_rule_list, 
     return subsystem_turnover
 
 
-all_instruments = my_config.instruments
+all_instruments = trading_instruments
 trading_rule_list = ['ewmac32', 'ewmac8']
 all_instrument_data = prepare_all_instr_data(all_instruments, trading_rule_list)
 net_instr_pnl_for_all_instr = {}
@@ -857,7 +853,7 @@ normalised_weights = pd.DataFrame(normalised_weights_np, columns=smoothed_instr_
 print('END')
 
 
-def main(my_config):
+def main():
     # instruments = my_config.instruments
     #
     # pnl_list = [calc_buffered_position(instrument) for instrument in instruments]
@@ -871,4 +867,4 @@ def main(my_config):
 
 
 if __name__ == '__main__':
-    main(my_config)
+    main()
