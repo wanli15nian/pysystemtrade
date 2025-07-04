@@ -662,7 +662,7 @@ def calc_subsystem_turnover(instrument_code, all_instr_data, trading_rule_list, 
     subsystem_turnover = turnover_x_y(positions, average_position_for_turnover)
     print('calc_subsystem_turnover')
     return subsystem_turnover
-'''
+
 all_instruments = my_config.instruments
 trading_rule_list = ['ewmac32', 'ewmac8']
 all_instrument_data = prepare_all_instr_data(all_instruments, trading_rule_list)
@@ -672,7 +672,7 @@ dict_of_gross_pandl = {}
 dict_of_costs = {}
 
 for instrument in all_instruments:
-    net_pnl, gross_instr_pnl, costs = calc_pnl_across_subsystem_for_indiv_instr(instrument, all_instrument_data)
+    net_pnl, gross_instr_pnl, costs = calc_pnl_across_subsystem_for_indiv_instr(instrument, all_instrument_data, trading_rule_list)
     net_instr_pnl_for_all_instr[instrument] = net_pnl
     dict_of_gross_pandl[instrument] = gross_instr_pnl
     dict_of_costs[instrument] = costs
@@ -687,13 +687,13 @@ net_PNL = net_PNL.resample('B').sum()
 gross_pnl = process_list_of_data(data=df_of_gross_pandl)
 costs = process_list_of_data(data=df_of_costs)
 
-turnover_as_list = [calc_subsystem_turnover(instrument_code, all_instrument_data) for instrument_code in all_instruments]
+turnover_as_list = [calc_subsystem_turnover(instrument_code, all_instrument_data, trading_rule_list) for instrument_code in all_instruments]
 turnover_as_dict = dict([(instrument_code, turnover) for (instrument_code, turnover) in zip(all_instruments, turnover_as_list)])
 turnovers = {'asset': turnover_as_dict}
 
 
 
-'''
+
 '''
 df_of_gross_pandl.replace(0.0, np.nan) 后就是需要的gross curve
 df_of_costs resample方式不同的"relevant curve", sum 都是一样的
@@ -707,15 +707,15 @@ df_of_costs resample方式不同的"relevant curve", sum 都是一样的
 #     )
 
 # joblib.dump({k: v for k, v in globals().items() if not k.startswith('__') and not isinstance(v, (types.ModuleType, types.FunctionType))}, 'project_checkpoint.pkl')
-loaded_var = joblib.load('project_checkpoint.pkl')
-globals().update(loaded_var)
-print('variables loaded')
-df_of_costs = loaded_var.get('df_of_costs')
-df_of_gross_pandl = loaded_var.get('df_of_gross_pandl').replace(0.0, np.nan)
-all_instruments = loaded_var.get('all_instruments')
+# loaded_var = joblib.load('project_checkpoint.pkl')
+# globals().update(loaded_var)
+# print('variables loaded')
+# df_of_costs = loaded_var.get('df_of_costs')
+# df_of_gross_pandl = loaded_var.get('df_of_gross_pandl').replace(0.0, np.nan)
+# all_instruments = loaded_var.get('all_instruments')
 # all_instrument_data = loaded_var.get('all_instrument_data')
 all_instrument_data = prepare_all_instr_data(instruments, trading_rule_list)
-net_PNL = loaded_var.get('net_PNL')
+# net_PNL = loaded_var.get('net_PNL')
 
 
 # SR 的Index 问题还是没有处理好，源代码为resample("B"), 现为很奇怪的resample
