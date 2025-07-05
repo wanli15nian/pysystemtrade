@@ -19,6 +19,7 @@ net_dict = {}
 gross_dict = {}
 costs_dict = {}
 turnover_dict = {}
+subsystem_positions = []
 
 for instrument in trading_instruments:
     price = get_daily_price(instrument)
@@ -30,6 +31,7 @@ for instrument in trading_instruments:
     block_move_value = get_point_size(instrument)
     position_raw, scalar = calc_subsystem_position(trading_instruments, instrument, all_instrument_data,
                                                    trading_rule_list)
+    subsystem_positions.append(position_raw)
 
     position_buffered = calc_buffered_pos_given_raw_pos(position_raw, scalar, 0.10)
     position = position_buffered.shift(1)
@@ -51,6 +53,9 @@ for instrument in trading_instruments:
 
 gross_pnl_df = pd.DataFrame(gross_dict)
 cost_df = pd.DataFrame(costs_dict)
+
+subsystem_positions = pd.concat(subsystem_positions, axis=1).ffill()
+subsystem_positions.columns = trading_instruments
 
 # gross_pnl_sum = gross_pnl_df.sum(axis=1)
 # cost_sum = cost_df.sum(axis=1)
@@ -176,27 +181,14 @@ weights = pd.DataFrame(weights_dict, index=weight_index)
 
 ## 在这里跳过add zero
 
-
-subsystem_positions = []
-
-for instrument_code in instruments_used:
-    raw_pos, vol_scalar = calc_subsystem_position(trading_instruments, instrument_code, all_instrument_data,
-                                                  trading_rule_list)
-    # pos_buffered = calc_buffered_pos_given_raw_pos(raw_pos, vol_scalar, buffer_size=0.1)
-    subsystem_positions.append(raw_pos)
-subsystem_positions = pd.concat(subsystem_positions, axis=1).ffill()
-subsystem_positions.columns = instruments_used
-
-position_or_forecast = subsystem_positions
-pdm_ffill = position_or_forecast.ffill()
-
+pdm_ffill = subsystem_positions.ffill()
 ## Set leading all nan to zero so weights not set to zero
 p_or_f_notnan = ~pdm_ffill.isna()
 pdm_ffill[p_or_f_notnan.sum(axis=1) == 0] = 0
 
 adj_weights = weights.groupby(level=0).last()
 adj_weights = adj_weights.reindex(pdm_ffill.index, method="ffill")
-instrument_weights = adj_weights[position_or_forecast.columns]
+instrument_weights = adj_weights[subsystem_positions.columns]
 instrument_weights[np.isnan(pdm_ffill)] = 0.0
 daily_unsmoothed_instr_weights = instrument_weights.resample('1B').mean()
 
