@@ -179,8 +179,6 @@ weights_dict = {asset_name: weight for (asset_name, weight) in zip(instruments_u
 weight_index = [start]  ## 这里应该是list of starting dates
 weights = pd.DataFrame(weights_dict, index=weight_index)
 
-## 在这里跳过add zero
-
 pdm_ffill = subsystem_positions.ffill()
 ## Set leading all nan to zero so weights not set to zero
 p_or_f_notnan = ~pdm_ffill.isna()
