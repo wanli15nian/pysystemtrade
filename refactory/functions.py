@@ -4,7 +4,8 @@ import pandas as pd
 
 from refactory.Fill import Fill
 from refactory.apply_buffer_to_position import calc_buffered_pos_given_raw_pos
-from refactory.data_source import get_point_size, get_instrument_raw_carry_data, get_rolls_per_year
+from refactory.data_source import get_point_size, get_instrument_raw_carry_data, get_rolls_per_year, get_daily_price, \
+    get_raw_cost_data
 from refactory.utils import calc_mixed_volatility, get_cost_per_trade, forecast_turnover_for_indiv_instr, \
     calculate_weighted_average_with_nans, get_stdev_estimator_for_instrument_weight, get_mean_estimator, \
     get_corr_estimator_for_instrument_weight, optimisation, single_resampled_set_of_returns, calc_volatility_scalar
@@ -320,12 +321,6 @@ def calc_buffered_pos_given_combined_forecast(volatility_scalar, position_raw):
     return position_buffered
 
 
-def process_list_of_data(data):  # Rename the columns
-    resampled_data = data.resample('1B').sum()
-    resampled_data[resampled_data == 0.0] = np.nan
-    return resampled_data
-
-
 def calc_daily_perc_volatility(instrument_code, all_instr_data):
     denom_price = get_instrument_raw_carry_data(instrument_code).PRICE
     denom_price = denom_price.resample('1B').last()
@@ -356,31 +351,6 @@ def turnover_x_y(x, y, smooth_y_days: int = 250) -> float:
     x_normalised_for_y = daily_x / daily_y.ffill()
     avg_daily = float(x_normalised_for_y.diff().abs().mean())
     return avg_daily * 256
-
-
-def calc_subsystem_turnover(instruments, instrument_code, all_instr_data, trading_rule_list,
-                            notional_trading_capital=500000,
-                            risk_target=0.25):
-    positions, volatility_scalar = calc_subsystem_position(instruments, instrument_code, all_instr_data,
-                                                           trading_rule_list)
-
-    annual_cash_vol_target = (notional_trading_capital * risk_target)
-    daily_cash_vol_target = annual_cash_vol_target / 16
-
-    block_move_value = all_instr_data[instrument_code]['value_per_point']
-    underlying_price = get_instrument_raw_carry_data(instrument_code).PRICE
-    daily_prices = underlying_price.resample('1B').last()
-    block_value = block_move_value * daily_prices.ffill() * 0.01
-
-    daily_perc_vol = calc_daily_perc_volatility(instrument_code, all_instr_data)
-    (block_value, daily_perc_vol) = block_value.align(daily_perc_vol, join="inner")
-    instr_ccy_vol = block_value.ffill() * daily_perc_vol
-    instr_value_vol = instr_ccy_vol.ffill()
-    average_position_for_turnover = daily_cash_vol_target / instr_value_vol
-
-    subsystem_turnover = turnover_x_y(positions, average_position_for_turnover)
-    print('calc_subsystem_turnover')
-    return subsystem_turnover
 
 
 def calc_gross_daily_pnl(forecast, point_size, price, position_target):
@@ -576,10 +546,15 @@ def calc_subsystem_position(instruments, instrument_code, all_instrument_data, t
 
 
 def calc_pnl_across_subsystem_for_indiv_instr(instruments, instrument_code, all_instrument_data, trading_rule_list):
-    price = all_instrument_data[instrument_code]['price']
-    rolls_per_year = all_instrument_data[instrument_code]['rolls_per_year']
-    raw_costs = all_instrument_data[instrument_code]['raw_costs']
-    value_per_point = all_instrument_data[instrument_code]['value_per_point']
+    instrument = instrument_code
+    # price = all_instrument_data[instrument_code]['price']
+    price = get_daily_price(instrument)
+    # rolls_per_year = all_instrument_data[instrument_code]['rolls_per_year']
+    rolls_per_year = get_rolls_per_year(instrument)
+    # raw_costs = all_instrument_data[instrument_code]['raw_costs']
+    raw_costs = get_raw_cost_data(instrument)
+    # value_per_point = all_instrument_data[instrument_code]['value_per_point']
+    value_per_point = get_point_size(instrument)
 
     position_raw, vol_scalar = calc_subsystem_position(instruments, instrument_code, all_instrument_data,
                                                        trading_rule_list)
@@ -620,4 +595,30 @@ def calc_pnl_across_subsystem_for_indiv_instr(instruments, instrument_code, all_
     normalised_costs = reindexed_deflator * costs_as_pd_series
     net_pnl = gross_pnl_daily.add(normalised_costs, fill_value=0).resample('B').sum()
     print('calc_pnl_across_subsytem_for_indiv_instr')
+
     return net_pnl, gross_pnl_daily, normalised_costs
+
+
+def calc_subsystem_turnover(instruments, instrument_code, all_instr_data, trading_rule_list,
+                            notional_trading_capital=500000,
+                            risk_target=0.25):
+    positions, volatility_scalar = calc_subsystem_position(instruments, instrument_code, all_instr_data,
+                                                           trading_rule_list)
+
+    annual_cash_vol_target = (notional_trading_capital * risk_target)
+    daily_cash_vol_target = annual_cash_vol_target / 16
+
+    block_move_value = all_instr_data[instrument_code]['value_per_point']
+    underlying_price = get_instrument_raw_carry_data(instrument_code).PRICE
+    daily_prices = underlying_price.resample('1B').last()
+    block_value = block_move_value * daily_prices.ffill() * 0.01
+
+    daily_perc_vol = calc_daily_perc_volatility(instrument_code, all_instr_data)
+    (block_value, daily_perc_vol) = block_value.align(daily_perc_vol, join="inner")
+    instr_ccy_vol = block_value.ffill() * daily_perc_vol
+    instr_value_vol = instr_ccy_vol.ffill()
+    average_position_for_turnover = daily_cash_vol_target / instr_value_vol
+
+    subsystem_turnover = turnover_x_y(positions, average_position_for_turnover)
+    print('calc_subsystem_turnover')
+    return subsystem_turnover

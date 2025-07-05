@@ -36,13 +36,24 @@ def rescale_forecast(forecast, target_scaling=10, upper_cap=20, window=250000, m
     return capped
 
 
-def get_capped_forecast(instrument_code, rule_name):
+def calculate_forecasts(price):
+    raw_ewmac32 = ewmac(price, 32, 128, 1)
+    ewmac32 = rescale_forecast(raw_ewmac32 / floor_vol(price_vol(price)))
+    # ewmac32.rename('ewmac32', inplace=True)
+    raw_ewmac8 = ewmac(price, 8, 32, 1)
+    ewmac8 = rescale_forecast(raw_ewmac8 / floor_vol(price_vol(price)))
+    # ewmac8.rename('ewmac8', inplace=True)
+    forecast_df = pd.DataFrame({'ewmac32': ewmac32, 'ewmac8': ewmac8})
+    return forecast_df
+
+
+def get_capped_forecast(instrument, rule_name):
     '''
     Forecast 不是对当天价格的预判
     Forecast 根据包括当天在内的价格数据，对未来趋势进行判断
     究竟趋势如何就根据过去几天的价格变化
     '''
-    price = get_daily_price(instrument_code)
+    price = get_daily_price(instrument)
     if rule_name == 'ewmac32':
         raw_ewmac32 = ewmac(price, 32, 128, 1)
         ewmac32 = rescale_forecast(raw_ewmac32 / floor_vol(price_vol(price)))

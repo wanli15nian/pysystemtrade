@@ -1,20 +1,18 @@
-import pandas as pd
-
 from refactory.data_source import get_daily_price, get_raw_carry_price, get_point_size, get_raw_cost_data, \
     get_rolls_per_year
 from refactory.temp import calc_pos_target_from_risk_target
-from refactory.utils import forecast_turnover_for_indiv_instr, get_capped_forecast
+from refactory.utils import forecast_turnover_for_indiv_instr, calculate_forecasts
 
 
 def prepare_all_instr_data(all_instruments, trading_rule_list):
     all_instrument_data = {}
     for instrument in all_instruments:
         individual_instr_data = {}
-        forecast_df = {}
-        for rule_name in trading_rule_list:
-            forecast = get_capped_forecast(instrument, rule_name)
-            forecast_df[rule_name] = forecast
-        forecast_df = pd.DataFrame(forecast_df)
+
+        price = get_daily_price(instrument)
+        individual_instr_data['price'] = price
+
+        forecast_df = calculate_forecasts(price)
         individual_instr_data['forecast_df'] = forecast_df
 
         turnover_dict = {}
@@ -22,9 +20,6 @@ def prepare_all_instr_data(all_instruments, trading_rule_list):
             turnover = forecast_turnover_for_indiv_instr(instrument, rule_name)
             turnover_dict[rule_name] = turnover
         individual_instr_data['turnover_dict'] = turnover_dict
-
-        price = get_daily_price(instrument)
-        individual_instr_data['price'] = price
 
         carry_price = get_raw_carry_price(instrument)
         individual_instr_data['carry_price'] = carry_price

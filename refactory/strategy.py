@@ -2,12 +2,13 @@ import numpy as np
 import pandas as pd
 from copy import copy
 
-from refactory.functions import process_list_of_data, calc_subsystem_turnover, \
+from refactory.functions import calc_subsystem_turnover, \
     calc_subsystem_position, calc_pnl_across_subsystem_for_indiv_instr
 from refactory.prepare_all_instr_data import prepare_all_instr_data
 from refactory.utils import optimisation, single_resampled_set_of_returns
 
 trading_instruments = ["CORN", "SOFR", "SP500_micro", 'US10']
+
 trading_rule_list = ['ewmac32', 'ewmac8']
 
 all_instrument_data = prepare_all_instr_data(trading_instruments, trading_rule_list)
@@ -15,30 +16,42 @@ all_instrument_data = prepare_all_instr_data(trading_instruments, trading_rule_l
 net_instr_pnl_for_all_instr = {}
 dict_of_gross_pandl = {}
 dict_of_costs = {}
+dict_of_turnover = {}
 for instrument in trading_instruments:
     net_pnl, gross_instr_pnl, costs = calc_pnl_across_subsystem_for_indiv_instr(trading_instruments, instrument,
                                                                                 all_instrument_data, trading_rule_list)
+    subsystem_turnover = calc_subsystem_turnover(trading_instruments, instrument, all_instrument_data,
+                                                 trading_rule_list)
     net_instr_pnl_for_all_instr[instrument] = net_pnl
     dict_of_gross_pandl[instrument] = gross_instr_pnl
     dict_of_costs[instrument] = costs
-df_of_gross_pandl = pd.DataFrame(dict_of_gross_pandl)
-summed_gross_pandl = df_of_gross_pandl.sum(axis=1)
-df_of_costs = pd.DataFrame(dict_of_costs)
-summed_costs = df_of_costs.sum(axis=1)
+    dict_of_turnover[instrument] = subsystem_turnover
 
-net_PNL = summed_gross_pandl.add(summed_costs, fill_value=0)
-net_PNL = net_PNL.resample('B').sum()
+gross_pnl_df = pd.DataFrame(dict_of_gross_pandl)
+gross_pnl_sum = gross_pnl_df.sum(axis=1)
 
-gross_pnl = process_list_of_data(data=df_of_gross_pandl)
-costs = process_list_of_data(data=df_of_costs)
+cost_df = pd.DataFrame(dict_of_costs)
+cost_sum = cost_df.sum(axis=1)
 
-turnover_as_list = [
-    calc_subsystem_turnover(trading_instruments, instrument_code, all_instrument_data, trading_rule_list) for
-    instrument_code
-    in trading_instruments]
-turnover_as_dict = dict(
-    [(instrument_code, turnover) for (instrument_code, turnover) in zip(trading_instruments, turnover_as_list)])
-turnovers = {'asset': turnover_as_dict}
+net_PNL = gross_pnl_sum.add(cost_sum, fill_value=0).resample('B').sum()
+
+
+def process_list_of_data(data):  # Rename the columns
+    resampled_data = data.resample('1B').sum()
+    resampled_data[resampled_data == 0.0] = np.nan
+    return resampled_data
+
+
+gross_pnl = process_list_of_data(data=gross_pnl_df)
+costs = process_list_of_data(data=cost_df)
+
+# turnover_as_list = [
+#     calc_subsystem_turnover(trading_instruments, instrument_code, all_instrument_data, trading_rule_list) for
+#     instrument_code
+#     in trading_instruments]
+# turnover_as_dict = dict(
+#     [(instrument_code, turnover) for (instrument_code, turnover) in zip(trading_instruments, turnover_as_list)])
+turnovers = {'asset': dict_of_turnover}
 
 '''
 df_of_gross_pandl.replace(0.0, np.nan) 后就是需要的gross curve
@@ -48,8 +61,8 @@ df_of_costs resample方式不同的"relevant curve", sum 都是一样的
 # SR 的Index 问题还是没有处理好，源代码为resample("B"), 现为很奇怪的resample
 SR_dict = {}
 for instrument in trading_instruments:
-    cost_curve = df_of_costs[instrument]
-    gross_pandl = df_of_gross_pandl[instrument]
+    cost_curve = cost_df[instrument]
+    gross_pandl = gross_pnl_df[instrument]
     daily_returns = cost_curve.mean()
     daily_std = gross_pandl.std()
     annual_SR = 16 * daily_returns / daily_std
@@ -57,7 +70,7 @@ for instrument in trading_instruments:
 
 net_return_as_dict = {}
 for instrument in trading_instruments:
-    daily_gross_returns_for_asset = df_of_gross_pandl[instrument]
+    daily_gross_returns_for_asset = gross_pnl_df[instrument]
     daily_gross_return_std = daily_gross_returns_for_asset.std()
     daily_asset_sr_cost = SR_dict[instrument] / 16
     daily_returns_cost = daily_gross_return_std * daily_asset_sr_cost
