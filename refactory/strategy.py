@@ -167,7 +167,7 @@ avg_std = np.nanmean(std)
 norm_factor = [asset_stdev / avg_std for asset_stdev in std]
 with np.errstate(invalid='ignore'):
     norm_means = [shrunk_means_values[i] / norm_factor[i] for (i, notUsed) in enumerate(shrunk_means)]
-    norm_stdev = [std[i] / norm_factor[i] for (i, notUsed) in enumerate(std)]
+    norm_stdev = [std.iloc[i] / norm_factor[i] for (i, notUsed) in enumerate(std)]
 
 mean_list = [target_sr * asset_stdev for asset_stdev in norm_stdev]
 

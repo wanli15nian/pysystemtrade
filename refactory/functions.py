@@ -253,7 +253,7 @@ def calc_gross_daily_pnl_dict_for_all_instr(all_instrument_data, all_instruments
 def calc_subsystem_position(instruments, instrument_code, all_instrument_data, trading_rule_list):
     gross_daily_pnl_dict = calc_gross_daily_pnl_dict_for_all_instr(all_instrument_data, instruments)
     # 用历史数据的多少来决定每个instrument的权重
-    forecast_length = [len(all_instrument_data[instrument]['forecast_df']) for instrument in (instruments)]
+    forecast_length = [len(all_instrument_data[instrument]['forecast_df']) for instrument in instruments]
     total_length = float(sum(forecast_length))
     forecast_length_weights = [forecast_length / total_length for forecast_length in forecast_length]
     dict_of_instr_cost_sr = {}
@@ -262,7 +262,9 @@ def calc_subsystem_position(instruments, instrument_code, all_instrument_data, t
         price = all_instrument_data[instrument]['price']
         point_size = all_instrument_data[instrument]['point_size']
         pos_target = all_instrument_data[instrument]['position_target']
+
         for trading_rule in trading_rule_list:
+
             forecast = all_instrument_data[instrument]['forecast_df'][trading_rule]
 
             pos_target = pos_target.reindex(forecast.index, method="ffill")
