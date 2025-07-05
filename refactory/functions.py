@@ -251,29 +251,26 @@ def calc_gross_daily_pnl_dict_for_all_instr(all_instrument_data, all_instruments
 
 
 def calc_subsystem_position(instruments, instrument_code, all_instrument_data, trading_rule_list):
-    all_instruments = instruments
-
-    gross_daily_pnl_dict = calc_gross_daily_pnl_dict_for_all_instr(all_instrument_data, all_instruments)
+    gross_daily_pnl_dict = calc_gross_daily_pnl_dict_for_all_instr(all_instrument_data, instruments)
     # 用历史数据的多少来决定每个instrument的权重
-    forecast_length = [len(all_instrument_data[instrument]['forecast_df']) for instrument in all_instruments]
+    forecast_length = [len(all_instrument_data[instrument]['forecast_df']) for instrument in (instruments)]
     total_length = float(sum(forecast_length))
     forecast_length_weights = [forecast_length / total_length for forecast_length in forecast_length]
     dict_of_instr_cost_sr = {}
-    for instrument in all_instruments:
+    for instrument in instruments:
         cost_SR_dict = {}
         price = all_instrument_data[instrument]['price']
         point_size = all_instrument_data[instrument]['point_size']
         pos_target = all_instrument_data[instrument]['position_target']
         for trading_rule in trading_rule_list:
             forecast = all_instrument_data[instrument]['forecast_df'][trading_rule]
-            pos_target = pos_target.reindex(forecast.index, method="ffill")
 
+            pos_target = pos_target.reindex(forecast.index, method="ffill")
             # Annual trading cost is calculated using pooled instruments, hence "all_instruments" is passed
             # Trading cost is the sum of holding and transaction cost
             annual_trading_cost_per_contract = calc_annual_trading_cost_per_contract(instrument, trading_rule,
-                                                                                     all_instruments,
+                                                                                     instruments,
                                                                                      forecast_length_weights)
-
             gross_daily_pnl_series = gross_daily_pnl_dict[instrument][trading_rule]
 
             ##PROBLEM: cost curve calc remains to be checked
@@ -306,7 +303,7 @@ def calc_subsystem_position(instruments, instrument_code, all_instrument_data, t
         instr_annual_cost_sr = dict_of_instr_cost_sr[instrument_code][rule]
         instr_cost_per_turnover = instr_annual_cost_sr / turnover
 
-        all_turnovers = [turnovers[instrument][rule] for instrument in all_instruments]
+        all_turnovers = [turnovers[instrument][rule] for instrument in (instruments)]
         average_turnover_across_assets = np.nanmean(all_turnovers)
 
         pooled_cost = instr_cost_per_turnover * average_turnover_across_assets * cost_multiplier
@@ -350,7 +347,7 @@ def calc_subsystem_position(instruments, instrument_code, all_instrument_data, t
     daily_forecast_weights_resampled_unsmoothed = weight_df.resample('1B').mean()
     forecast_weights_for_rules = daily_forecast_weights_resampled_unsmoothed.ewm(span=125).mean()
     # 跳过一个weight normalisation to 1 的函数
-    list_of_forecast_df = [all_instrument_data[instrument]['forecast_df'] for instrument in all_instruments]
+    list_of_forecast_df = [all_instrument_data[instrument]['forecast_df'] for instrument in (instruments)]
     list_of_resampled_forecast = [forecast_df.resample('W').last() for forecast_df in list_of_forecast_df]
     pooled_forecast_data = reindex_and_stack_list_of_df(list_of_resampled_forecast)
 
@@ -358,8 +355,8 @@ def calc_subsystem_position(instruments, instrument_code, all_instrument_data, t
     ew_lookback = 250
     min_periods = 20
     if pooled_fdm == True:
-        ew_lookback = ew_lookback * len(all_instruments)
-        min_periods = min_periods * len(all_instruments)
+        ew_lookback = ew_lookback * len(instruments)
+        min_periods = min_periods * len(instruments)
     raw_pooled_correlations = pooled_forecast_data.ewm(span=ew_lookback, min_periods=min_periods,
                                                        ignore_na=True).corr(pairwise=True)
 
