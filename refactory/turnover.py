@@ -23,6 +23,7 @@ def turnover_x_y(x, y, smooth_y_days: int = 250) -> float:
 
 def calc_average_position(daily_price, block_move_value, notional_trading_capital=500000, risk_target=0.25,
                           vol_mult=1.0):
+    # FIXME 核对一下为什么要用carry数据，应该是只用daily price就行了
     # carry_data = get_instrument_raw_carry_data(instrument).PRICE
     # daily_prices = carry_data.resample('1B').last()
     # denom_price = get_instrument_raw_carry_data(instrument).PRICE

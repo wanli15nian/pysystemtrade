@@ -2,10 +2,7 @@ import numpy as np
 import pandas as pd
 
 from refactory.apply_buffer_to_position import calc_buffered_pos_given_raw_pos
-from refactory.cost import calc_all_fills, calc_normalised_cost, calc_cost_deflator
-from refactory.data_source import get_point_size, get_rolls_per_year, get_daily_price, \
-    get_raw_cost_data
-from refactory.turnover import turnover_x_y, calc_average_position
+from refactory.data_source import get_point_size, get_rolls_per_year
 from refactory.utils import calc_mixed_volatility, get_cost_per_trade, forecast_turnover_for_indiv_instr, \
     calculate_weighted_average_with_nans, get_stdev_estimator_for_instrument_weight, get_mean_estimator, \
     get_corr_estimator_for_instrument_weight, optimisation, single_resampled_set_of_returns, calc_volatility_scalar
@@ -406,39 +403,3 @@ def calc_subsystem_position(instruments, instrument_code, all_instrument_data, t
     subsystem_position_raw = vol_scalar * combined_forecast / 10.0
     print('calc_subsystem_position')
     return subsystem_position_raw, vol_scalar
-
-
-def calc_pnl_across_subsystem_for_indiv_instr(instruments, instrument, all_instrument_data, trading_rule_list):
-    # price = all_instrument_data[instrument_code]['price']
-    price = get_daily_price(instrument)
-    # rolls_per_year = all_instrument_data[instrument_code]['rolls_per_year']
-    rolls_per_year = get_rolls_per_year(instrument)
-    # raw_costs = all_instrument_data[instrument_code]['raw_costs']
-    raw_costs = get_raw_cost_data(instrument)
-    # value_per_point = all_instrument_data[instrument_code]['value_per_point']
-    value_per_point = get_point_size(instrument)
-
-    position_raw, vol_scalar = calc_subsystem_position(instruments, instrument, all_instrument_data,
-                                                       trading_rule_list)
-    position_buffered = calc_buffered_pos_given_raw_pos(position_raw, vol_scalar, 0.10)
-    position = position_buffered.shift(1)
-    gross_pnl = calc_gross_pnl(instrument, price, position)
-
-    all_fills = calc_all_fills(position, price, rolls_per_year)
-    cost_deflator = calc_cost_deflator(price)
-    normalised_costs = calc_normalised_cost(raw_costs, all_fills, cost_deflator, value_per_point)
-
-    net_pnl = gross_pnl.add(normalised_costs, fill_value=0).resample('B').sum()
-    print('calc_pnl_across_subsytem_for_indiv_instr')
-
-    return net_pnl, gross_pnl, normalised_costs
-
-
-def calc_subsystem_turnover(instruments, instrument, all_instr_data, trading_rule_list):
-    block_move_value = all_instr_data[instrument]['value_per_point']
-    daily_price = get_daily_price(instrument).resample('1B').last()
-    average_position_for_turnover = calc_average_position(daily_price, block_move_value)
-    positions, volatility_scalar = calc_subsystem_position(instruments, instrument, all_instr_data,
-                                                           trading_rule_list)
-    print('calc_subsystem_turnover')
-    return turnover_x_y(positions, average_position_for_turnover)

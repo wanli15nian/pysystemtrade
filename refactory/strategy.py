@@ -5,9 +5,9 @@ from copy import copy
 from refactory.apply_buffer_to_position import calc_buffered_pos_given_raw_pos
 from refactory.cost import calc_all_fills, calc_cost_deflator, calc_normalised_cost
 from refactory.data_source import get_daily_price, get_rolls_per_year, get_raw_cost_data, get_point_size
-from refactory.functions import calc_subsystem_turnover, \
-    calc_subsystem_position, calc_gross_pnl
+from refactory.functions import calc_subsystem_position, calc_gross_pnl
 from refactory.prepare_all_instr_data import prepare_all_instr_data
+from refactory.turnover import turnover_x_y, calc_average_position
 from refactory.utils import optimisation, single_resampled_set_of_returns
 
 trading_instruments = ["CORN", "SOFR", "SP500_micro", 'US10']
@@ -29,9 +29,12 @@ def calc_costs(position, price, rolls_per_year, raw_costs, value_per_point):
 
 for instrument in trading_instruments:
     price = get_daily_price(instrument)
+    # FIXME:daily_price是不是和price是一个？
+    daily_price = price.resample('1B').last()
+
     rolls_per_year = get_rolls_per_year(instrument)
     raw_costs = get_raw_cost_data(instrument)
-    value_per_point = get_point_size(instrument)
+    block_move_value = get_point_size(instrument)
     position_raw, scalar = calc_subsystem_position(trading_instruments, instrument, all_instrument_data,
                                                    trading_rule_list)
 
@@ -39,18 +42,19 @@ for instrument in trading_instruments:
     position = position_buffered.shift(1)
 
     gross_pnl = calc_gross_pnl(instrument, price, position)
-    normalised_costs = calc_costs(position, price, rolls_per_year, raw_costs, value_per_point)
+    normalised_costs = calc_costs(position, price, rolls_per_year, raw_costs, block_move_value)
     net_pnl = gross_pnl.add(normalised_costs, fill_value=0).resample('B').sum()
 
     net_dict[instrument] = net_pnl
     gross_dict[instrument] = gross_pnl
     costs_dict[instrument] = normalised_costs
-
     print('calc_pnl_across_subsytem_for_indiv_instr')
 
-    subsystem_turnover = calc_subsystem_turnover(trading_instruments, instrument, all_instrument_data,
-                                                 trading_rule_list)
+    average_position_for_turnover = calc_average_position(daily_price, block_move_value)
+    # FIXME：这里是不是应该用buffer过的position？
+    subsystem_turnover = turnover_x_y(position_raw, average_position_for_turnover)
     turnover_dict[instrument] = subsystem_turnover
+    print('calc_subsystem_turnover')
 
 gross_pnl_df = pd.DataFrame(gross_dict)
 gross_pnl_sum = gross_pnl_df.sum(axis=1)
