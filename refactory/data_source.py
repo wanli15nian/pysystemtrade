@@ -2,9 +2,6 @@ import pandas as pd
 import csv
 
 
-'''
-以下全部都是为了Instrument Info
-'''
 def get_instrument_info(instrument_code, file_path='data/csvconfig/instrumentconfig.csv'):
     with open(file_path, newline='', encoding='utf-8') as csvfile:
         reader = csv.DictReader(csvfile)
@@ -32,6 +29,16 @@ def get_spread_cost(instrument_code, file_path='data/csvconfig/spreadcosts.csv')
     spread_cost = row['SpreadCost'].values[0]
     return pd.DataFrame({instrument_code: [spread_cost]}, index=['SpreadCost'])
 
+
+def get_rolls_per_year(instrument_code, file_path='data/csvconfig/rollconfig.csv'):
+    df = pd.read_csv(file_path)
+    row = df[df['Instrument'] == instrument_code]
+
+    if row.empty:
+        raise ValueError(f"Instrument '{instrument_code}' not found in {file_path}")
+
+    rolls_per_year = len(row['HoldRollCycle'].values[0])
+    return pd.DataFrame({instrument_code: [rolls_per_year]}, index=['rolls_per_year'])
 
 
 
