@@ -28,8 +28,10 @@ def get_instrument_info(instrument_code, file_path='data/csvconfig/instrumentcon
 def get_daily_prices(instrument_code):
     file = pd.read_csv('data/adjusted_prices_csv/'+instrument_code+'.csv', parse_dates=['DATETIME'])
     df = file.set_index('DATETIME')
-    daily_prices= df.resample('1B').last()
+    daily_prices = df.resample('1B').last()
     return daily_prices
+
+
 
 
 
