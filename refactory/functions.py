@@ -152,22 +152,22 @@ def calc_div_mult_single_period(corr, weights, dm_max=2.5):
 #     return instrument_turnover_dict
 
 
-def calc_net_returns_dict_for_all_instr(dict_of_sr_costs, gross_returns_dict):
-    net_returns_dict = {}
-    for instrument in gross_returns_dict.keys():
-        gross_returns = gross_returns_dict[instrument]
-        net_returns_single_instrument = {}
-        for column_name in gross_returns.columns:
-            gross_returns_daily_std = gross_returns[column_name].std()
-            daily_sr_cost = dict_of_sr_costs[column_name] / 16
-            daily_returns_cost = (daily_sr_cost * gross_returns_daily_std).item()
-            net_returns_single_instrument_rule = gross_returns[column_name] + daily_returns_cost
-            net_returns_single_instrument[column_name] = net_returns_single_instrument_rule
-        net_returns_single_instrument = pd.DataFrame(net_returns_single_instrument)
-        net_returns_dict[instrument] = net_returns_single_instrument  # CLEARED
-    net_returns = single_resampled_set_of_returns(net_returns_dict, frequency='W')  # CLEARED
-    print('calc_net_returns_dict_for_all_instr')
-    return net_returns
+# def calc_net_returns_dict_for_all_instr(dict_of_sr_costs, gross_returns_dict):
+#     net_returns_dict = {}
+#     for instrument in gross_returns_dict.keys():
+#         gross_returns = gross_returns_dict[instrument]
+#         net_returns_single_instrument = {}
+#         for column_name in gross_returns.columns:
+#             gross_returns_daily_std = gross_returns[column_name].std()
+#             daily_sr_cost = dict_of_sr_costs[column_name] / 16
+#             daily_returns_cost = (daily_sr_cost * gross_returns_daily_std).item()
+#             net_returns_single_instrument_rule = gross_returns[column_name] + daily_returns_cost
+#             net_returns_single_instrument[column_name] = net_returns_single_instrument_rule
+#         net_returns_single_instrument = pd.DataFrame(net_returns_single_instrument)
+#         net_returns_dict[instrument] = net_returns_single_instrument  # CLEARED
+#     net_returns = single_resampled_set_of_returns(net_returns_dict, frequency='W')  # CLEARED
+#     print('calc_net_returns_dict_for_all_instr')
+#     return net_returns
 
 
 # def calc_buffered_pos_given_combined_forecast(volatility_scalar, position_raw):
@@ -186,45 +186,13 @@ def calc_gross_daily_pnl_dict_for_all_instr(all_instrument_data, all_instruments
         forecast = all_instrument_data[instrument]['forecast_df']
         pos_target = all_instrument_data[instrument]['position_target']
 
-        gross_daily_pnl = calc_gross_daily_pnl(forecast=forecast, price=price, position_target=pos_target,
-                                               point_size=point_size)
-        gross_daily_pnl_single_instrument_df = gross_daily_pnl.replace(0, np.nan)
-        gross_daily_pnl_dict[instrument] = gross_daily_pnl_single_instrument_df
+        position = forecast.mul(pos_target, axis=0) / 10
+        position = position.shift(1)
+        gross_pnl = calc_gross_pnl(position, price, point_size)
+        gross_pnl = gross_pnl.replace(0, np.nan)
+        gross_daily_pnl_dict[instrument] = gross_pnl
     print('calc_gross_returns_dict_for_all_instr')
     return gross_daily_pnl_dict
-
-
-def calc_daily_gross_pnl_in_points(positions: pd.Series, prices: pd.Series):
-    '''
-    持仓单位为 “手"
-    实际持仓再往后调一天，然后乘以价格变化
-    因为实际持仓和价格变化都是当天收盘之后算出来的
-    所以第一天的实际持仓算出来后，第二天会那么持仓，然后吃满第二天的价格变化
-    pnl也会算进第二天里
-
-    需要去算具体金额的盈亏，还得乘以point_size, 也就是比如说一手多少吨
-    '''
-    pos_series = positions.groupby(positions.index).last()  # 得到当天最后的持仓
-    pos_price_series = pd.concat([pos_series, prices], axis=1)
-    if len(pos_price_series.columns) == 2:
-        pos_price_series.columns = ["positions", "price"]
-    pos_price_series = pos_price_series.ffill()
-    daily_price_change = pos_price_series.price.diff()
-    adjusted_pos_price_series = pos_price_series.loc[:, pos_price_series.columns != 'price'].shift(1)
-    daily_pnl_in_points = adjusted_pos_price_series.mul(daily_price_change, axis=0)
-    daily_pnl_in_points[daily_pnl_in_points.isna()] = 0.0
-    print("calc_daily_pnl_in_points_given_pos_prices")
-    return daily_pnl_in_points
-
-
-def calc_gross_daily_pnl(forecast, price, position_target, point_size):
-    '''
-    根据品种价格，以及设的波动率目标，有对应的目标仓位
-    根据当天的Position target 和对未来的Forecast, 算出来第二天应该有的实际持仓，所以会shift(1)
-    '''
-    position = forecast.mul(position_target, axis=0) / 10
-    position = position.shift(1)
-    return calc_gross_pnl(position, price, point_size)
 
 
 def calc_subsystem_position(instruments, instrument, all_instrument_data, trading_rule_list):
@@ -234,13 +202,15 @@ def calc_subsystem_position(instruments, instrument, all_instrument_data, tradin
     forecast_length_weights = calc_forecast_length_weights(forecast_dict)
 
     price = get_daily_price(instrument)
-    forecast_df = calculate_forecasts(price)
     point_size = get_point_size(instrument)
+    
+    forecast_df = calculate_forecasts(price)
     pos_target = calc_target_position(price, point_size, capital=1000000, risk_target=0.16)
 
-    gross_daily_pnl = calc_gross_daily_pnl(forecast=forecast_df, price=price, position_target=pos_target,
-                                           point_size=point_size)
-    instrument_gross_pnl = gross_daily_pnl.replace(0, np.nan)
+    position = forecast_df.mul(pos_target, axis=0) / 10
+    position = position.shift(1)
+    gross_pnl = calc_gross_pnl(position, price, point_size)
+    gross_pnl = gross_pnl.replace(0, np.nan)
 
     dict_of_instr_cost_sr_with_pooling = {}
     for rule in trading_rule_list:
@@ -254,7 +224,7 @@ def calc_subsystem_position(instruments, instrument, all_instrument_data, tradin
         annual_trading_cost_per_contract = calc_annual_trading_cost_per_contract(instrument, rule,
                                                                                  instruments,
                                                                                  forecast_length_weights)
-        gross_daily_pnl_series = instrument_gross_pnl[rule]
+        gross_daily_pnl_series = gross_pnl[rule]
 
         ##PROBLEM: cost curve calc remains to be checked
         cost_curve = calc_cost(pos_target=pos_target, price=price,
@@ -286,16 +256,16 @@ def calc_subsystem_position(instruments, instrument, all_instrument_data, tradin
     # TODO: 其实这里的步骤就是把第一个循环的内容重复反方向算了一遍而已，完全可以合并
     net_returns_of_rules_for_all_instr_dict = {}
     for instrument in gross_daily_pnl_dict.keys():
-        gross_daily_pnl = gross_daily_pnl_dict[instrument]
+        gross_pnl = gross_daily_pnl_dict[instrument]
         net_returns_single_instrument = {}
 
         # FIXME: dict_of_instr_cost_with_pooling is specific to the target instrument, how can it be applied widely
-        for column_name in gross_daily_pnl.columns:
-            gross_daily_pnl_std = gross_daily_pnl[column_name].std()
+        for column_name in gross_pnl.columns:
+            gross_daily_pnl_std = gross_pnl[column_name].std()
             daily_cost_sr = dict_of_instr_cost_sr_with_pooling[column_name] / 16
             daily_cost = (daily_cost_sr * gross_daily_pnl_std).item()
 
-            net_returns_single_instrument_rule = gross_daily_pnl[column_name] + daily_cost
+            net_returns_single_instrument_rule = gross_pnl[column_name] + daily_cost
             net_returns_single_instrument[column_name] = net_returns_single_instrument_rule
 
         net_returns_single_instrument = pd.DataFrame(net_returns_single_instrument)
@@ -388,6 +358,29 @@ def average_turnover_across_instruments(all_instrument_data, instruments, rule):
     all_turnovers = [turnovers[instrument][rule] for instrument in (instruments)]
     average_turnover_across_assets = np.nanmean(all_turnovers)
     return average_turnover_across_assets
+
+
+def calc_daily_gross_pnl_in_points(positions: pd.Series, prices: pd.Series):
+    # TODO: 清理，这里为什么还要shift一次，可能会有问题
+    '''
+    持仓单位为 “手"
+    实际持仓再往后调一天，然后乘以价格变化
+    因为实际持仓和价格变化都是当天收盘之后算出来的
+    所以第一天的实际持仓算出来后，第二天会那么持仓，然后吃满第二天的价格变化
+    pnl也会算进第二天里
+
+    需要去算具体金额的盈亏，还得乘以point_size, 也就是比如说一手多少吨
+    '''
+    pos_series = positions.groupby(positions.index).last()  # 得到当天最后的持仓
+    pos_price_series = pd.concat([pos_series, prices], axis=1)
+    if len(pos_price_series.columns) == 2:
+        pos_price_series.columns = ["positions", "price"]
+    pos_price_series = pos_price_series.ffill()
+    daily_price_change = pos_price_series.price.diff()
+    adjusted_pos_price_series = pos_price_series.loc[:, pos_price_series.columns != 'price'].shift(1)
+    daily_pnl_in_points = adjusted_pos_price_series.mul(daily_price_change, axis=0)
+    daily_pnl_in_points[daily_pnl_in_points.isna()] = 0.0
+    return daily_pnl_in_points
 
 
 def calc_gross_pnl(position, price, point_size):
