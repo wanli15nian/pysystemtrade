@@ -1,9 +1,8 @@
-import datetime
 import numpy as np
 import pandas as pd
 
-from refactory.Fill import Fill
 from refactory.apply_buffer_to_position import calc_buffered_pos_given_raw_pos
+from refactory.cost import calc_all_fills, calc_normalised_cost, calc_cost_deflator
 from refactory.data_source import get_point_size, get_instrument_raw_carry_data, get_rolls_per_year, get_daily_price, \
     get_raw_cost_data
 from refactory.utils import calc_mixed_volatility, get_cost_per_trade, forecast_turnover_for_indiv_instr, \
@@ -188,110 +187,6 @@ def get_turnover_for_list_of_rules(instrument_list, trading_rule_list):
     print('get_turnover_for_list_of_rules')
 
     return instrument_turnover_dict
-
-
-def calc_cost_instr_currency_for_a_fill(fill, value_per_point, raw_costs):
-    blocks_traded = fill.qty
-    price = fill.price
-    include_slippage = fill.price_requires_slippage_adjustment
-    if include_slippage:
-        slippage_costs = abs(blocks_traded) * value_per_point * raw_costs.price_slippage
-    else:
-        slippage_costs = 0
-
-    '''
-    三种Commission cost 的计算方式
-    '''
-    block_price_multiplier = value_per_point * price
-    per_trade_commission = raw_costs.value_of_pertrade_commission
-    block_commission = abs(blocks_traded) * raw_costs.value_of_block_commission
-    perc_commission = abs(blocks_traded) * block_price_multiplier * raw_costs.percentage_cost
-
-    commission_costs = max([per_trade_commission, block_commission, perc_commission])
-
-    total_cost = slippage_costs + commission_costs
-    print('calc_cost_instr_currency_for_a_fill')
-    return total_cost
-
-
-def pseudo_fills_for_year(year, rolls_per_year, price, adjusted_pos_buffered):
-    if rolls_per_year == 0:
-        return []
-
-    date_list = generate_equal_dates_within_year(year, rolls_per_year)
-    avg_holding_within_a_yr = calc_avg_holding_within_a_year(year, rolls_per_year, adjusted_pos_buffered)
-    price_series = price.ffill()
-    last_date_with_positions = price.index[-1]
-    multiply_roll_costs_by = 1
-
-    ## We multiply the quantity rather than the actual costs, as the later
-    ##   cost calculation doesn't distinguish between rolls and other trades
-
-    opening_fills_this_year = [
-        Fill(
-            date=date,
-            qty=qty * multiply_roll_costs_by,
-            price=get_row_of_series_before_date(price_series, date),
-            price_requires_slippage_adjustment=True,
-        )
-        for date, qty in zip(date_list, avg_holding_within_a_yr)
-        if date <= last_date_with_positions and abs(qty) > 0
-    ]
-
-    closing_fills_this_year = [Fill(
-        date=fill.date,
-        qty=-fill.qty,
-        price=fill.price) for fill in opening_fills_this_year]
-
-    fills_this_year = opening_fills_this_year + closing_fills_this_year
-    print('pseudo_fills_for_year')
-
-    return fills_this_year
-
-
-def get_row_of_series_before_date(data_series, relevant_date):
-    if relevant_date == np.nan:
-        data_at_date = data_series.values[-1]
-    else:
-        matching_index_size = data_series.index[data_series.index < relevant_date].size
-        if matching_index_size == 0:
-            index_point = None
-        else:
-            index_point = matching_index_size - 1
-        data_at_date = data_series.values[index_point]
-    return data_at_date
-
-
-def calc_avg_holding_within_a_year(year, rolls_per_year, adjusted_pos_buffered):
-    first_date = generate_equal_dates_within_year(year - 1, rolls_per_year)[-1]
-    subsequent_dates = generate_equal_dates_within_year(year, rolls_per_year)
-    all_dates = [first_date] + subsequent_dates
-    list_of_average_holdings = []
-    for date_index in range(len(subsequent_dates)):
-        end_date = all_dates[date_index + 1]
-        previous_date = all_dates[date_index]
-        avg_holding = adjusted_pos_buffered[previous_date:end_date].abs().mean()
-        if np.isnan(avg_holding):
-            avg_holding = 0.0
-        list_of_average_holdings.append(avg_holding)
-    print('calc_avg_holding_within_a_year')
-    return list_of_average_holdings
-
-
-def generate_equal_dates_within_year(year, rolls_per_year, false_start_of_year_align=False):
-    days_between_periods = int(365 / rolls_per_year)
-    start_of_year = datetime.datetime(year, 1, 1)
-    if false_start_of_year_align:
-        first_date = start_of_year
-    else:
-        half_period = int(days_between_periods / 2)
-        half_period_increment = datetime.timedelta(days=half_period)
-        first_date = start_of_year + half_period_increment
-    delta_for_each_period = datetime.timedelta(days=days_between_periods)
-    all_dates = [first_date + (delta_for_each_period * period_count)
-                 for period_count in range(rolls_per_year)]
-    print('generate_equal_dates_within_year')
-    return all_dates
 
 
 def calc_net_returns_dict_for_all_instr(dict_of_sr_costs, gross_returns_dict):
@@ -558,39 +453,11 @@ def calc_pnl_across_subsystem_for_indiv_instr(instruments, instrument, all_instr
                                                        trading_rule_list)
     position_buffered = calc_buffered_pos_given_raw_pos(position_raw, vol_scalar, 0.10)
     position = position_buffered.shift(1)
-
     gross_pnl = calc_gross_pnl(instrument, price, position)
 
-    list_of_years = list(set([int(idx.year) for idx in position.index]))
-    list_of_years.sort()
-    fills_by_year = [pseudo_fills_for_year(year, rolls_per_year, price, position) for year in
-                     list_of_years]
-    list_of_holding_fills = [item for sublist in fills_by_year for item in sublist]
-    trades = position.diff()
-    trades_without_na = trades[~trades.isna()]
-    trades_without_zeros = trades_without_na[trades_without_na != 0]
-    prices_aligned_to_trades = price.reindex(trades_without_zeros.index, method="ffill")
-    trades_as_list = list(trades_without_zeros.values)
-    prices_as_list = list(prices_aligned_to_trades.values)
-    dates_as_list = list(prices_aligned_to_trades.index)
-    list_of_trading_fills = [
-        Fill(date, qty, price, price_requires_slippage_adjustment=True)
-        for date, qty, price in zip(dates_as_list, trades_as_list, prices_as_list)
-    ]
-    list_of_all_fills = list_of_trading_fills + list_of_holding_fills
-    instrument_currency_costs = [-calc_cost_instr_currency_for_a_fill(fill, value_per_point, raw_costs) for fill in
-                                 list_of_all_fills]
-    date_index = [fill.date for fill in list_of_all_fills]
-    costs_as_pd_series = pd.Series(instrument_currency_costs, date_index)
-    costs_as_pd_series = costs_as_pd_series.sort_index()
-    costs_as_pd_series = costs_as_pd_series.groupby(costs_as_pd_series.index).sum()
-    daily_price = price.resample("1B").ffill()
-    daily_returns = daily_price.ffill().diff()
-    vol_price = daily_returns.rolling(180, min_periods=3).std().ffill()
-    final_vol = vol_price.iloc[-1]
-    cost_deflator = vol_price / final_vol
-    reindexed_deflator = cost_deflator.reindex(costs_as_pd_series.index, method="ffill")
-    normalised_costs = reindexed_deflator * costs_as_pd_series
+    all_fills = calc_all_fills(position, price, rolls_per_year)
+    cost_deflator = calc_cost_deflator(price)
+    normalised_costs = calc_normalised_cost(raw_costs, all_fills, cost_deflator, value_per_point)
 
     net_pnl = gross_pnl.add(normalised_costs, fill_value=0).resample('B').sum()
     print('calc_pnl_across_subsytem_for_indiv_instr')
