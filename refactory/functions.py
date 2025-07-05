@@ -2,7 +2,9 @@ import numpy as np
 import pandas as pd
 
 from refactory.apply_buffer_to_position import calc_buffered_pos_given_raw_pos
-from refactory.data_util import get_point_size, get_rolls_per_year
+from refactory.data_util import get_point_size, get_rolls_per_year, get_daily_price
+from refactory.forecast import calculate_forecasts
+from refactory.temp import calc_pos_target_from_risk_target
 from refactory.utils import calc_mixed_volatility, get_cost_per_trade, forecast_turnover_for_indiv_instr, \
     calculate_weighted_average_with_nans, get_stdev_estimator_for_instrument_weight, get_mean_estimator, \
     get_corr_estimator_for_instrument_weight, optimisation, single_resampled_set_of_returns, calc_volatility_scalar
@@ -174,17 +176,15 @@ def calc_div_mult_single_period(corr, weights, dm_max=2.5):
     return dm
 
 
-def get_turnover_for_list_of_rules(instrument_list, trading_rule_list):
-    instrument_turnover_dict = dict()
-
-    for instrument in instrument_list:
-        instrument_turnover_dict[instrument] = {
-            rule_name: forecast_turnover_for_indiv_instr(instrument, rule_name)
-            for rule_name in trading_rule_list
-        }
-    print('get_turnover_for_list_of_rules')
-
-    return instrument_turnover_dict
+# def get_turnover_for_list_of_rules(instrument_list, trading_rule_list):
+#     instrument_turnover_dict = dict()
+#     for instrument in instrument_list:
+#         instrument_turnover_dict[instrument] = {
+#             rule_name: forecast_turnover_for_indiv_instr(instrument, rule_name)
+#             for rule_name in trading_rule_list
+#         }
+#     print('get_turnover_for_list_of_rules')
+#     return instrument_turnover_dict
 
 
 def calc_net_returns_dict_for_all_instr(dict_of_sr_costs, gross_returns_dict):
@@ -251,64 +251,60 @@ def calc_gross_daily_pnl_dict_for_all_instr(all_instrument_data, all_instruments
 
 
 def calc_subsystem_position(instruments, instrument_code, all_instrument_data, trading_rule_list):
+    instrument = instrument_code
+
     gross_daily_pnl_dict = calc_gross_daily_pnl_dict_for_all_instr(all_instrument_data, instruments)
+    instrument_gross_pnl = gross_daily_pnl_dict[instrument]
+
     # 用历史数据的多少来决定每个instrument的权重
     forecast_length = [len(all_instrument_data[instrument]['forecast_df']) for instrument in instruments]
     total_length = float(sum(forecast_length))
     forecast_length_weights = [forecast_length / total_length for forecast_length in forecast_length]
-    dict_of_instr_cost_sr = {}
-    for instrument in instruments:
-        cost_SR_dict = {}
-        price = all_instrument_data[instrument]['price']
-        point_size = all_instrument_data[instrument]['point_size']
-        pos_target = all_instrument_data[instrument]['position_target']
 
-        for trading_rule in trading_rule_list:
+    price = get_daily_price(instrument)
+    point_size = get_point_size(instrument)
 
-            forecast = all_instrument_data[instrument]['forecast_df'][trading_rule]
+    pos_target = calc_pos_target_from_risk_target(price, point_size, capital=1000000, risk_target=0.16)
+    forecast_df = calculate_forecasts(price)
 
-            pos_target = pos_target.reindex(forecast.index, method="ffill")
-            # Annual trading cost is calculated using pooled instruments, hence "all_instruments" is passed
-            # Trading cost is the sum of holding and transaction cost
-            annual_trading_cost_per_contract = calc_annual_trading_cost_per_contract(instrument, trading_rule,
-                                                                                     instruments,
-                                                                                     forecast_length_weights)
-            gross_daily_pnl_series = gross_daily_pnl_dict[instrument][trading_rule]
-
-            ##PROBLEM: cost curve calc remains to be checked
-            cost_curve = calc_cost(pos_target=pos_target, price=price,
-                                   point_size=point_size, trading_cost=annual_trading_cost_per_contract)
-            '''
-            annual_cost_SR 算出交易成本与gross returns 波动的比例
-            越高，说明成本越难以接受
-            当annual_cost_SR等于1的时候，就算gross returns 总是赚的，也会被交易成本给消耗掉
-            '''
-
-            cost_curve.iloc[:11] = np.nan  # QUESTION: 为什么前11个数都是Nan
-            if instrument == 'US10':
-                cost_curve.iloc[:13] = np.nan  # QUESTION: 为什么到了US10是前13个数字
-            cost_curve_mean = cost_curve.mean()
-
-            gross_daily_pnl_series = gross_daily_pnl_series.replace(0, np.nan)
-            gross_daily_pnl_std = gross_daily_pnl_series.std()
-            annual_cost_SR = 16 * cost_curve_mean / gross_daily_pnl_std
-            cost_SR_dict[trading_rule] = annual_cost_SR
-        dict_of_instr_cost_sr[instrument] = cost_SR_dict
-
-    turnovers = {instrument: all_instrument_data[instrument]['turnover_dict'] for instrument in all_instrument_data}
-    # FIXME: 首先这个instr_cost_per_turnover 算的就很奇怪，毕竟分子并不是真正的cost, 而是个比值
-    # 其次，cost_multiplier是2，没有解释
-    cost_multiplier = 2
     dict_of_instr_cost_sr_with_pooling = {}
     for rule in trading_rule_list:
-        turnover = turnovers[instrument_code][rule]
-        instr_annual_cost_sr = dict_of_instr_cost_sr[instrument_code][rule]
+
+        average_turnover = average_turnover_across_instruments(all_instrument_data, instruments, rule)
+
+        forecast = forecast_df[rule]
+        pos_target = pos_target.reindex(forecast.index, method="ffill")
+        # Annual trading cost is calculated using pooled instruments, hence "all_instruments" is passed
+        # Trading cost is the sum of holding and transaction cost
+        annual_trading_cost_per_contract = calc_annual_trading_cost_per_contract(instrument, rule,
+                                                                                 instruments,
+                                                                                 forecast_length_weights)
+        gross_daily_pnl_series = instrument_gross_pnl[rule]
+
+        ##PROBLEM: cost curve calc remains to be checked
+        cost_curve = calc_cost(pos_target=pos_target, price=price,
+                               point_size=point_size, trading_cost=annual_trading_cost_per_contract)
+        '''
+        annual_cost_SR 算出交易成本与gross returns 波动的比例
+        越高，说明成本越难以接受
+        当annual_cost_SR等于1的时候，就算gross returns 总是赚的，也会被交易成本给消耗掉
+        '''
+
+        cost_curve.iloc[:11] = np.nan  # QUESTION: 为什么前11个数都是Nan
+        if instrument == 'US10':
+            cost_curve.iloc[:13] = np.nan  # QUESTION: 为什么到了US10是前13个数字
+        cost_curve_mean = cost_curve.mean()
+
+        gross_daily_pnl_series = gross_daily_pnl_series.replace(0, np.nan)
+        gross_daily_pnl_std = gross_daily_pnl_series.std()
+        annual_cost_SR = 16 * cost_curve_mean / gross_daily_pnl_std
+
+        turnover = forecast_turnover_for_indiv_instr(instrument_code, rule)
+        instr_annual_cost_sr = annual_cost_SR
         instr_cost_per_turnover = instr_annual_cost_sr / turnover
 
-        all_turnovers = [turnovers[instrument][rule] for instrument in (instruments)]
-        average_turnover_across_assets = np.nanmean(all_turnovers)
-
-        pooled_cost = instr_cost_per_turnover * average_turnover_across_assets * cost_multiplier
+        cost_multiplier = 2
+        pooled_cost = instr_cost_per_turnover * average_turnover * cost_multiplier
         dict_of_instr_cost_sr_with_pooling[rule] = pooled_cost
 
     # TODO: 其实这里的步骤就是把第一个循环的内容重复反方向算了一遍而已，完全可以合并
@@ -402,3 +398,10 @@ def calc_subsystem_position(instruments, instrument_code, all_instrument_data, t
     subsystem_position_raw = vol_scalar * combined_forecast / 10.0
     print('calc_subsystem_position')
     return subsystem_position_raw, vol_scalar
+
+
+def average_turnover_across_instruments(all_instrument_data, instruments, rule):
+    turnovers = {instrument: all_instrument_data[instrument]['turnover_dict'] for instrument in all_instrument_data}
+    all_turnovers = [turnovers[instrument][rule] for instrument in (instruments)]
+    average_turnover_across_assets = np.nanmean(all_turnovers)
+    return average_turnover_across_assets
