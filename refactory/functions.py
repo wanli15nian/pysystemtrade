@@ -147,8 +147,7 @@ def calculate_instrument_weights(pnl_df):
     return weight
 
 
-def calc_gross_instr_pnl(instrument, position_buffered, price):
-    position_buffered = position_buffered.shift(1)
+def calc_gross_pnl(instrument, price, position_buffered):
     pnl_in_points = calc_daily_gross_pnl_in_points(positions=position_buffered, prices=price)
     point_size = get_point_size(instrument)
     pnl_in_ccy = pnl_in_points * point_size
@@ -545,8 +544,7 @@ def calc_subsystem_position(instruments, instrument_code, all_instrument_data, t
     return subsystem_position_raw, vol_scalar
 
 
-def calc_pnl_across_subsystem_for_indiv_instr(instruments, instrument_code, all_instrument_data, trading_rule_list):
-    instrument = instrument_code
+def calc_pnl_across_subsystem_for_indiv_instr(instruments, instrument, all_instrument_data, trading_rule_list):
     # price = all_instrument_data[instrument_code]['price']
     price = get_daily_price(instrument)
     # rolls_per_year = all_instrument_data[instrument_code]['rolls_per_year']
@@ -556,19 +554,19 @@ def calc_pnl_across_subsystem_for_indiv_instr(instruments, instrument_code, all_
     # value_per_point = all_instrument_data[instrument_code]['value_per_point']
     value_per_point = get_point_size(instrument)
 
-    position_raw, vol_scalar = calc_subsystem_position(instruments, instrument_code, all_instrument_data,
+    position_raw, vol_scalar = calc_subsystem_position(instruments, instrument, all_instrument_data,
                                                        trading_rule_list)
     position_buffered = calc_buffered_pos_given_raw_pos(position_raw, vol_scalar, 0.10)
+    position = position_buffered.shift(1)
 
-    adjusted_pos_buffered = position_buffered.shift(1)
-    gross_pnl_daily = calc_gross_instr_pnl(instrument_code, position_buffered, price)
+    gross_pnl = calc_gross_pnl(instrument, price, position)
 
-    list_of_years = list(set([int(idx.year) for idx in adjusted_pos_buffered.index]))
+    list_of_years = list(set([int(idx.year) for idx in position.index]))
     list_of_years.sort()
-    fills_by_year = [pseudo_fills_for_year(year, rolls_per_year, price, adjusted_pos_buffered) for year in
+    fills_by_year = [pseudo_fills_for_year(year, rolls_per_year, price, position) for year in
                      list_of_years]
     list_of_holding_fills = [item for sublist in fills_by_year for item in sublist]
-    trades = adjusted_pos_buffered.diff()
+    trades = position.diff()
     trades_without_na = trades[~trades.isna()]
     trades_without_zeros = trades_without_na[trades_without_na != 0]
     prices_aligned_to_trades = price.reindex(trades_without_zeros.index, method="ffill")
@@ -593,10 +591,11 @@ def calc_pnl_across_subsystem_for_indiv_instr(instruments, instrument_code, all_
     cost_deflator = vol_price / final_vol
     reindexed_deflator = cost_deflator.reindex(costs_as_pd_series.index, method="ffill")
     normalised_costs = reindexed_deflator * costs_as_pd_series
-    net_pnl = gross_pnl_daily.add(normalised_costs, fill_value=0).resample('B').sum()
+
+    net_pnl = gross_pnl.add(normalised_costs, fill_value=0).resample('B').sum()
     print('calc_pnl_across_subsytem_for_indiv_instr')
 
-    return net_pnl, gross_pnl_daily, normalised_costs
+    return net_pnl, gross_pnl, normalised_costs
 
 
 def calc_subsystem_turnover(instruments, instrument_code, all_instr_data, trading_rule_list,
