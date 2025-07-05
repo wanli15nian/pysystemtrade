@@ -9,12 +9,12 @@ from refactory.utils import optimisation, single_resampled_set_of_returns
 
 trading_instruments = ["CORN", "SOFR", "SP500_micro", 'US10']
 trading_rule_list = ['ewmac32', 'ewmac8']
+
 all_instrument_data = prepare_all_instr_data(trading_instruments, trading_rule_list)
 
 net_instr_pnl_for_all_instr = {}
 dict_of_gross_pandl = {}
 dict_of_costs = {}
-
 for instrument in trading_instruments:
     net_pnl, gross_instr_pnl, costs = calc_pnl_across_subsystem_for_indiv_instr(trading_instruments, instrument,
                                                                                 all_instrument_data, trading_rule_list)
