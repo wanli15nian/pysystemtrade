@@ -250,9 +250,7 @@ def calc_gross_daily_pnl_dict_for_all_instr(all_instrument_data, all_instruments
     return gross_daily_pnl_dict
 
 
-def calc_subsystem_position(instruments, instrument_code, all_instrument_data, trading_rule_list):
-    instrument = instrument_code
-
+def calc_subsystem_position(instruments, instrument, all_instrument_data, trading_rule_list):
     gross_daily_pnl_dict = calc_gross_daily_pnl_dict_for_all_instr(all_instrument_data, instruments)
     instrument_gross_pnl = gross_daily_pnl_dict[instrument]
 
@@ -299,7 +297,7 @@ def calc_subsystem_position(instruments, instrument_code, all_instrument_data, t
         gross_daily_pnl_std = gross_daily_pnl_series.std()
         annual_cost_SR = 16 * cost_curve_mean / gross_daily_pnl_std
 
-        turnover = forecast_turnover_for_indiv_instr(instrument_code, rule)
+        turnover = forecast_turnover_for_indiv_instr(instrument, rule)
         instr_annual_cost_sr = annual_cost_SR
         instr_cost_per_turnover = instr_annual_cost_sr / turnover
 
@@ -335,7 +333,7 @@ def calc_subsystem_position(instruments, instrument_code, all_instrument_data, t
         index=end_list, columns=net_returns_stacked_for_all_instr.columns)
 
     # To add the initial weight
-    universal_index = all_instrument_data[instrument_code]['price'].index
+    universal_index = price.index
     column_num = len(weight_df.columns)
     initial_weight = pd.DataFrame({col: 1 / column_num for col in weight_df.columns}, index=[start_date])
     weight_df = pd.concat([initial_weight, weight_df], axis=0)
@@ -388,10 +386,9 @@ def calc_subsystem_position(instruments, instrument_code, all_instrument_data, t
     div_mult = div_mult_unsmoothed_daily.ewm(span=125).mean()
 
     # FIXME: combined forecast 有问题
-    instrument_forecast = all_instrument_data[instrument_code]['forecast_df']
-    combined_forecast_without_cap = (forecast_weights_for_rules * instrument_forecast).sum(axis=1) * div_mult.ffill()
+    combined_forecast_without_cap = (forecast_weights_for_rules * forecast_df).sum(axis=1) * div_mult.ffill()
     combined_forecast = combined_forecast_without_cap.clip(20, -20)  # QUESTION: 小数点后8位开始对不上，暂时不管
-    vol_scalar = calc_volatility_scalar(instrument_code, all_instrument_data,
+    vol_scalar = calc_volatility_scalar(instrument, all_instrument_data,
                                         annual_perc_vol_target=0.25,
                                         capital=500000)
     vol_scalar = vol_scalar.reindex(universal_index, method="ffill")
