@@ -50,30 +50,18 @@ for instrument in trading_instruments:
     print('calc_subsystem_turnover')
 
 gross_pnl_df = pd.DataFrame(gross_dict)
-gross_pnl_sum = gross_pnl_df.sum(axis=1)
-
 cost_df = pd.DataFrame(costs_dict)
-cost_sum = cost_df.sum(axis=1)
 
-net_PNL = gross_pnl_sum.add(cost_sum, fill_value=0).resample('B').sum()
+# gross_pnl_sum = gross_pnl_df.sum(axis=1)
+# cost_sum = cost_df.sum(axis=1)
+# net_PNL = gross_pnl_sum.add(cost_sum, fill_value=0).resample('B').sum()
+# def process_list_of_data(data):  # Rename the columns
+#     resampled_data = data.resample('1B').sum()
+#     resampled_data[resampled_data == 0.0] = np.nan
+#     return resampled_data
+# gross_pnl = process_list_of_data(data=gross_pnl_df)
+# costs = process_list_of_data(data=cost_df)
 
-
-def process_list_of_data(data):  # Rename the columns
-    resampled_data = data.resample('1B').sum()
-    resampled_data[resampled_data == 0.0] = np.nan
-    return resampled_data
-
-
-gross_pnl = process_list_of_data(data=gross_pnl_df)
-costs = process_list_of_data(data=cost_df)
-
-# turnover_as_list = [
-#     calc_subsystem_turnover(trading_instruments, instrument_code, all_instrument_data, trading_rule_list) for
-#     instrument_code
-#     in trading_instruments]
-# turnover_as_dict = dict(
-#     [(instrument_code, turnover) for (instrument_code, turnover) in zip(trading_instruments, turnover_as_list)])
-turnovers = {'asset': turnover_dict}
 
 '''
 df_of_gross_pandl.replace(0.0, np.nan) 后就是需要的gross curve
