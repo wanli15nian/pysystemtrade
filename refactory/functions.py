@@ -4,7 +4,7 @@ import pandas as pd
 from refactory.apply_buffer_to_position import calc_buffered_pos_given_raw_pos
 from refactory.data_util import get_point_size, get_rolls_per_year, get_daily_price
 from refactory.forecast import calculate_forecasts
-from refactory.temp import calc_pos_target_from_risk_target
+from refactory.target_volatility import calc_pos_target_from_risk_target
 from refactory.utils import calc_mixed_volatility, get_cost_per_trade, forecast_turnover_for_indiv_instr, \
     calculate_weighted_average_with_nans, get_stdev_estimator_for_instrument_weight, get_mean_estimator, \
     get_corr_estimator_for_instrument_weight, optimisation, single_resampled_set_of_returns, calc_volatility_scalar
@@ -54,7 +54,6 @@ def calc_cost(pos_target, price, point_size, trading_cost):
     costs_in_points = sr_cost_as_annualised_figure * period_intervals_in_seconds / (365.25 * 24 * 60 * 60)
     costs = costs_in_points * point_size  # 后续有个fx 的序列，但目前不加
     print('calc_cost')
-
     return costs
 
 
@@ -251,19 +250,19 @@ def calc_gross_daily_pnl_dict_for_all_instr(all_instrument_data, all_instruments
 
 
 def calc_subsystem_position(instruments, instrument, all_instrument_data, trading_rule_list):
-    gross_daily_pnl_dict = calc_gross_daily_pnl_dict_for_all_instr(all_instrument_data, instruments)
-    instrument_gross_pnl = gross_daily_pnl_dict[instrument]
-
     # 用历史数据的多少来决定每个instrument的权重
     forecast_length = [len(all_instrument_data[instrument]['forecast_df']) for instrument in instruments]
     total_length = float(sum(forecast_length))
     forecast_length_weights = [forecast_length / total_length for forecast_length in forecast_length]
 
     price = get_daily_price(instrument)
-    point_size = get_point_size(instrument)
-
-    pos_target = calc_pos_target_from_risk_target(price, point_size, capital=1000000, risk_target=0.16)
     forecast_df = calculate_forecasts(price)
+    point_size = get_point_size(instrument)
+    pos_target = calc_pos_target_from_risk_target(price, point_size, capital=1000000, risk_target=0.16)
+
+    gross_daily_pnl = calc_gross_daily_pnl(forecast=forecast_df, point_size=point_size, price=price,
+                                           position_target=pos_target)
+    instrument_gross_pnl = gross_daily_pnl.replace(0, np.nan)
 
     dict_of_instr_cost_sr_with_pooling = {}
     for rule in trading_rule_list:
@@ -305,6 +304,7 @@ def calc_subsystem_position(instruments, instrument, all_instrument_data, tradin
         pooled_cost = instr_cost_per_turnover * average_turnover * cost_multiplier
         dict_of_instr_cost_sr_with_pooling[rule] = pooled_cost
 
+    gross_daily_pnl_dict = calc_gross_daily_pnl_dict_for_all_instr(all_instrument_data, instruments)
     # TODO: 其实这里的步骤就是把第一个循环的内容重复反方向算了一遍而已，完全可以合并
     net_returns_of_rules_for_all_instr_dict = {}
     for instrument in gross_daily_pnl_dict.keys():

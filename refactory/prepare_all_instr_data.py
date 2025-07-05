@@ -1,7 +1,7 @@
 from refactory.data_util import get_daily_price, get_raw_carry_price, get_point_size, get_raw_cost_data, \
     get_rolls_per_year
 from refactory.forecast import calculate_forecasts
-from refactory.temp import calc_pos_target_from_risk_target
+from refactory.target_volatility import calc_pos_target_from_risk_target
 from refactory.utils import forecast_turnover_for_indiv_instr
 
 
