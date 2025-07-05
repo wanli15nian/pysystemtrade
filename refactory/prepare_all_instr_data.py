@@ -1,7 +1,7 @@
 from refactory.data_util import get_daily_price, get_raw_carry_price, get_point_size, get_raw_cost_data, \
     get_rolls_per_year
 from refactory.forecast import calculate_forecasts
-from refactory.target_volatility import calc_pos_target_from_risk_target
+from refactory.target_volatility import calc_target_position
 from refactory.utils import forecast_turnover_for_indiv_instr
 
 
@@ -28,7 +28,7 @@ def prepare_all_instr_data(all_instruments, trading_rule_list):
         point_size = get_point_size(instrument)
         individual_instr_data['point_size'] = point_size
 
-        position_target = calc_pos_target_from_risk_target(price, point_size, capital=1000000, risk_target=0.16)
+        position_target = calc_target_position(price, point_size, capital=1000000, risk_target=0.16)
         individual_instr_data['position_target'] = position_target
 
         raw_costs = get_raw_cost_data(instrument)

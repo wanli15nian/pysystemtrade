@@ -1,7 +1,7 @@
 from refactory.utils import calc_mixed_volatility
 
 
-def calc_pos_target_from_risk_target(price, point_size, capital=1000000, risk_target=0.16):
+def calc_target_position(price, point_size, capital=1000000, risk_target=0.16):
     '''
     根据自行设置的risk target 所计算出的单一品种的目标仓位
     剩余资金的风险暴露应该是0，要不然就是使得整体的风险暴露大于risk target

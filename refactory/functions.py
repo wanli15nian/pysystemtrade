@@ -1,36 +1,12 @@
 import numpy as np
 import pandas as pd
 
-from refactory.apply_buffer_to_position import calc_buffered_pos_given_raw_pos
 from refactory.data_util import get_point_size, get_rolls_per_year, get_daily_price
 from refactory.forecast import calculate_forecasts
-from refactory.target_volatility import calc_pos_target_from_risk_target
+from refactory.target_volatility import calc_target_position
 from refactory.utils import calc_mixed_volatility, get_cost_per_trade, forecast_turnover_for_indiv_instr, \
     calculate_weighted_average_with_nans, get_stdev_estimator_for_instrument_weight, get_mean_estimator, \
     get_corr_estimator_for_instrument_weight, optimisation, single_resampled_set_of_returns, calc_volatility_scalar
-
-
-def calc_daily_gross_pnl_in_points(positions: pd.Series, prices: pd.Series):
-    '''
-    持仓单位为 “手"
-    实际持仓再往后调一天，然后乘以价格变化
-    因为实际持仓和价格变化都是当天收盘之后算出来的
-    所以第一天的实际持仓算出来后，第二天会那么持仓，然后吃满第二天的价格变化
-    pnl也会算进第二天里
-
-    需要去算具体金额的盈亏，还得乘以point_size, 也就是比如说一手多少吨
-    '''
-    pos_series = positions.groupby(positions.index).last()  # 得到当天最后的持仓
-    pos_price_series = pd.concat([pos_series, prices], axis=1)
-    if len(pos_price_series.columns) == 2:
-        pos_price_series.columns = ["positions", "price"]
-    pos_price_series = pos_price_series.ffill()
-    daily_price_change = pos_price_series.price.diff()
-    adjusted_pos_price_series = pos_price_series.loc[:, pos_price_series.columns != 'price'].shift(1)
-    daily_pnl_in_points = adjusted_pos_price_series.mul(daily_price_change, axis=0)
-    daily_pnl_in_points[daily_pnl_in_points.isna()] = 0.0
-    print("calc_daily_pnl_in_points_given_pos_prices")
-    return daily_pnl_in_points
 
 
 def generate_fit_end_list(start_date, end_date):
@@ -145,16 +121,6 @@ def calculate_instrument_weights(pnl_df):
     return weight
 
 
-def calc_gross_pnl(instrument, price, position_buffered):
-    pnl_in_points = calc_daily_gross_pnl_in_points(positions=position_buffered, prices=price)
-    point_size = get_point_size(instrument)
-    pnl_in_ccy = pnl_in_points * point_size
-    gross_pnl_daily = pnl_in_ccy.resample("B").sum()
-    gross_pnl_daily = gross_pnl_daily.squeeze()
-    print('calc_gross_instr_pnl')
-    return gross_pnl_daily
-
-
 def calc_div_mult_single_period(corr, weights, dm_max=2.5):
     '''
     计算Portfolio variance in correlation space
@@ -204,33 +170,12 @@ def calc_net_returns_dict_for_all_instr(dict_of_sr_costs, gross_returns_dict):
     return net_returns
 
 
-def calc_buffered_pos_given_combined_forecast(volatility_scalar, position_raw):
-    # 小数点后8位开始对不上，暂时不管
-    # position_raw[position_raw < 0] = 0
-    # position_raw.fillna(0.0, inplace=True)
-    position_buffered = calc_buffered_pos_given_raw_pos(position_raw, volatility_scalar, 0.10)
-    return position_buffered
-
-
-def calc_gross_daily_pnl(forecast, point_size, price, position_target):
-    '''
-    根据品种价格，以及设的波动率目标，有对应的目标仓位
-    根据当天的Position target 和对未来的Forecast, 算出来第二天应该有的实际持仓，所以会shift(1)
-    '''
-    # FIXME: 其次，当forecast信号强烈的时候，是不是意味着实际持仓可以超出Position_target, 从而导致风险暴露超出目标风险暴露
-    position = forecast.mul(position_target, axis=0) / 10
-    position = position.shift(1)
-
-    pnl_in_points = calc_daily_gross_pnl_in_points(positions=position, prices=price)
-    pnl = pnl_in_points * point_size
-    daily_pnl_gross = pnl.resample("B").sum()
-    # FIXME: 鉴于forecast是个两列的df, daily_pnl_gross也是个两列的df
-    # 这就有问题了，应该如何理解这两列的实际持仓呢
-    # 计算过程中，我们本质上是把每个rule当成了单独的portfolio来算的，所以才有了用position_target直接乘上去
-    # 得出的daily_pnl_gross不能是直接相加吧，如果是的话就不合理了
-    # 举例，两个forecast 给出了很弱的信号，所以实际持仓都是目标持仓的60%, 如果直接相加的，反而会导致最终持仓到了目标持仓的120%
-    print('calc_gross_daily_pnl')
-    return daily_pnl_gross
+# def calc_buffered_pos_given_combined_forecast(volatility_scalar, position_raw):
+#     # 小数点后8位开始对不上，暂时不管
+#     # position_raw[position_raw < 0] = 0
+#     # position_raw.fillna(0.0, inplace=True)
+#     position_buffered = calc_buffered_pos_given_raw_pos(position_raw, volatility_scalar, 0.10)
+#     return position_buffered
 
 
 def calc_gross_daily_pnl_dict_for_all_instr(all_instrument_data, all_instruments):
@@ -241,27 +186,60 @@ def calc_gross_daily_pnl_dict_for_all_instr(all_instrument_data, all_instruments
         forecast = all_instrument_data[instrument]['forecast_df']
         pos_target = all_instrument_data[instrument]['position_target']
 
-        gross_daily_pnl = calc_gross_daily_pnl(forecast=forecast, point_size=point_size, price=price,
-                                               position_target=pos_target)
+        gross_daily_pnl = calc_gross_daily_pnl(forecast=forecast, price=price, position_target=pos_target,
+                                               point_size=point_size)
         gross_daily_pnl_single_instrument_df = gross_daily_pnl.replace(0, np.nan)
         gross_daily_pnl_dict[instrument] = gross_daily_pnl_single_instrument_df
     print('calc_gross_returns_dict_for_all_instr')
     return gross_daily_pnl_dict
 
 
+def calc_daily_gross_pnl_in_points(positions: pd.Series, prices: pd.Series):
+    '''
+    持仓单位为 “手"
+    实际持仓再往后调一天，然后乘以价格变化
+    因为实际持仓和价格变化都是当天收盘之后算出来的
+    所以第一天的实际持仓算出来后，第二天会那么持仓，然后吃满第二天的价格变化
+    pnl也会算进第二天里
+
+    需要去算具体金额的盈亏，还得乘以point_size, 也就是比如说一手多少吨
+    '''
+    pos_series = positions.groupby(positions.index).last()  # 得到当天最后的持仓
+    pos_price_series = pd.concat([pos_series, prices], axis=1)
+    if len(pos_price_series.columns) == 2:
+        pos_price_series.columns = ["positions", "price"]
+    pos_price_series = pos_price_series.ffill()
+    daily_price_change = pos_price_series.price.diff()
+    adjusted_pos_price_series = pos_price_series.loc[:, pos_price_series.columns != 'price'].shift(1)
+    daily_pnl_in_points = adjusted_pos_price_series.mul(daily_price_change, axis=0)
+    daily_pnl_in_points[daily_pnl_in_points.isna()] = 0.0
+    print("calc_daily_pnl_in_points_given_pos_prices")
+    return daily_pnl_in_points
+
+
+def calc_gross_daily_pnl(forecast, price, position_target, point_size):
+    '''
+    根据品种价格，以及设的波动率目标，有对应的目标仓位
+    根据当天的Position target 和对未来的Forecast, 算出来第二天应该有的实际持仓，所以会shift(1)
+    '''
+    position = forecast.mul(position_target, axis=0) / 10
+    position = position.shift(1)
+    return calc_gross_pnl(position, price, point_size)
+
+
 def calc_subsystem_position(instruments, instrument, all_instrument_data, trading_rule_list):
-    # 用历史数据的多少来决定每个instrument的权重
-    forecast_length = [len(all_instrument_data[instrument]['forecast_df']) for instrument in instruments]
-    total_length = float(sum(forecast_length))
-    forecast_length_weights = [forecast_length / total_length for forecast_length in forecast_length]
+    price_dict = {i: get_daily_price(i) for i in instruments}
+    forecast_dict = {k: calculate_forecasts(v) for k, v in price_dict.items()}
+
+    forecast_length_weights = calc_forecast_length_weights(forecast_dict)
 
     price = get_daily_price(instrument)
     forecast_df = calculate_forecasts(price)
     point_size = get_point_size(instrument)
-    pos_target = calc_pos_target_from_risk_target(price, point_size, capital=1000000, risk_target=0.16)
+    pos_target = calc_target_position(price, point_size, capital=1000000, risk_target=0.16)
 
-    gross_daily_pnl = calc_gross_daily_pnl(forecast=forecast_df, point_size=point_size, price=price,
-                                           position_target=pos_target)
+    gross_daily_pnl = calc_gross_daily_pnl(forecast=forecast_df, price=price, position_target=pos_target,
+                                           point_size=point_size)
     instrument_gross_pnl = gross_daily_pnl.replace(0, np.nan)
 
     dict_of_instr_cost_sr_with_pooling = {}
@@ -397,8 +375,30 @@ def calc_subsystem_position(instruments, instrument, all_instrument_data, tradin
     return subsystem_position_raw, vol_scalar
 
 
+def calc_forecast_length_weights(forecast_dict):
+    # 用历史数据的多少来决定每个instrument的权重
+    forecast_length = [len(v) for k, v in forecast_dict.items()]
+    total_length = float(sum(forecast_length))
+    forecast_length_weights = [forecast_length / total_length for forecast_length in forecast_length]
+    return forecast_length_weights
+
+
 def average_turnover_across_instruments(all_instrument_data, instruments, rule):
     turnovers = {instrument: all_instrument_data[instrument]['turnover_dict'] for instrument in all_instrument_data}
     all_turnovers = [turnovers[instrument][rule] for instrument in (instruments)]
     average_turnover_across_assets = np.nanmean(all_turnovers)
     return average_turnover_across_assets
+
+
+def calc_gross_pnl(position, price, point_size):
+    pnl_in_points = calc_daily_gross_pnl_in_points(positions=position, prices=price)
+    pnl = pnl_in_points * point_size
+    daily_pnl = pnl.resample("B").sum()
+    daily_pnl = daily_pnl.squeeze()
+    print('calc_gross_instrument_pnl')
+    # FIXME: 鉴于forecast是个两列的df, daily_pnl_gross也是个两列的df
+    # 这就有问题了，应该如何理解这两列的实际持仓呢
+    # 计算过程中，我们本质上是把每个rule当成了单独的portfolio来算的，所以才有了用position_target直接乘上去
+    # 得出的daily_pnl_gross不能是直接相加吧，如果是的话就不合理了
+    # 举例，两个forecast 给出了很弱的信号，所以实际持仓都是目标持仓的60%, 如果直接相加的，反而会导致最终持仓到了目标持仓的120%
+    return daily_pnl

@@ -22,13 +22,15 @@ turnover_dict = {}
 subsystem_positions = []
 
 for instrument in trading_instruments:
-    price = get_daily_price(instrument)
     # FIXME:daily_price是不是和price是一个？
+    price = get_daily_price(instrument)
     daily_price = price.resample('1B').last()
 
     rolls_per_year = get_rolls_per_year(instrument)
     raw_costs = get_raw_cost_data(instrument)
     block_move_value = get_point_size(instrument)
+    point_size = get_point_size(instrument)
+
     position_raw, scalar = calc_subsystem_position(trading_instruments, instrument, all_instrument_data,
                                                    trading_rule_list)
     subsystem_positions.append(position_raw)
@@ -36,7 +38,7 @@ for instrument in trading_instruments:
     position_buffered = calc_buffered_pos_given_raw_pos(position_raw, scalar, 0.10)
     position = position_buffered.shift(1)
 
-    gross_pnl = calc_gross_pnl(instrument, price, position)
+    gross_pnl = calc_gross_pnl(position, price, point_size)
     normalised_costs = calc_costs(position, price, rolls_per_year, raw_costs, block_move_value)
     net_pnl = gross_pnl.add(normalised_costs, fill_value=0).resample('B').sum()
 
@@ -46,7 +48,7 @@ for instrument in trading_instruments:
     print('calc_pnl_across_subsytem_for_indiv_instr')
 
     average_position_for_turnover = calc_average_position(daily_price, block_move_value)
-    # FIXME：这里是不是应该用buffer过的position？
+    # TODO：这里是不是应该用buffer过的position？
     subsystem_turnover = turnover_x_y(position_raw, average_position_for_turnover)
     turnover_dict[instrument] = subsystem_turnover
     print('calc_subsystem_turnover')
