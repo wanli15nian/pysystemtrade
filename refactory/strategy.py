@@ -2,8 +2,11 @@ import numpy as np
 import pandas as pd
 from copy import copy
 
+from refactory.apply_buffer_to_position import calc_buffered_pos_given_raw_pos
+from refactory.cost import calc_all_fills, calc_cost_deflator, calc_normalised_cost
+from refactory.data_source import get_daily_price, get_rolls_per_year, get_raw_cost_data, get_point_size
 from refactory.functions import calc_subsystem_turnover, \
-    calc_subsystem_position, calc_pnl_across_subsystem_for_indiv_instr
+    calc_subsystem_position, calc_gross_pnl
 from refactory.prepare_all_instr_data import prepare_all_instr_data
 from refactory.utils import optimisation, single_resampled_set_of_returns
 
@@ -12,25 +15,47 @@ trading_rule_list = ['ewmac32', 'ewmac8']
 
 all_instrument_data = prepare_all_instr_data(trading_instruments, trading_rule_list)
 
-net_instr_pnl_for_all_instr = {}
-dict_of_gross_pandl = {}
-dict_of_costs = {}
-dict_of_turnover = {}
+net_dict = {}
+gross_dict = {}
+costs_dict = {}
+turnover_dict = {}
+
+
+def calc_costs(position, price, rolls_per_year, raw_costs, value_per_point):
+    all_fills = calc_all_fills(position, price, rolls_per_year)
+    cost_deflator = calc_cost_deflator(price)
+    return calc_normalised_cost(raw_costs, all_fills, cost_deflator, value_per_point)
+
+
 for instrument in trading_instruments:
-    net_pnl, gross_instr_pnl, costs = calc_pnl_across_subsystem_for_indiv_instr(trading_instruments, instrument,
-                                                                                all_instrument_data, trading_rule_list)
-    net_instr_pnl_for_all_instr[instrument] = net_pnl
-    dict_of_gross_pandl[instrument] = gross_instr_pnl
-    dict_of_costs[instrument] = costs
+    price = get_daily_price(instrument)
+    rolls_per_year = get_rolls_per_year(instrument)
+    raw_costs = get_raw_cost_data(instrument)
+    value_per_point = get_point_size(instrument)
+    position_raw, scalar = calc_subsystem_position(trading_instruments, instrument, all_instrument_data,
+                                                   trading_rule_list)
+
+    position_buffered = calc_buffered_pos_given_raw_pos(position_raw, scalar, 0.10)
+    position = position_buffered.shift(1)
+
+    gross_pnl = calc_gross_pnl(instrument, price, position)
+    normalised_costs = calc_costs(position, price, rolls_per_year, raw_costs, value_per_point)
+    net_pnl = gross_pnl.add(normalised_costs, fill_value=0).resample('B').sum()
+
+    net_dict[instrument] = net_pnl
+    gross_dict[instrument] = gross_pnl
+    costs_dict[instrument] = normalised_costs
+
+    print('calc_pnl_across_subsytem_for_indiv_instr')
 
     subsystem_turnover = calc_subsystem_turnover(trading_instruments, instrument, all_instrument_data,
                                                  trading_rule_list)
-    dict_of_turnover[instrument] = subsystem_turnover
+    turnover_dict[instrument] = subsystem_turnover
 
-gross_pnl_df = pd.DataFrame(dict_of_gross_pandl)
+gross_pnl_df = pd.DataFrame(gross_dict)
 gross_pnl_sum = gross_pnl_df.sum(axis=1)
 
-cost_df = pd.DataFrame(dict_of_costs)
+cost_df = pd.DataFrame(costs_dict)
 cost_sum = cost_df.sum(axis=1)
 
 net_PNL = gross_pnl_sum.add(cost_sum, fill_value=0).resample('B').sum()
@@ -51,7 +76,7 @@ costs = process_list_of_data(data=cost_df)
 #     in trading_instruments]
 # turnover_as_dict = dict(
 #     [(instrument_code, turnover) for (instrument_code, turnover) in zip(trading_instruments, turnover_as_list)])
-turnovers = {'asset': dict_of_turnover}
+turnovers = {'asset': turnover_dict}
 
 '''
 df_of_gross_pandl.replace(0.0, np.nan) 后就是需要的gross curve
