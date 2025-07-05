@@ -4,6 +4,12 @@ import pandas as pd
 from dataclasses import dataclass
 
 
+def calc_costs(position, price, rolls_per_year, raw_costs, value_per_point):
+    all_fills = calc_all_fills(position, price, rolls_per_year)
+    cost_deflator = calc_cost_deflator(price)
+    return calc_normalised_cost(raw_costs, all_fills, cost_deflator, value_per_point)
+
+
 @dataclass
 class Fill:
     date: datetime.datetime

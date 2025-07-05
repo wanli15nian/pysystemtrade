@@ -3,7 +3,7 @@ import pandas as pd
 from copy import copy
 
 from refactory.apply_buffer_to_position import calc_buffered_pos_given_raw_pos
-from refactory.cost import calc_all_fills, calc_cost_deflator, calc_normalised_cost
+from refactory.cost import calc_costs
 from refactory.data_source import get_daily_price, get_rolls_per_year, get_raw_cost_data, get_point_size
 from refactory.functions import calc_subsystem_position, calc_gross_pnl
 from refactory.prepare_all_instr_data import prepare_all_instr_data
@@ -19,13 +19,6 @@ net_dict = {}
 gross_dict = {}
 costs_dict = {}
 turnover_dict = {}
-
-
-def calc_costs(position, price, rolls_per_year, raw_costs, value_per_point):
-    all_fills = calc_all_fills(position, price, rolls_per_year)
-    cost_deflator = calc_cost_deflator(price)
-    return calc_normalised_cost(raw_costs, all_fills, cost_deflator, value_per_point)
-
 
 for instrument in trading_instruments:
     price = get_daily_price(instrument)
