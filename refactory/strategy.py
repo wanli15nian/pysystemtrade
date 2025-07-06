@@ -41,8 +41,8 @@ for instrument in instruments:
 
     rolls_per_year = get_rolls_per_year(instrument)
     raw_costs = get_raw_cost_data(instrument)
-    block_move_value = get_point_size(instrument)
     point_size = get_point_size(instrument)
+    block_move_value = point_size
 
     year = get_rolls_per_year(instrument)
     size = get_point_size(instrument)  # 指源代码中 get_value_of_block_price_move 返回的是point_size
@@ -95,8 +95,7 @@ for instrument in instruments:
     combined_forecast, universal_index = combine_forecast(forecast, forecast_dict, net_pnl_all, price)
 
     size1 = all_instrument_data[instrument]['point_size']
-    price2 = all_instrument_data[instrument]['price']
-    vol_scalar = calc_volatility_scalar(price2, size1, 500000, 0.25)
+    vol_scalar = calc_volatility_scalar(price, size1, 500000, 0.25)
     vol_scalar = vol_scalar.reindex(universal_index, method="ffill")
     subsystem_position_raw = vol_scalar * combined_forecast / 10.0
     print('calc_subsystem_position')
@@ -115,18 +114,17 @@ for instrument in instruments:
     costs_dict[instrument] = normalised_costs
     print('calc_pnl_across_subsytem_for_indiv_instr')
 
-gross_pnl_df = pd.DataFrame(gross_dict)
-cost_df = pd.DataFrame(costs_dict)
-
-subsystem_positions = pd.concat(subsystem_positions, axis=1).ffill()
-subsystem_positions.columns = instruments
-
-for instrument in instruments:
     daily_price = get_daily_price(instrument)
     average_position_for_turnover = calc_average_position(daily_price, block_move_value)
     subsystem_turnover = turnover_x_y(position_raw, average_position_for_turnover)
     turnover_dict[instrument] = subsystem_turnover
     print('calc_subsystem_turnover')
+
+gross_pnl_df = pd.DataFrame(gross_dict)
+cost_df = pd.DataFrame(costs_dict)
+
+subsystem_positions = pd.concat(subsystem_positions, axis=1).ffill()
+subsystem_positions.columns = instruments
 
 # gross_pnl_sum = gross_pnl_df.sum(axis=1)
 # cost_sum = cost_df.sum(axis=1)
