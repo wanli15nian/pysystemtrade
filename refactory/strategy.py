@@ -7,8 +7,8 @@ from refactory.cost import calc_costs
 from refactory.cost_forecast import calc_turnover_weights, annual_forecast_turnover, get_capped_forecast, \
     calculate_weighted_turnover
 from refactory.data_source import get_instrument_info
-from refactory.data_util import get_daily_price, get_rolls_per_year, get_raw_cost_data, get_point_size, get_per_trade, \
-    get_per_block, get_percentage, get_spread_cost
+from refactory.data_util import get_daily_price, get_raw_cost_data, get_per_trade, \
+    get_per_block, get_percentage, get_spread_cost, get_rolls_per_year, get_point_size
 from refactory.forecast import calc_forecasts
 from refactory.functions import calc_gross_pnl, calc_cost_SR_by_rule, calc_net_pnl_instrument, \
     combine_forecast
@@ -39,9 +39,14 @@ subsystem_positions = []
 for instrument in instruments:
     price = get_daily_price(instrument)
 
-    rolls_per_year = get_rolls_per_year(instrument)
+    info = info_all.loc[instrument]
+
     raw_costs = get_raw_cost_data(instrument)
-    point_size = get_point_size(instrument)
+    # TODO: 用【】取会自动转为浮点型，临时方案是强制给转成整型
+    rolls_per_year = int(info['rolls_per_year'])
+    r1 = get_rolls_per_year(instrument)
+    point_size = info['point_size']
+    p1 = get_point_size(instrument)
     spread_cost = get_spread_cost(instrument)
     per_trade = get_per_trade(instrument)
     per_block = get_per_block(instrument)

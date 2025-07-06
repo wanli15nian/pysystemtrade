@@ -16,7 +16,7 @@ def get_instrument_info():
     i.columns = ['percentage', 'per_block', 'per_trade', 'point_size']
 
     r0 = load_roll_config()
-    r = r0['HoldRollCycle'].apply(len)
+    r = r0['HoldRollCycle'].apply(len).astype('Int64')
     r.name = 'rolls_per_year'
 
     c0 = load_spread_cost()
