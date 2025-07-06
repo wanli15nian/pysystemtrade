@@ -149,3 +149,10 @@ def calc_volatility_scalar(price, point_size, capital, annual_perc_vol_target):
     cash_vol_target = capital * perc_vol_target
     vol_scalar = cash_vol_target / value_vol
     return vol_scalar
+
+
+# Define a function called multi_to_list that takes in an input
+def multi_to_list(input):
+    grouped = input.groupby(level='instrument')
+    result = [group.reset_index(level='instrument', drop=True) for instrument, group in grouped]
+    return result

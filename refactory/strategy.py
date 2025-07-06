@@ -42,9 +42,8 @@ weighted_turnover_ = turnover_.apply(lambda x: calculate_weighted_turnover(turno
 cost_sr_ = pd.DataFrame([calc_cost_SR(rules, average_turnover_, weighted_turnover_, gross_.loc[i], forecast_.loc[i],
                                       price_.loc[i], target_.loc[i], info_.loc[i])
                          for i in instruments], index=instruments, columns=rules)
-# net_ = pd.concat(
-#     [calc_net_pnl_instrument(cost_sr_.loc[i], forecast_.loc[i], info_.loc[i], price_.loc[i], target_.loc[i])
-#      for i in instruments], keys=instruments, names=['instrument', 'datetime'])
+net_ = pd.concat([calc_net_pnl(gross_.loc[i], cost_sr_.loc[i])
+                  for i in instruments], keys=instruments, names=['instrument', 'datetime'])
 
 all_instrument_data = prepare_all_instr_data(instruments, rules)
 
@@ -83,6 +82,9 @@ for instrument in instruments:
         # gross = calc_gross_pnl(position1, p, size1)
         gross = gross_.loc[ins]
         net_pnl_all[ins] = calc_net_pnl(gross, cost_SR_dict)
+
+    grouped = net_.groupby(level='instrument')
+    net_pnl_all = {ins: group.reset_index(level='instrument', drop=True) for ins, group in grouped}
 
     combined_forecast, universal_index = combine_forecast(forecast, forecast_, net_pnl_all, price)
 
