@@ -36,14 +36,6 @@ def calculate_weighted_turnover(weights, list_of_values, sum_of_weights_should_b
     return weighted_value
 
 
-def calc_turnover_weights(forecast_all):
-    # 用历史数据的多少来决定每个instrument的权重
-    forecast_length = [len(v) for k, v in forecast_all.items()]
-    total_length = float(sum(forecast_length))
-    weights = [l / total_length for l in forecast_length]
-    return weights
-
-
 def get_cost_per_trade(price, per_block, per_trade, percentage, price_slippage, point_size, notional_blocks_traded):
     # 单次交易成本，包括slippage和commission
     # FIXME: 在这里作者使用了pd.DateOffset来进行年份计算，而在rolling window中是用365天，原因存疑
@@ -71,6 +63,15 @@ def annual_forecast_turnover(forecast_raw):
     return turnover_annual
 
 
+def calc_turnover_weights(forecast_all):
+    # 用历史数据的多少来决定每个instrument的权重
+    # forecast_length = [len(v) for k, v in forecast_all.items()]
+    forecast_length = forecast_all.groupby('instrument').apply(len).to_list()
+    total_length = float(sum(forecast_length))
+    weights = [l / total_length for l in forecast_length]
+    return weights
+
+
 def get_capped_forecast(instrument, rule_name):
     '''
     Forecast 不是对当天价格的预判
@@ -90,3 +91,11 @@ def get_capped_forecast(instrument, rule_name):
         return ewmac8
     else:
         raise 'Rule not defined '
+
+
+def calc_turnover_weights1(forecast_all):
+    # 用历史数据的多少来决定每个instrument的权重
+    forecast_length = [len(v) for k, v in forecast_all.items()]
+    total_length = float(sum(forecast_length))
+    weights = [l / total_length for l in forecast_length]
+    return weights

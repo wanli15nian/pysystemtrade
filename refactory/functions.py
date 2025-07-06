@@ -210,8 +210,14 @@ def calc_net_pnl_instrument(cost_SR_dict, forecast1, point_size, price1, target)
     return net_returns_single_instrument
 
 
-def calc_cost_SR_by_rule(average_turnover, forecast_rule, gross_rule_pnl, per_block, per_trade, percentage, point_size,
-                         pos_target, price, rolls_per_year, spread_cost, weighted_turnover):
+def calc_cost_SR_by_rule(price, average_turnover, weighted_turnover, forecast_rule, gross_rule_pnl, pos_target, info):
+    rolls_per_year = int(info['rolls_per_year'])
+    point_size = info['point_size']
+    spread_cost = info['spread_cost']
+    per_trade = info['per_trade']
+    per_block = info['per_block']
+    percentage = info['percentage']
+
     cost_per_trade = get_cost_per_trade(price, per_block, per_trade, percentage, spread_cost, point_size,
                                         notional_blocks_traded=1)
     annual_cost = calc_annual_cost(weighted_turnover, cost_per_trade, rolls_per_year)
