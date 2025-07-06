@@ -9,8 +9,9 @@ from refactory.cost_forecast import calc_turnover_weights, annual_forecast_turno
 from refactory.data_source import get_instrument_info
 from refactory.data_util import get_daily_price, get_raw_cost_data
 from refactory.forecast import calc_forecasts
-from refactory.functions import calc_gross_pnl, calc_cost_SR_by_rule, calc_net_pnl_instrument, \
+from refactory.functions import calc_cost_SR_by_rule, calc_net_pnl_instrument, \
     combine_forecast
+from refactory.gross_pnl import calc_gross, calc_gross_pnl
 from refactory.prepare_all_instr_data import prepare_all_instr_data
 from refactory.target_volatility import calc_target_position
 from refactory.turnover import turnover_x_y, calc_average_position
@@ -23,10 +24,10 @@ info_all = get_instrument_info().loc[instruments]
 price_all = pd.concat((get_daily_price(i)
                        for i in instruments), keys=instruments, names=['instrument', 'datetime'])
 
-forecast_all = pd.concat((calc_forecasts(price_all[i])
+forecast_all = pd.concat((calc_forecasts(price_all.loc[i])
                           for i in instruments), keys=instruments, names=['instrument', 'datetime'])
 
-target_all = pd.concat((calc_target_position(price_all[i], info_all.loc[i], capital=1000000, risk_target=0.16)
+target_all = pd.concat((calc_target_position(price_all.loc[i], info_all.loc[i], capital=1000000, risk_target=0.16)
                         for i in instruments), keys=instruments, names=['instrument', 'datetime'])
 
 trading_rule_list = ['ewmac32', 'ewmac8']
@@ -48,13 +49,12 @@ for instrument in instruments:
     per_block = info['per_block']
     percentage = info['percentage']
 
-    price = get_daily_price(instrument)
-    forecast = calc_forecasts(price)
+    price = price_all.loc[instrument]
+    forecast = forecast_all.loc[instrument]
+    pos_target = target_all.loc[instrument]
+    # pos_target = calc_target_position(price, info, capital=1000000, risk_target=0.16)
 
-    pos_target = calc_target_position(price, info, capital=1000000, risk_target=0.16)
-    position1 = forecast.mul(pos_target, axis=0) / 10
-    position1 = position1.shift(1)
-    pnl = calc_gross_pnl(position1, price, point_size)
+    pnl = calc_gross(forecast, pos_target, price, info)
 
     price_dict = {i1: get_daily_price(i1) for i1 in instruments}
     forecast_dict = {k: calc_forecasts(v) for k, v in price_dict.items()}
