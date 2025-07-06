@@ -34,6 +34,9 @@ target_ = pd.concat((calc_target_position(price_.loc[i], info_.loc[i], capital=1
 gross_ = pd.concat((calc_gross(forecast_.loc[i], target_.loc[i], price_.loc[i], info_.loc[i])
                     for i in instruments), keys=instruments, names=['instrument', 'datetime'])
 
+average_weights_ = forecast_.groupby(level='instrument').apply(
+    lambda x: x.reset_index(level='instrument', drop=True).apply(annual_forecast_turnover))
+
 all_instrument_data = prepare_all_instr_data(instruments, trading_rule_list)
 
 net_dict = {}
