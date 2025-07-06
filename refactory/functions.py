@@ -4,7 +4,8 @@ import pandas as pd
 from refactory.cost_forecast import annual_forecast_turnover, \
     get_capped_forecast, calc_turnover_weights, calculate_weighted_turnover, calc_annual_cost, \
     get_cost_per_trade
-from refactory.data_util import get_point_size, get_daily_price, get_rolls_per_year
+from refactory.data_util import get_point_size, get_daily_price, get_rolls_per_year, get_per_trade, get_per_block, \
+    get_percentage, get_spread_cost
 from refactory.forecast import calc_forecasts
 from refactory.target_volatility import calc_target_position
 from refactory.utils import calc_mixed_volatility, get_stdev_estimator_for_instrument_weight, get_mean_estimator, \
@@ -134,22 +135,6 @@ def calc_div_mult_single_period(corr, weights, dm_max=2.5):
 #     return position_buffered
 
 
-def calc_gross_daily_pnl_dict_for_all_instr(all_instrument_data, all_instruments):
-    gross_daily_pnl_dict = {}
-    for instrument in all_instruments:
-        price = all_instrument_data[instrument]['price']
-        point_size = all_instrument_data[instrument]['point_size']
-        forecast = all_instrument_data[instrument]['forecast_df']
-        pos_target = all_instrument_data[instrument]['position_target']
-
-        position = forecast.mul(pos_target, axis=0) / 10
-        position = position.shift(1)
-        gross_pnl = calc_gross_pnl(position, price, point_size)
-        gross_daily_pnl_dict[instrument] = gross_pnl
-    print('calc_gross_returns_dict_for_all_instr')
-    return gross_daily_pnl_dict
-
-
 def calc_cost(pos_target, price, point_size, trading_cost):
     # Actually output in price space to match gross returns
     # These will be annualised figure, make it a small loss every day
@@ -165,7 +150,13 @@ def calc_cost(pos_target, price, point_size, trading_cost):
 
 def calc_subsystem_position(instruments, instrument, all_instrument_data, trading_rule_list):
     price = get_daily_price(instrument)
-    point_size = get_point_size(instrument)
+
+    rolls_per_year = get_rolls_per_year(instrument)
+    point_size = get_point_size(instrument)  # 指源代码中 get_value_of_block_price_move 返回的是point_size
+    per_trade = get_per_trade(instrument)
+    per_block = get_per_block(instrument)
+    percentage = get_percentage(instrument)
+    spread_cost = get_spread_cost(instrument)
 
     forecast = calc_forecasts(price)
     pos_target = calc_target_position(price, point_size, capital=1000000, risk_target=0.16)
@@ -174,9 +165,8 @@ def calc_subsystem_position(instruments, instrument, all_instrument_data, tradin
     position = position.shift(1)
     gross_pnl = calc_gross_pnl(position, price, point_size)
 
-    dict_of_instr_cost_sr_with_pooling = {}
+    cost_SR_dict = {}
     for rule in trading_rule_list:
-
         # 单个rule，所有品种一起算average_turnover
         turnovers1 = {i: all_instrument_data[i]['turnover_dict'] for i in all_instrument_data}
         all_turnovers = [turnovers1[i][rule] for i in instruments]
@@ -192,62 +182,32 @@ def calc_subsystem_position(instruments, instrument, all_instrument_data, tradin
         weighted_turnover = calculate_weighted_turnover(weights, turnovers)
 
         # 单个rule，单个品种，算cost
-        gross_rule_pnl = gross_pnl[rule]
+        gross_pnl_rule = gross_pnl[rule]
         forecast_rule = forecast[rule]
-        # forecast_rule = get_capped_forecast(instrument, rule)
-        rolls_per_year = get_rolls_per_year(instrument)
-        cost_per_trade = get_cost_per_trade(instrument)
+        pooled_cost = calc_cost_SR_by_rule(average_turnover, forecast_rule, gross_pnl_rule, per_block, per_trade,
+                                           percentage, point_size, pos_target, price, rolls_per_year, spread_cost,
+                                           weighted_turnover)
 
-        annual_cost = calc_annual_cost(weighted_turnover, cost_per_trade, rolls_per_year)
+        cost_SR_dict[rule] = pooled_cost
 
-        # pos_target = pos_target.reindex(forecast_rule.index, method="ffill")
-        ##PROBLEM: cost curve calc remains to be checked
-        cost_curve = calc_cost(pos_target=pos_target, price=price,
-                               point_size=point_size, trading_cost=annual_cost)
-        # cost_SR_annual算出交易成本与gross returns 波动的比例,越高说明成本越难以接受
-        cost_curve.iloc[:11] = np.nan  # QUESTION: 为什么前11个数都是Nan
-        if instrument == 'US10':
-            cost_curve.iloc[:13] = np.nan  # QUESTION: 为什么到了US10是前13个数字
-        cost_curve_mean = cost_curve.mean()
-
-        gross_daily_pnl_std = gross_rule_pnl.std()
-        cost_SR_annual = 16 * cost_curve_mean / gross_daily_pnl_std
-
-        turnover = annual_forecast_turnover(forecast_rule)
-        instr_cost_per_turnover = cost_SR_annual / turnover
-
-        cost_multiplier = 2
-        pooled_cost = instr_cost_per_turnover * average_turnover * cost_multiplier
-
-        dict_of_instr_cost_sr_with_pooling[rule] = pooled_cost
-
-    gross_daily_pnl_dict = calc_gross_daily_pnl_dict_for_all_instr(all_instrument_data, instruments)
     # TODO: 其实这里的步骤就是把第一个循环的内容重复反方向算了一遍而已，完全可以合并
-    net_returns_of_rules_for_all_instr_dict = {}
-    for instrument in gross_daily_pnl_dict.keys():
-        gross_pnl = gross_daily_pnl_dict[instrument]
-        net_returns_single_instrument = {}
+    net_pnl_all = {}
+    for instrument in instruments:
+        price1 = all_instrument_data[instrument]['price']
+        point_size = all_instrument_data[instrument]['point_size']
+        forecast1 = all_instrument_data[instrument]['forecast_df']
+        target = all_instrument_data[instrument]['position_target']
 
-        # FIXME: dict_of_instr_cost_with_pooling is specific to the target instrument, how can it be applied widely
-        for column_name in gross_pnl.columns:
-            gross_daily_pnl_std = gross_pnl[column_name].std()
-            daily_cost_sr = dict_of_instr_cost_sr_with_pooling[column_name] / 16
-            daily_cost = (daily_cost_sr * gross_daily_pnl_std).item()
-
-            net_returns_single_instrument_rule = gross_pnl[column_name] + daily_cost
-            net_returns_single_instrument[column_name] = net_returns_single_instrument_rule
-
-        net_returns_single_instrument = pd.DataFrame(net_returns_single_instrument)
-        net_returns_of_rules_for_all_instr_dict[instrument] = net_returns_single_instrument
-
-    net_returns_stacked_for_all_instr = single_resampled_set_of_returns(net_returns_of_rules_for_all_instr_dict,
-                                                                        frequency='W')
-    start_date = net_returns_stacked_for_all_instr.index[0]
-    end_date = net_returns_stacked_for_all_instr.index[-1]
+        net_pnl_instrument = calc_net_pnl_instrument(cost_SR_dict, forecast1, point_size, price1, target)
+        net_pnl_all[instrument] = pd.DataFrame(net_pnl_instrument)
+    net_pnl_stacked = single_resampled_set_of_returns(net_pnl_all, frequency='W')
+    
+    start_date = net_pnl_stacked.index[0]
+    end_date = net_pnl_stacked.index[-1]
     end_list = generate_fit_end_list(start_date, end_date)
     weight_df = pd.DataFrame(
-        [calc_forecast_weights(instruments, net_returns_stacked_for_all_instr, end) for end in end_list],
-        index=end_list, columns=net_returns_stacked_for_all_instr.columns)
+        [calc_forecast_weights(instruments, net_pnl_stacked, end) for end in end_list],
+        index=end_list, columns=net_pnl_stacked.columns)
 
     # To add the initial weight
     universal_index = price.index
@@ -312,6 +272,47 @@ def calc_subsystem_position(instruments, instrument, all_instrument_data, tradin
     subsystem_position_raw = vol_scalar * combined_forecast / 10.0
     print('calc_subsystem_position')
     return subsystem_position_raw, vol_scalar
+
+
+def calc_net_pnl_instrument(cost_SR_dict, forecast1, point_size, price1, target):
+    position1 = forecast1.mul(target, axis=0) / 10
+    position1 = position1.shift(1)
+    gross_pnl = calc_gross_pnl(position1, price1, point_size)
+    net_returns_single_instrument = {}
+    # FIXME: dict_of_instr_cost_with_pooling is specific to the target instrument, how can it be applied widely
+    for column_name in gross_pnl.columns:
+        cost_SR = cost_SR_dict[column_name]
+        gross_pnl_rule = gross_pnl[column_name]
+
+        daily_cost_sr = cost_SR / 16
+        daily_cost = (daily_cost_sr * gross_pnl_rule.std()).item()
+        net_pnl_rule = gross_pnl_rule + daily_cost
+
+        net_returns_single_instrument[column_name] = net_pnl_rule
+    return net_returns_single_instrument
+
+
+def calc_cost_SR_by_rule(average_turnover, forecast_rule, gross_rule_pnl, per_block, per_trade, percentage, point_size,
+                         pos_target, price, rolls_per_year, spread_cost, weighted_turnover):
+    cost_per_trade = get_cost_per_trade(price, per_block, per_trade, percentage, spread_cost, point_size,
+                                        notional_blocks_traded=1)
+    annual_cost = calc_annual_cost(weighted_turnover, cost_per_trade, rolls_per_year)
+    # pos_target = pos_target.reindex(forecast_rule.index, method="ffill")
+    ##PROBLEM: cost curve calc remains to be checked
+    cost_curve = calc_cost(pos_target=pos_target, price=price,
+                           point_size=point_size, trading_cost=annual_cost)
+    # cost_SR_annual算出交易成本与gross returns 波动的比例,越高说明成本越难以接受
+    # cost_curve.iloc[:11] = np.nan  # QUESTION: 为什么前11个数都是Nan
+    # if instrument == 'US10':
+    #     cost_curve.iloc[:13] = np.nan  # QUESTION: 为什么到了US10是前13个数字
+    cost_curve_mean = cost_curve.mean()
+    gross_daily_pnl_std = gross_rule_pnl.std()
+    cost_SR_annual = 16 * cost_curve_mean / gross_daily_pnl_std
+    turnover = annual_forecast_turnover(forecast_rule)
+    instr_cost_per_turnover = cost_SR_annual / turnover
+    cost_multiplier = 2
+    pooled_cost = instr_cost_per_turnover * average_turnover * cost_multiplier
+    return pooled_cost
 
 
 def calc_gross_pnl(position, price, point_size):
