@@ -11,7 +11,6 @@ from refactory.data_util import get_daily_price, get_raw_cost_data
 from refactory.forecast import calc_forecasts
 from refactory.functions import combine_forecast, calc_net_pnl
 from refactory.gross_pnl import calc_gross, calc_gross_pnl
-from refactory.prepare_all_instr_data import prepare_all_instr_data
 from refactory.target_volatility import calc_target_position
 from refactory.turnover import turnover_x_y, calc_average_position
 from refactory.utils import optimisation, single_resampled_set_of_returns, calc_volatility_scalar
@@ -44,8 +43,6 @@ cost_sr_ = pd.DataFrame([calc_cost_SR(rules, average_turnover_, weighted_turnove
                          for i in instruments], index=instruments, columns=rules)
 net_ = pd.concat([calc_net_pnl(gross_.loc[i], cost_sr_.loc[i])
                   for i in instruments], keys=instruments, names=['instrument', 'datetime'])
-
-all_instrument_data = prepare_all_instr_data(instruments, rules)
 
 net_dict = {}
 gross_dict = {}

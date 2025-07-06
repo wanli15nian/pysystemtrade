@@ -2,8 +2,6 @@ import numpy as np
 import pandas as pd
 from copy import copy
 
-from refactory.data_util import get_daily_price
-from refactory.forecast import ewmac, rescale_forecast, floor_vol, price_vol
 from refactory.utils import calc_mixed_volatility
 
 
@@ -70,24 +68,3 @@ def calc_turnover_weights(forecast_all):
     total_length = float(sum(forecast_length))
     weights = [l / total_length for l in forecast_length]
     return weights
-
-
-def get_capped_forecast(instrument, rule_name):
-    '''
-    Forecast 不是对当天价格的预判
-    Forecast 根据包括当天在内的价格数据，对未来趋势进行判断
-    究竟趋势如何就根据过去几天的价格变化
-    '''
-    price = get_daily_price(instrument)
-    if rule_name == 'ewmac32':
-        raw_ewmac32 = ewmac(price, 32, 128, 1)
-        ewmac32 = rescale_forecast(raw_ewmac32 / floor_vol(price_vol(price)))
-        ewmac32.rename('ewmac32', inplace=True)
-        return ewmac32
-    if rule_name == 'ewmac8':
-        raw_ewmac8 = ewmac(price, 8, 32, 1)
-        ewmac8 = rescale_forecast(raw_ewmac8 / floor_vol(price_vol(price)))
-        ewmac8.rename('ewmac8', inplace=True)
-        return ewmac8
-    else:
-        raise 'Rule not defined '
