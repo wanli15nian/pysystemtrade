@@ -1,11 +1,10 @@
 import numpy as np
 import pandas as pd
 
-from refactory.cost_SR import calc_annual_trading_cost_per_contract
+from refactory.cost_forecast import calc_annual_cost, instrument_forecast_turnover
 from refactory.data_util import get_point_size, get_daily_price
 from refactory.forecast import calculate_forecasts
 from refactory.target_volatility import calc_target_position
-from refactory.turnover_forecast import instrument_forecast_turnover
 from refactory.utils import calc_mixed_volatility, get_stdev_estimator_for_instrument_weight, get_mean_estimator, \
     get_corr_estimator_for_instrument_weight, optimisation, single_resampled_set_of_returns, calc_volatility_scalar
 
@@ -303,22 +302,6 @@ def calc_subsystem_position(instruments, instrument, all_instrument_data, tradin
     subsystem_position_raw = vol_scalar * combined_forecast / 10.0
     print('calc_subsystem_position')
     return subsystem_position_raw, vol_scalar
-
-
-def calc_annual_cost(forecast_dict, instruments, instrument, rule):
-    forecast_length_weights = calc_forecast_length_weights(forecast_dict)
-    annual_trading_cost_per_contract = calc_annual_trading_cost_per_contract(instrument, rule,
-                                                                             instruments,
-                                                                             forecast_length_weights)
-    return annual_trading_cost_per_contract
-
-
-def calc_forecast_length_weights(forecast_dict):
-    # 用历史数据的多少来决定每个instrument的权重
-    forecast_length = [len(v) for k, v in forecast_dict.items()]
-    total_length = float(sum(forecast_length))
-    forecast_length_weights = [forecast_length / total_length for forecast_length in forecast_length]
-    return forecast_length_weights
 
 
 def average_turnover_across_instruments(all_instrument_data, instruments, rule):
