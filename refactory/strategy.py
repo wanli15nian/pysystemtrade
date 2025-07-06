@@ -115,9 +115,7 @@ def calc_sr_dict(instruments, cost_df, gross_pnl_df):
     net_return_as_dict = {}
     for instrument in instruments:
         index_used = gross_pnl_df[instrument].index
-        daily_returns = cost_df[instrument].mean()
-        daily_returns_cost_as_list = [daily_returns] * len(index_used)
-        daily_returns_cost_as_ts = pd.Series(daily_returns_cost_as_list, index_used)
+        daily_returns_cost_as_ts = pd.Series(cost_df[instrument].mean(), index_used)
         net_returns = gross_pnl_df[instrument] + daily_returns_cost_as_ts
         net_return_as_dict[instrument] = net_returns
     return net_return_as_dict
