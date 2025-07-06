@@ -36,22 +36,19 @@ turnover_dict = {}
 subsystem_positions = []
 
 for instrument in instruments:
-    price = get_daily_price(instrument)
 
     info = info_all.loc[instrument]
-
-    raw_costs = get_raw_cost_data(instrument)
-    # TODO: 用【】取会自动转为浮点型，临时方案是强制给转成整型
-    rolls_per_year = int(info['rolls_per_year'])
-    # r1 = get_rolls_per_year(instrument)
+    rolls_per_year = int(info['rolls_per_year'])  # TODO: 用【】取会自动转为浮点型，临时方案是强制给转成整型
     point_size = info['point_size']
-    # p1 = get_point_size(instrument)
     spread_cost = info['spread_cost']
     per_trade = info['per_trade']
     per_block = info['per_block']
     percentage = info['percentage']
 
+    price = get_daily_price(instrument)
     forecast = calc_forecasts(price)
+    
+    raw_costs = get_raw_cost_data(instrument)
 
     pos_target = calc_target_position(price, point_size, capital=1000000, risk_target=0.16)
     position1 = forecast.mul(pos_target, axis=0) / 10
