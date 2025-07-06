@@ -23,14 +23,12 @@ def generate_fit_end_list(start_date, end_date):
     return end_list
 
 
-def calc_forecast_weights(instruments, pnl_df, fit_end, span_multiple=50000,
+def calc_forecast_weights(instruments_num, pnl_df, fit_end, span_multiple=50000,
                           min_periods_corr_multiple=10, min_periods_multiple=5):
-    # instruments = trading_instruments
-
     number_of_rules = len(pnl_df.columns)
-    span = len(instruments) * span_multiple
-    min_periods_corr = len(instruments) * min_periods_corr_multiple
-    min_periods = len(instruments) * min_periods_multiple
+    span = instruments_num * span_multiple
+    min_periods_corr = instruments_num * min_periods_corr_multiple
+    min_periods = instruments_num * min_periods_multiple
     norm_stdev, norm_factor, stdev_list = get_stdev_estimator_for_instrument_weight(pnl_df, fit_end, span, min_periods)
     mean_list = get_mean_estimator(pnl_df, fit_end, span, min_periods)
     norm_mean = [a / b for a, b in zip(mean_list, norm_factor)]
@@ -165,6 +163,9 @@ def calc_subsystem_position(instruments, instrument, all_instrument_data, tradin
     position = position.shift(1)
     gross_pnl = calc_gross_pnl(position, price, point_size)
 
+    price_dict = {i: get_daily_price(i) for i in instruments}
+    forecast_dict = {k: calc_forecasts(v) for k, v in price_dict.items()}
+
     cost_SR_dict = {}
     for rule in trading_rule_list:
         # 单个rule，所有品种一起算average_turnover
@@ -174,8 +175,8 @@ def calc_subsystem_position(instruments, instrument, all_instrument_data, tradin
 
         # 单个rule，所有品种一起算turnover
         # 传入rule的forecast的multiindex
-        price_dict = {i: get_daily_price(i) for i in instruments}
-        forecast_dict = {k: calc_forecasts(v) for k, v in price_dict.items()}
+        # price_dict = {i: get_daily_price(i) for i in instruments}
+        # forecast_dict = {k: calc_forecasts(v) for k, v in price_dict.items()}
         weights = calc_turnover_weights(forecast_dict)
         turnovers = [annual_forecast_turnover(get_capped_forecast(instrument_code, rule))
                      for instrument_code in instruments]
@@ -192,49 +193,58 @@ def calc_subsystem_position(instruments, instrument, all_instrument_data, tradin
 
     # TODO: 其实这里的步骤就是把第一个循环的内容重复反方向算了一遍而已，完全可以合并
     net_pnl_all = {}
-    for instrument in instruments:
-        price1 = all_instrument_data[instrument]['price']
-        point_size = all_instrument_data[instrument]['point_size']
-        forecast1 = all_instrument_data[instrument]['forecast_df']
-        target = all_instrument_data[instrument]['position_target']
+    for ins in instruments:
+        price1 = all_instrument_data[ins]['price']
+        point_size = all_instrument_data[ins]['point_size']
+        forecast1 = all_instrument_data[ins]['forecast_df']
+        target = all_instrument_data[ins]['position_target']
 
         net_pnl_instrument = calc_net_pnl_instrument(cost_SR_dict, forecast1, point_size, price1, target)
-        net_pnl_all[instrument] = pd.DataFrame(net_pnl_instrument)
+        net_pnl_all[ins] = pd.DataFrame(net_pnl_instrument)
+
+    combined_forecast, universal_index = combine_forecast(forecast, forecast_dict, net_pnl_all, price)
+
+    vol_scalar = calc_volatility_scalar(instrument, all_instrument_data,
+                                        annual_perc_vol_target=0.25,
+                                        capital=500000)
+    vol_scalar = vol_scalar.reindex(universal_index, method="ffill")
+    subsystem_position_raw = vol_scalar * combined_forecast / 10.0
+    print('calc_subsystem_position')
+    return subsystem_position_raw, vol_scalar
+
+
+def combine_forecast(forecast, forecast_dict, net_pnl_all, price):
+    # forecast_df_list = [all_instrument_data[instrument]['forecast_df'] for instrument in instruments]
+    forecast_df_list = [v for k, v in forecast_dict.items()]
+    instruments_num = len(net_pnl_all)
     net_pnl_stacked = single_resampled_set_of_returns(net_pnl_all, frequency='W')
-    
     start_date = net_pnl_stacked.index[0]
     end_date = net_pnl_stacked.index[-1]
     end_list = generate_fit_end_list(start_date, end_date)
     weight_df = pd.DataFrame(
-        [calc_forecast_weights(instruments, net_pnl_stacked, end) for end in end_list],
+        [calc_forecast_weights(instruments_num, net_pnl_stacked, end) for end in end_list],
         index=end_list, columns=net_pnl_stacked.columns)
-
     # To add the initial weight
     universal_index = price.index
     column_num = len(weight_df.columns)
     initial_weight = pd.DataFrame({col: 1 / column_num for col in weight_df.columns}, index=[start_date])
     weight_df = pd.concat([initial_weight, weight_df], axis=0)
-
     # 把按年的Index ffill成按天的Index
     weight_df = weight_df.reindex(universal_index, method='ffill').fillna(1 / column_num)
     daily_forecast_weights_resampled_unsmoothed = weight_df.resample('1B').mean()
     forecast_weights_for_rules = daily_forecast_weights_resampled_unsmoothed.ewm(span=125).mean()
     # 跳过一个weight normalisation to 1 的函数
-    list_of_forecast_df = [all_instrument_data[instrument]['forecast_df'] for instrument in (instruments)]
-    list_of_resampled_forecast = [forecast_df.resample('W').last() for forecast_df in list_of_forecast_df]
+    list_of_resampled_forecast = [forecast_df.resample('W').last() for forecast_df in forecast_df_list]
     pooled_forecast_data = reindex_and_stack_list_of_df(list_of_resampled_forecast)
-
     pooled_fdm = True
     ew_lookback = 250
     min_periods = 20
     if pooled_fdm == True:
-        ew_lookback = ew_lookback * len(instruments)
-        min_periods = min_periods * len(instruments)
+        ew_lookback = ew_lookback * instruments_num
+        min_periods = min_periods * instruments_num
     raw_pooled_correlations = pooled_forecast_data.ewm(span=ew_lookback, min_periods=min_periods,
                                                        ignore_na=True).corr(pairwise=True)
-
     size_of_matrix = len(pooled_forecast_data)
-
     pooled_forecast_corr_list_for_fdm = []
     for fit_end in end_list:
         corr_matrix_values = (raw_pooled_correlations[raw_pooled_correlations.index.get_level_values(0) < fit_end]
@@ -243,7 +253,6 @@ def calc_subsystem_position(instruments, instrument, all_instrument_data, tradin
         corr_matrix_values = corr_matrix_values[-1]
         corr_matrix_values = [max(0, value) for value in corr_matrix_values]
         pooled_forecast_corr_list_for_fdm.append(corr_matrix_values)
-
     # pooled_forecast_corr_list_for_fdm.insert(0, np.array([0.99, 1]))  # 为了让corr_list的element和end_list对齐，先不加起始默认matrix
     div_mult_vector = []
     for corrmatrix, start_of_period in zip(pooled_forecast_corr_list_for_fdm, end_list):
@@ -256,22 +265,14 @@ def calc_subsystem_position(instruments, instrument, all_instrument_data, tradin
         div_multiplier = calc_div_mult_single_period(corrmatrix, last_weight_for_period)
         div_mult_vector.append(div_multiplier)
     div_mult = pd.Series(div_mult_vector, index=end_list)
-
     # forecast_weights_for_rules.index 是fitting period的start dates
     div_mult_unsmoothed_daily = div_mult.reindex(forecast_weights_for_rules.index, method="ffill")
     div_mult_unsmoothed_daily[div_mult_unsmoothed_daily.isna()] = 1.0
     div_mult = div_mult_unsmoothed_daily.ewm(span=125).mean()
-
     # FIXME: combined forecast_rule 有问题
     combined_forecast_without_cap = (forecast_weights_for_rules * forecast).sum(axis=1) * div_mult.ffill()
     combined_forecast = combined_forecast_without_cap.clip(20, -20)  # QUESTION: 小数点后8位开始对不上，暂时不管
-    vol_scalar = calc_volatility_scalar(instrument, all_instrument_data,
-                                        annual_perc_vol_target=0.25,
-                                        capital=500000)
-    vol_scalar = vol_scalar.reindex(universal_index, method="ffill")
-    subsystem_position_raw = vol_scalar * combined_forecast / 10.0
-    print('calc_subsystem_position')
-    return subsystem_position_raw, vol_scalar
+    return combined_forecast, universal_index
 
 
 def calc_net_pnl_instrument(cost_SR_dict, forecast1, point_size, price1, target):
