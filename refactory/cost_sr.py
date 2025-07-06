@@ -12,6 +12,7 @@ def calc_cost_SR(rules, average_turnover_, weighted_turnover_, pnl, forecast, pr
         pooled_cost = calc_cost_SR_by_rule(price, average_turnover, weighted_turnover, forecast_rule, gross_pnl_rule,
                                            pos_target, info)
         cost_SR_dict[rule] = pooled_cost
+    # cost_SR_df = pd.DataFrame([cost_SR_dict])
     return cost_SR_dict
 
 

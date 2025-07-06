@@ -9,8 +9,7 @@ from refactory.cost_sr import calc_cost_SR
 from refactory.data_source import get_instrument_info
 from refactory.data_util import get_daily_price, get_raw_cost_data
 from refactory.forecast import calc_forecasts
-from refactory.functions import calc_net_pnl_instrument, \
-    combine_forecast
+from refactory.functions import combine_forecast, calc_net_pnl
 from refactory.gross_pnl import calc_gross, calc_gross_pnl
 from refactory.prepare_all_instr_data import prepare_all_instr_data
 from refactory.target_volatility import calc_target_position
@@ -37,9 +36,15 @@ gross_ = pd.concat((calc_gross(forecast_.loc[i], target_.loc[i], price_.loc[i], 
 turnover_ = forecast_.groupby(level='instrument').apply(
     lambda x: x.reset_index(level='instrument', drop=True).apply(annual_forecast_turnover))
 average_turnover_ = turnover_.apply(np.nanmean)
-
 turnover_weight = calc_turnover_weights(forecast_)
 weighted_turnover_ = turnover_.apply(lambda x: calculate_weighted_turnover(turnover_weight, x))
+
+cost_sr_ = pd.DataFrame([calc_cost_SR(rules, average_turnover_, weighted_turnover_, gross_.loc[i], forecast_.loc[i],
+                                      price_.loc[i], target_.loc[i], info_.loc[i])
+                         for i in instruments], index=instruments, columns=rules)
+# net_ = pd.concat(
+#     [calc_net_pnl_instrument(cost_sr_.loc[i], forecast_.loc[i], info_.loc[i], price_.loc[i], target_.loc[i])
+#      for i in instruments], keys=instruments, names=['instrument', 'datetime'])
 
 all_instrument_data = prepare_all_instr_data(instruments, rules)
 
@@ -68,13 +73,16 @@ for instrument in instruments:
 
     net_pnl_all = {}
     for ins in instruments:
-        p = all_instrument_data[ins]['price']
-        size = all_instrument_data[ins]['point_size']
-        forecast1 = all_instrument_data[ins]['forecast_df']
-        target = all_instrument_data[ins]['position_target']
-
-        net_pnl_instrument = calc_net_pnl_instrument(cost_SR_dict, forecast1, size, p, target)
-        net_pnl_all[ins] = pd.DataFrame(net_pnl_instrument)
+        # p = all_instrument_data[ins]['price']
+        # size = all_instrument_data[ins]['point_size']
+        # forecast1 = all_instrument_data[ins]['forecast_df']
+        # target = all_instrument_data[ins]['position_target']
+        # size1 = size['point_size']
+        # position1 = forecast1.mul(target, axis=0) / 10
+        # position1 = position1.shift(1)
+        # gross = calc_gross_pnl(position1, p, size1)
+        gross = gross_.loc[ins]
+        net_pnl_all[ins] = calc_net_pnl(gross, cost_SR_dict)
 
     combined_forecast, universal_index = combine_forecast(forecast, forecast_, net_pnl_all, price)
 

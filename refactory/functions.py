@@ -1,7 +1,6 @@
 import numpy as np
 import pandas as pd
 
-from refactory.gross_pnl import calc_gross_pnl
 from refactory.utils import get_stdev_estimator_for_instrument_weight, get_mean_estimator, \
     get_corr_estimator_for_instrument_weight, optimisation, single_resampled_set_of_returns
 
@@ -191,10 +190,7 @@ def combine_forecast(forecast, forecast_, net_pnl_all, price):
     return combined_forecast, universal_index
 
 
-def calc_net_pnl_instrument(cost_SR_dict, forecast1, point_size, price1, target):
-    position1 = forecast1.mul(target, axis=0) / 10
-    position1 = position1.shift(1)
-    gross_pnl = calc_gross_pnl(position1, price1, point_size)
+def calc_net_pnl(gross_pnl, cost_SR_dict):
     net_returns_single_instrument = {}
     # FIXME: dict_of_instr_cost_with_pooling is specific to the target instrument, how can it be applied widely
     for column_name in gross_pnl.columns:
@@ -206,4 +202,4 @@ def calc_net_pnl_instrument(cost_SR_dict, forecast1, point_size, price1, target)
         net_pnl_rule = gross_pnl_rule + daily_cost
 
         net_returns_single_instrument[column_name] = net_pnl_rule
-    return net_returns_single_instrument
+    return pd.DataFrame(net_returns_single_instrument)
