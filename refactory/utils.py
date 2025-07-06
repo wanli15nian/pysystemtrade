@@ -116,8 +116,7 @@ def single_resampled_set_of_returns(data_dict, frequency: str):
     return stacked_data
 
 
-def calc_volatility_scalar(instrument_code, all_instrument_data, annual_perc_vol_target=0.16,
-                           capital=1000000):
+def calc_volatility_scalar(price, point_size, capital, annual_perc_vol_target):
     '''
     Get ratio of required volatility vs volatility of instrument in instrument's own currency
 
@@ -132,31 +131,21 @@ def calc_volatility_scalar(instrument_code, all_instrument_data, annual_perc_vol
         )
         return self.get_daily_prices(instrument_code)
     '''
-    carry_price = all_instrument_data[instrument_code]['carry_price']
-    point_size = all_instrument_data[instrument_code]['point_size']
+    carry_price = price
     block_value = carry_price.ffill() * 0.01 * point_size
     block_value.ffill(inplace=True)
-
     # FIXME: When to use carry_price and when to use price, the logic of computation here is unknown
     resampled_carry_price = carry_price.resample('1B').last()
-
-    price = all_instrument_data[instrument_code]['price']
     annualised_price_vol_points = calc_mixed_volatility(price.diff(), slow_vol_years=10)
     annualised_price_vol_points.ffill(inplace=True)
-
     (resampled_carry_price, annualised_price_vol_points) = resampled_carry_price.align(annualised_price_vol_points,
                                                                                        join='right')
     percentage_vol = 100.0 * (annualised_price_vol_points / resampled_carry_price.ffill().abs())
-
     (block_value, percentage_vol) = block_value.align(percentage_vol, join="inner")
     currency_vol = block_value * percentage_vol
-
     # It is to multiply by fx_rate, which is taken to be 1 here
     value_vol = currency_vol.ffill() * 1
-
     perc_vol_target = annual_perc_vol_target / 16
     cash_vol_target = capital * perc_vol_target
-
     vol_scalar = cash_vol_target / value_vol
-
     return vol_scalar

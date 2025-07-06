@@ -94,9 +94,10 @@ for instrument in instruments:
         net_pnl_all[ins] = pd.DataFrame(net_pnl_instrument)
 
     combined_forecast, universal_index = combine_forecast(forecast, forecast_dict, net_pnl_all, price1)
-    vol_scalar = calc_volatility_scalar(instrument, all_instrument_data,
-                                        annual_perc_vol_target=0.25,
-                                        capital=500000)
+    carry_price = all_instrument_data[instrument]['carry_price']
+    size1 = all_instrument_data[instrument]['point_size']
+    price2 = all_instrument_data[instrument]['price']
+    vol_scalar = calc_volatility_scalar(price2, size1, 500000, 0.25)
     vol_scalar = vol_scalar.reindex(universal_index, method="ffill")
     subsystem_position_raw = vol_scalar * combined_forecast / 10.0
     print('calc_subsystem_position')
