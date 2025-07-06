@@ -100,48 +100,19 @@ def optimisation(number, corr, norm_mean, norm_stdev):
 
 
 def single_resampled_set_of_returns(data_dict, frequency: str):
-    returns_as_list = []
-    for _, instrument_returns in data_dict.items():
-        returns_as_list.append(instrument_returns)
+    data_resampled = [pnl.resample(frequency).sum() for pnl in data_dict.values()]
 
-    data_resampled = [data_item.resample(frequency).sum() for data_item in returns_as_list]
     all_indices = [data_item.index for data_item in data_resampled]
     flattened = [item for sublist in all_indices for item in sublist]
     common_index = list(set(flattened))
     common_index.sort()
+
     reindexed_data = [data_item.reindex(common_index) for data_item in data_resampled]
 
     for offset_value, data_item in enumerate(reindexed_data):
         data_item.index = data_item.index + pd.Timedelta("%dus" % offset_value)
 
-    stacked_data = pd.concat(reindexed_data, axis=0)
-    stacked_data = stacked_data.sort_index()
-    return stacked_data
-
-
-def single_resampled_set_of_returns1(data_dict, frequency: str):
-    # 使用列表推导式获取所有乐器收益
-    returns_as_list = list(data_dict.values())
-
-    # 对每个乐器收益进行重采样并求和，同时获取所有重采样后的索引
-    data_resampled = [instrument_returns.resample(frequency).sum() for instrument_returns in returns_as_list]
-
-    # 获取所有重采样后的索引并扁平化
-    all_indices = [index for data_item in data_resampled for index in data_item.index]
-
-    # 获取所有唯一索引并排序
-    common_index = sorted(set(all_indices))
-
-    # 重采样数据重新索引到公共索引
-    reindexed_data = [data_item.reindex(common_index) for data_item in data_resampled]
-
-    # 为每个重采样数据添加偏移量并堆叠
-    stacked_data = pd.concat(
-        (data_item.shift(offset_value, freq='us') for offset_value, data_item in enumerate(reindexed_data)),
-        keys=data_dict.keys(),  # 使用乐器代码作为键
-        axis=0
-    ).sort_index()
-
+    stacked_data = pd.concat(reindexed_data, axis=0).sort_index()
     return stacked_data
 
 
