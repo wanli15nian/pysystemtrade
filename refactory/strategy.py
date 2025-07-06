@@ -65,10 +65,10 @@ for instrument in instruments:
     grouped = net_.groupby(level='instrument')
     net_pnl_all = {ins: group.reset_index(level='instrument', drop=True) for ins, group in grouped}
 
-    combined_forecast, universal_index = combine_forecast(forecast, forecast_, net_pnl_all, price)
+    combined_forecast = combine_forecast(forecast, forecast_, net_pnl_all, price)
 
     vol_scalar = calc_volatility_scalar(price, point_size, 500000, 0.25)
-    vol_scalar = vol_scalar.reindex(universal_index, method="ffill")
+    vol_scalar = vol_scalar.reindex(price.index, method="ffill")
     subsystem_position_raw = vol_scalar * combined_forecast / 10.0
     print('calc_subsystem_position')
 
@@ -90,7 +90,7 @@ for instrument in instruments:
     daily_price = get_daily_price(instrument)
     average_position_for_turnover = calc_average_position(daily_price, point_size)
     subsystem_turnover = turnover_x_y(subsystem_position_raw, average_position_for_turnover)
-    turnover_dict[instrument] = subsystem_turnover #TODO: Check the meaning of turnover
+    turnover_dict[instrument] = subsystem_turnover  # TODO: Check the meaning of turnover
     print('calc_subsystem_turnover')
 
 gross_pnl_df = pd.DataFrame(gross_dict)
@@ -98,6 +98,7 @@ cost_df = pd.DataFrame(costs_dict)
 
 subsystem_positions = pd.concat(subsystem_positions, axis=1).ffill()
 subsystem_positions.columns = instruments
+
 
 # gross_pnl_sum = gross_pnl_df.sum(axis=1)
 # cost_sum = cost_df.sum(axis=1)
@@ -119,12 +120,16 @@ def calc_net_returns_dict(instruments, cost_df, gross_pnl_df):
         net_returns = gross_pnl_df[instrument] + daily_returns_cost_as_ts
         net_return_dict[instrument] = net_returns
     return net_return_dict
+
+
 net_returns_dict = calc_net_returns_dict(instruments, cost_df, gross_pnl_df)
+
 
 def resample_net_returns(net_returns_dict):
     net_return_df_unresampled = pd.DataFrame(net_returns_dict)
     net_return_df = single_resampled_set_of_returns({'asset': net_return_df_unresampled}, 'W')
     return net_return_df
+
 
 net_return_df = resample_net_returns(net_returns_dict)
 
@@ -135,6 +140,8 @@ matching_index_size = net_return_df.index[net_return_df.index < end].size
 last_index = matching_index_size - 1
 data_length = len(net_return_df.index)
 frequency = 'W'
+
+
 def calc_corr_matrix(net_return_df, span=500000, min_periods=10, ignore_na=True, pairwise=True):
     corr = net_return_df.ewm(span=span, min_periods=min_periods, ignore_na=ignore_na).corr(pairwise=pairwise)
     size_of_matrix = len(corr.columns)
@@ -143,19 +150,27 @@ def calc_corr_matrix(net_return_df, span=500000, min_periods=10, ignore_na=True,
     corr_matrix_df = pd.DataFrame(corr_matrix_values, columns=corr.columns)
     return corr_matrix_df
 
+
 corr_matrix_df = calc_corr_matrix(net_return_df)
+
 
 def calc_annualised_return_mean(net_return_df, span=50000, min_periods=5):
     exponential_mean = net_return_df.ewm(span=span, min_periods=min_periods).mean()
-    mean = exponential_mean.iloc[last_index]* 365.25 / 7.0
+    mean = exponential_mean.iloc[last_index] * 365.25 / 7.0
     return mean
+
+
 annualised_return_mean = calc_annualised_return_mean(net_return_df)
+
 
 def calc_annualised_return_std(net_return_df, span=50000, min_periods=5):
     exponential_std = net_return_df.ewm(span=span, min_periods=min_periods).std()
     std = exponential_std.iloc[last_index] * (365.25 / 7.0) ** 0.5
     return std
+
+
 annualised_return_std = calc_annualised_return_std(net_return_df)
+
 
 # Shrinkage
 def calc_avg_corr(corr_matrix_df):
@@ -163,35 +178,44 @@ def calc_avg_corr(corr_matrix_df):
     np.fill_diagonal(new_corr_values, np.nan)
     avg_corr = np.nanmean(new_corr_values)
     return avg_corr
+
+
 avg_corr = calc_avg_corr(corr_matrix_df)
+
 
 def calc_avg_corr_matrix(instruments, avg_corr):
     n = len(instruments)
     corr_matrix = np.full((n, n), avg_corr)  # Fill entire matrix with avg_corr
     np.fill_diagonal(corr_matrix, 1.0)  # Set diagonals to 1.0
     return pd.DataFrame(corr_matrix, index=instruments, columns=instruments)
+
+
 avg_corr_matrix = calc_avg_corr_matrix(instruments, avg_corr)
 
 
 def calc_shrunk_corr(avg_corr_matrix, shrinkage_corr=0.5):
-    shrunk_corr_without_columns = (shrinkage_corr * avg_corr_matrix.values + (1 - shrinkage_corr) * corr_matrix_df.values)
+    shrunk_corr_without_columns = (
+            shrinkage_corr * avg_corr_matrix.values + (1 - shrinkage_corr) * corr_matrix_df.values)
     return pd.DataFrame(shrunk_corr_without_columns, columns=instruments, index=instruments)
+
+
 shrunk_corr = calc_shrunk_corr(avg_corr_matrix)
 
+
 def calc_shrunk_means(annualised_return_mean, annualised_return_std, shrinkage_sr=0.9, target_sr=0.5):
-    sr_estimates = (annualised_return_mean/annualised_return_std).to_list()
+    sr_estimates = (annualised_return_mean / annualised_return_std).to_list()
     post_sr_list = [(shrinkage_sr * target_sr) + (1 - shrinkage_sr) * estimatedSR for estimatedSR in sr_estimates]
     shrunk_means_values = (post_sr_list * annualised_return_std).to_list()
     shrunk_means = [(asset_name, mean_value) for (asset_name, mean_value) in zip(instruments, shrunk_means_values)]
     return shrunk_means
 
+
 target_sr = 0.5
 shrunk_means = calc_shrunk_means(annualised_return_mean, annualised_return_std)
-norm_std = [annualised_return_std.mean()]*4
+norm_std = [annualised_return_std.mean()] * 4
 mean_list = [target_sr * asset_stdev for asset_stdev in norm_std]
 weights = optimisation(len(instruments), corr=shrunk_corr.values, norm_mean=mean_list, norm_stdev=norm_std)
 weights_df = pd.DataFrame({asset_name: weight for (asset_name, weight) in zip(instruments, weights)}, index=[start])
-
 
 pdm_ffill = subsystem_positions.ffill()
 ## Set leading all nan to zero so weights not set to zero
@@ -206,8 +230,8 @@ def calc_smoothed_instr_weights(weights_df, smooth_weighting=125):
     smoothed_instr_weights = daily_unsmoothed_instr_weights.ewm(span=smooth_weighting).mean()
     return smoothed_instr_weights
 
-smoothed_instr_weights = calc_smoothed_instr_weights(weights_df)
 
+smoothed_instr_weights = calc_smoothed_instr_weights(weights_df)
 
 sum_weights = smoothed_instr_weights.sum(axis=1)
 zero_rows = sum_weights == 0.0
@@ -219,6 +243,5 @@ weight_values = smoothed_instr_weights.values
 normalised_weights_np = weight_multiplier_array.transpose() * weight_values
 normalised_weights = pd.DataFrame(normalised_weights_np, columns=smoothed_instr_weights.columns,
                                   index=smoothed_instr_weights.index)
-
 
 print('END')

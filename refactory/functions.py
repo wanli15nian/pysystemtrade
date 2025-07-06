@@ -187,7 +187,7 @@ def combine_forecast(forecast, forecast_, net_pnl_all, price):
     # FIXME: combined forecast_rule 有问题
     combined_forecast_without_cap = (forecast_weights_for_rules * forecast).sum(axis=1) * div_mult.ffill()
     combined_forecast = combined_forecast_without_cap.clip(20, -20)  # QUESTION: 小数点后8位开始对不上，暂时不管
-    return combined_forecast, universal_index
+    return combined_forecast
 
 
 def calc_net_pnl(gross_pnl, cost_SR_dict):
