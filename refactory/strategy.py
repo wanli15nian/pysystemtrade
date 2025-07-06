@@ -173,12 +173,10 @@ def _od(i, j, offdiag, diag):
 
 
 def calc_avg_corr_matrix(instruments, avg_corr):
-    corr_matrix_values_as_list = [
-        [_od(i, j, offdiag=avg_corr, diag=1.0) for i in range(len(instruments))] for j in range(len(instruments))
-    ]
-    corr_matrix_without_columns = np.array(corr_matrix_values_as_list)
-    avg_corr_matrix = pd.DataFrame(corr_matrix_without_columns, columns=instruments, index=instruments)
-    return avg_corr_matrix
+    n = len(instruments)
+    corr_matrix = np.full((n, n), avg_corr)  # Fill entire matrix with avg_corr
+    np.fill_diagonal(corr_matrix, 1.0)  # Set diagonals to 1.0
+    return pd.DataFrame(corr_matrix, index=instruments, columns=instruments)
 avg_corr_matrix = calc_avg_corr_matrix(instruments, avg_corr)
 
 shrinkage_corr = 0.5
