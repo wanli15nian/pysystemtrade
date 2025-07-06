@@ -44,18 +44,17 @@ for instrument in instruments:
     block_move_value = get_point_size(instrument)
     point_size = get_point_size(instrument)
 
-    price1 = price
     year = get_rolls_per_year(instrument)
     size = get_point_size(instrument)  # 指源代码中 get_value_of_block_price_move 返回的是point_size
     per_trade = get_per_trade(instrument)
     per_block = get_per_block(instrument)
     percentage = get_percentage(instrument)
     spread_cost = get_spread_cost(instrument)
-    forecast = calc_forecasts(price1)
-    pos_target = calc_target_position(price1, size, capital=1000000, risk_target=0.16)
+    forecast = calc_forecasts(price)
+    pos_target = calc_target_position(price, size, capital=1000000, risk_target=0.16)
     position1 = forecast.mul(pos_target, axis=0) / 10
     position1 = position1.shift(1)
-    pnl = calc_gross_pnl(position1, price1, size)
+    pnl = calc_gross_pnl(position1, price, size)
     price_dict = {i1: get_daily_price(i1) for i1 in instruments}
     forecast_dict = {k: calc_forecasts(v) for k, v in price_dict.items()}
     cost_SR_dict = {}
@@ -78,7 +77,7 @@ for instrument in instruments:
         gross_pnl_rule = pnl[rule]
         forecast_rule = forecast[rule]
         pooled_cost = calc_cost_SR_by_rule(average_turnover, forecast_rule, gross_pnl_rule, per_block, per_trade,
-                                           percentage, size, pos_target, price1, year, spread_cost,
+                                           percentage, size, pos_target, price, year, spread_cost,
                                            weighted_turnover)
 
         cost_SR_dict[rule] = pooled_cost
@@ -93,8 +92,8 @@ for instrument in instruments:
         net_pnl_instrument = calc_net_pnl_instrument(cost_SR_dict, forecast1, size, p, target)
         net_pnl_all[ins] = pd.DataFrame(net_pnl_instrument)
 
-    combined_forecast, universal_index = combine_forecast(forecast, forecast_dict, net_pnl_all, price1)
-    carry_price = all_instrument_data[instrument]['carry_price']
+    combined_forecast, universal_index = combine_forecast(forecast, forecast_dict, net_pnl_all, price)
+
     size1 = all_instrument_data[instrument]['point_size']
     price2 = all_instrument_data[instrument]['price']
     vol_scalar = calc_volatility_scalar(price2, size1, 500000, 0.25)
