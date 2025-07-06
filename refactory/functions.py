@@ -2,14 +2,10 @@ import numpy as np
 import pandas as pd
 
 from refactory.cost_forecast import annual_forecast_turnover, \
-    get_capped_forecast, calc_turnover_weights, calculate_weighted_turnover, calc_annual_cost, \
+    calc_annual_cost, \
     get_cost_per_trade
-from refactory.data_util import get_point_size, get_daily_price, get_rolls_per_year, get_per_trade, get_per_block, \
-    get_percentage, get_spread_cost
-from refactory.forecast import calc_forecasts
-from refactory.target_volatility import calc_target_position
 from refactory.utils import calc_mixed_volatility, get_stdev_estimator_for_instrument_weight, get_mean_estimator, \
-    get_corr_estimator_for_instrument_weight, optimisation, single_resampled_set_of_returns, calc_volatility_scalar
+    get_corr_estimator_for_instrument_weight, optimisation, single_resampled_set_of_returns
 
 
 def generate_fit_end_list(start_date, end_date):
@@ -144,73 +140,6 @@ def calc_cost(pos_target, price, point_size, trading_cost):
     costs = costs_in_points * point_size  # 后续有个fx 的序列，但目前不加
     print('calc_cost')
     return costs
-
-
-def calc_subsystem_position(instruments, instrument, all_instrument_data, trading_rule_list):
-    price = get_daily_price(instrument)
-
-    rolls_per_year = get_rolls_per_year(instrument)
-    point_size = get_point_size(instrument)  # 指源代码中 get_value_of_block_price_move 返回的是point_size
-    per_trade = get_per_trade(instrument)
-    per_block = get_per_block(instrument)
-    percentage = get_percentage(instrument)
-    spread_cost = get_spread_cost(instrument)
-
-    forecast = calc_forecasts(price)
-    pos_target = calc_target_position(price, point_size, capital=1000000, risk_target=0.16)
-
-    position = forecast.mul(pos_target, axis=0) / 10
-    position = position.shift(1)
-    gross_pnl = calc_gross_pnl(position, price, point_size)
-
-    price_dict = {i: get_daily_price(i) for i in instruments}
-    forecast_dict = {k: calc_forecasts(v) for k, v in price_dict.items()}
-
-    cost_SR_dict = {}
-    for rule in trading_rule_list:
-        # 单个rule，所有品种一起算average_turnover
-        turnovers1 = {i: all_instrument_data[i]['turnover_dict'] for i in all_instrument_data}
-        all_turnovers = [turnovers1[i][rule] for i in instruments]
-        average_turnover = np.nanmean(all_turnovers)
-
-        # 单个rule，所有品种一起算turnover
-        # 传入rule的forecast的multiindex
-        # price_dict = {i: get_daily_price(i) for i in instruments}
-        # forecast_dict = {k: calc_forecasts(v) for k, v in price_dict.items()}
-        weights = calc_turnover_weights(forecast_dict)
-        turnovers = [annual_forecast_turnover(get_capped_forecast(instrument_code, rule))
-                     for instrument_code in instruments]
-        weighted_turnover = calculate_weighted_turnover(weights, turnovers)
-
-        # 单个rule，单个品种，算cost
-        gross_pnl_rule = gross_pnl[rule]
-        forecast_rule = forecast[rule]
-        pooled_cost = calc_cost_SR_by_rule(average_turnover, forecast_rule, gross_pnl_rule, per_block, per_trade,
-                                           percentage, point_size, pos_target, price, rolls_per_year, spread_cost,
-                                           weighted_turnover)
-
-        cost_SR_dict[rule] = pooled_cost
-
-    # TODO: 其实这里的步骤就是把第一个循环的内容重复反方向算了一遍而已，完全可以合并
-    net_pnl_all = {}
-    for ins in instruments:
-        price1 = all_instrument_data[ins]['price']
-        point_size = all_instrument_data[ins]['point_size']
-        forecast1 = all_instrument_data[ins]['forecast_df']
-        target = all_instrument_data[ins]['position_target']
-
-        net_pnl_instrument = calc_net_pnl_instrument(cost_SR_dict, forecast1, point_size, price1, target)
-        net_pnl_all[ins] = pd.DataFrame(net_pnl_instrument)
-
-    combined_forecast, universal_index = combine_forecast(forecast, forecast_dict, net_pnl_all, price)
-
-    vol_scalar = calc_volatility_scalar(instrument, all_instrument_data,
-                                        annual_perc_vol_target=0.25,
-                                        capital=500000)
-    vol_scalar = vol_scalar.reindex(universal_index, method="ffill")
-    subsystem_position_raw = vol_scalar * combined_forecast / 10.0
-    print('calc_subsystem_position')
-    return subsystem_position_raw, vol_scalar
 
 
 def combine_forecast(forecast, forecast_dict, net_pnl_all, price):

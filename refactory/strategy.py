@@ -4,14 +4,22 @@ from copy import copy
 
 from refactory.apply_buffer_to_position import calc_buffered_pos_given_raw_pos
 from refactory.cost import calc_costs
-from refactory.data_util import get_daily_price, get_rolls_per_year, get_raw_cost_data, get_point_size
+from refactory.cost_forecast import calc_turnover_weights, annual_forecast_turnover, get_capped_forecast, \
+    calculate_weighted_turnover
+from refactory.data_source import get_instrument_info
+from refactory.data_util import get_daily_price, get_rolls_per_year, get_raw_cost_data, get_point_size, get_per_trade, \
+    get_per_block, get_percentage, get_spread_cost
 from refactory.forecast import calc_forecasts
-from refactory.functions import calc_subsystem_position, calc_gross_pnl
+from refactory.functions import calc_gross_pnl, calc_cost_SR_by_rule, calc_net_pnl_instrument, \
+    combine_forecast
 from refactory.prepare_all_instr_data import prepare_all_instr_data
+from refactory.target_volatility import calc_target_position
 from refactory.turnover import turnover_x_y, calc_average_position
-from refactory.utils import optimisation, single_resampled_set_of_returns
+from refactory.utils import optimisation, single_resampled_set_of_returns, calc_volatility_scalar
 
 instruments = ["CORN", "SOFR", "SP500_micro", 'US10']
+
+info_all = get_instrument_info().loc[instruments]
 
 price_all = pd.concat((get_daily_price(i)
                        for i in instruments), keys=instruments, names=['instrument', 'datetime'])
@@ -29,17 +37,70 @@ turnover_dict = {}
 subsystem_positions = []
 
 for instrument in instruments:
-    # FIXME:daily_price是不是和price是一个？
     price = get_daily_price(instrument)
-    daily_price = price.resample('1B').last()
 
     rolls_per_year = get_rolls_per_year(instrument)
     raw_costs = get_raw_cost_data(instrument)
     block_move_value = get_point_size(instrument)
     point_size = get_point_size(instrument)
 
-    position_raw, scalar = calc_subsystem_position(instruments, instrument, all_instrument_data,
-                                                   trading_rule_list)
+    price1 = price
+    year = get_rolls_per_year(instrument)
+    size = get_point_size(instrument)  # 指源代码中 get_value_of_block_price_move 返回的是point_size
+    per_trade = get_per_trade(instrument)
+    per_block = get_per_block(instrument)
+    percentage = get_percentage(instrument)
+    spread_cost = get_spread_cost(instrument)
+    forecast = calc_forecasts(price1)
+    pos_target = calc_target_position(price1, size, capital=1000000, risk_target=0.16)
+    position1 = forecast.mul(pos_target, axis=0) / 10
+    position1 = position1.shift(1)
+    pnl = calc_gross_pnl(position1, price1, size)
+    price_dict = {i1: get_daily_price(i1) for i1 in instruments}
+    forecast_dict = {k: calc_forecasts(v) for k, v in price_dict.items()}
+    cost_SR_dict = {}
+    for rule in trading_rule_list:
+        # 单个rule，所有品种一起算average_turnover
+        turnovers1 = {i1: all_instrument_data[i1]['turnover_dict'] for i1 in all_instrument_data}
+        all_turnovers = [turnovers1[i1][rule] for i1 in instruments]
+        average_turnover = np.nanmean(all_turnovers)
+
+        # 单个rule，所有品种一起算turnover
+        # 传入rule的forecast的multiindex
+        # price_dict = {i: get_daily_price(i) for i in instruments}
+        # forecast_dict = {k: calc_forecasts(v) for k, v in price_dict.items()}
+        weights1 = calc_turnover_weights(forecast_dict)
+        turnovers = [annual_forecast_turnover(get_capped_forecast(instrument_code, rule))
+                     for instrument_code in instruments]
+        weighted_turnover = calculate_weighted_turnover(weights1, turnovers)
+
+        # 单个rule，单个品种，算cost
+        gross_pnl_rule = pnl[rule]
+        forecast_rule = forecast[rule]
+        pooled_cost = calc_cost_SR_by_rule(average_turnover, forecast_rule, gross_pnl_rule, per_block, per_trade,
+                                           percentage, size, pos_target, price1, year, spread_cost,
+                                           weighted_turnover)
+
+        cost_SR_dict[rule] = pooled_cost
+
+    net_pnl_all = {}
+    for ins in instruments:
+        p = all_instrument_data[ins]['price']
+        size = all_instrument_data[ins]['point_size']
+        forecast1 = all_instrument_data[ins]['forecast_df']
+        target = all_instrument_data[ins]['position_target']
+
+        net_pnl_instrument = calc_net_pnl_instrument(cost_SR_dict, forecast1, size, p, target)
+        net_pnl_all[ins] = pd.DataFrame(net_pnl_instrument)
+
+    combined_forecast, universal_index = combine_forecast(forecast, forecast_dict, net_pnl_all, price1)
+    vol_scalar = calc_volatility_scalar(instrument, all_instrument_data,
+                                        annual_perc_vol_target=0.25,
+                                        capital=500000)
+    vol_scalar = vol_scalar.reindex(universal_index, method="ffill")
+    subsystem_position_raw = vol_scalar * combined_forecast / 10.0
+    print('calc_subsystem_position')
+    position_raw, scalar = subsystem_position_raw, vol_scalar
     subsystem_positions.append(position_raw)
 
     position_buffered = calc_buffered_pos_given_raw_pos(position_raw, scalar, 0.10)
@@ -54,17 +115,18 @@ for instrument in instruments:
     costs_dict[instrument] = normalised_costs
     print('calc_pnl_across_subsytem_for_indiv_instr')
 
-    average_position_for_turnover = calc_average_position(daily_price, block_move_value)
-    # TODO：这里是不是应该用buffer过的position？
-    subsystem_turnover = turnover_x_y(position_raw, average_position_for_turnover)
-    turnover_dict[instrument] = subsystem_turnover
-    print('calc_subsystem_turnover')
-
 gross_pnl_df = pd.DataFrame(gross_dict)
 cost_df = pd.DataFrame(costs_dict)
 
 subsystem_positions = pd.concat(subsystem_positions, axis=1).ffill()
 subsystem_positions.columns = instruments
+
+for instrument in instruments:
+    daily_price = get_daily_price(instrument)
+    average_position_for_turnover = calc_average_position(daily_price, block_move_value)
+    subsystem_turnover = turnover_x_y(position_raw, average_position_for_turnover)
+    turnover_dict[instrument] = subsystem_turnover
+    print('calc_subsystem_turnover')
 
 # gross_pnl_sum = gross_pnl_df.sum(axis=1)
 # cost_sum = cost_df.sum(axis=1)
