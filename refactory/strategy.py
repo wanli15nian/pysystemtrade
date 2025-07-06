@@ -111,19 +111,18 @@ subsystem_positions.columns = instruments
 
 
 # SR 的Index 问题还是没有处理好，源代码为resample("B"), 现为很奇怪的resample
-def calc_sr_dict(instruments, cost_df, gross_pnl_df):
-    net_return_as_dict = {}
+def calc_net_returns_dict(instruments, cost_df, gross_pnl_df):
+    net_return_dict = {}
     for instrument in instruments:
         index_used = gross_pnl_df[instrument].index
         daily_returns_cost_as_ts = pd.Series(cost_df[instrument].mean(), index_used)
         net_returns = gross_pnl_df[instrument] + daily_returns_cost_as_ts
-        net_return_as_dict[instrument] = net_returns
-    return net_return_as_dict
-net_returns_dict = calc_sr_dict(instruments, cost_df, gross_pnl_df)
+        net_return_dict[instrument] = net_returns
+    return net_return_dict
+net_returns_dict = calc_net_returns_dict(instruments, cost_df, gross_pnl_df)
 
 net_return_df_unresampled = pd.DataFrame(net_returns_dict)
-net_return_dict = {'asset': net_return_df_unresampled}
-net_return_df = single_resampled_set_of_returns(net_return_dict, 'W')
+net_return_df = single_resampled_set_of_returns({'asset': net_return_df_unresampled}, 'W')
 
 start = net_return_df.index[0]
 end = net_return_df.index[-1]
