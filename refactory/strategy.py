@@ -10,10 +10,14 @@ from refactory.prepare_all_instr_data import prepare_all_instr_data
 from refactory.turnover import turnover_x_y, calc_average_position
 from refactory.utils import optimisation, single_resampled_set_of_returns
 
-trading_instruments = ["CORN", "SOFR", "SP500_micro", 'US10']
-trading_rule_list = ['ewmac32', 'ewmac8']
+instruments = ["CORN", "SOFR", "SP500_micro", 'US10']
 
-all_instrument_data = prepare_all_instr_data(trading_instruments, trading_rule_list)
+price_all = pd.concat((
+    get_daily_price(i)
+    for i in instruments), keys=instruments, names=['instrument', 'date'])
+
+trading_rule_list = ['ewmac32', 'ewmac8']
+all_instrument_data = prepare_all_instr_data(instruments, trading_rule_list)
 
 net_dict = {}
 gross_dict = {}
@@ -21,7 +25,7 @@ costs_dict = {}
 turnover_dict = {}
 subsystem_positions = []
 
-for instrument in trading_instruments:
+for instrument in instruments:
     # FIXME:daily_price是不是和price是一个？
     price = get_daily_price(instrument)
     daily_price = price.resample('1B').last()
@@ -31,7 +35,7 @@ for instrument in trading_instruments:
     block_move_value = get_point_size(instrument)
     point_size = get_point_size(instrument)
 
-    position_raw, scalar = calc_subsystem_position(trading_instruments, instrument, all_instrument_data,
+    position_raw, scalar = calc_subsystem_position(instruments, instrument, all_instrument_data,
                                                    trading_rule_list)
     subsystem_positions.append(position_raw)
 
@@ -57,7 +61,7 @@ gross_pnl_df = pd.DataFrame(gross_dict)
 cost_df = pd.DataFrame(costs_dict)
 
 subsystem_positions = pd.concat(subsystem_positions, axis=1).ffill()
-subsystem_positions.columns = trading_instruments
+subsystem_positions.columns = instruments
 
 # gross_pnl_sum = gross_pnl_df.sum(axis=1)
 # cost_sum = cost_df.sum(axis=1)
@@ -77,7 +81,7 @@ df_of_costs resample方式不同的"relevant curve", sum 都是一样的
 
 # SR 的Index 问题还是没有处理好，源代码为resample("B"), 现为很奇怪的resample
 SR_dict = {}
-for instrument in trading_instruments:
+for instrument in instruments:
     cost_curve = cost_df[instrument]
     gross_pandl = gross_pnl_df[instrument]
     daily_returns = cost_curve.mean()
@@ -86,7 +90,7 @@ for instrument in trading_instruments:
     SR_dict[instrument] = annual_SR
 
 net_return_as_dict = {}
-for instrument in trading_instruments:
+for instrument in instruments:
     daily_gross_returns_for_asset = gross_pnl_df[instrument]
     daily_gross_return_std = daily_gross_returns_for_asset.std()
     daily_asset_sr_cost = SR_dict[instrument] / 16

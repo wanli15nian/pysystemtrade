@@ -107,3 +107,7 @@ def get_instrument_raw_carry_data(instrument_code):
     carry_data = all_price_data[['PRICE', 'CARRY', 'PRICE_CONTRACT', 'CARRY_CONTRACT']]
     print("get_instrument_raw_carry_data")
     return carry_data
+
+
+if __name__ == '__main__':
+    b = get_daily_price('CORN')
