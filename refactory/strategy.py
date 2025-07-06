@@ -7,7 +7,8 @@ from refactory.cost import calc_costs
 from refactory.cost_forecast import calc_turnover_weights, annual_forecast_turnover, get_capped_forecast, \
     calculate_weighted_turnover
 from refactory.data_source import get_instrument_info
-from refactory.data_util import get_daily_price, get_raw_cost_data
+from refactory.data_util import get_daily_price, get_rolls_per_year, get_raw_cost_data, get_point_size, get_per_trade, \
+    get_per_block, get_percentage, get_spread_cost
 from refactory.forecast import calc_forecasts
 from refactory.functions import calc_gross_pnl, calc_cost_SR_by_rule, calc_net_pnl_instrument, \
     combine_forecast
@@ -36,24 +37,15 @@ turnover_dict = {}
 subsystem_positions = []
 
 for instrument in instruments:
+    price = get_daily_price(instrument)
 
-    # rolls_per_year = get_rolls_per_year(instrument)
+    rolls_per_year = get_rolls_per_year(instrument)
     raw_costs = get_raw_cost_data(instrument)
-    # point_size = get_point_size(instrument)
-    # spread_cost = get_spread_cost(instrument)
-    # per_trade = get_per_trade(instrument)
-    # per_block = get_per_block(instrument)
-    # percentage = get_percentage(instrument)
-
-    price = price_all[instrument]
-    info = info_all.loc[instrument]
-
-    rolls_per_year = info['rolls_per_year']
-    point_size = info['point_size']
-    spread_cost = info['spread_cost']
-    per_trade = info['per_trade']
-    per_block = info['per_block']
-    percentage = info['percentage']
+    point_size = get_point_size(instrument)
+    spread_cost = get_spread_cost(instrument)
+    per_trade = get_per_trade(instrument)
+    per_block = get_per_block(instrument)
+    percentage = get_percentage(instrument)
 
     forecast = calc_forecasts(price)
 
@@ -120,7 +112,7 @@ for instrument in instruments:
     costs_dict[instrument] = normalised_costs
     print('calc_pnl_across_subsytem_for_indiv_instr')
 
-    daily_price = price
+    daily_price = get_daily_price(instrument)
     average_position_for_turnover = calc_average_position(daily_price, point_size)
     subsystem_turnover = turnover_x_y(position_raw, average_position_for_turnover)
     turnover_dict[instrument] = subsystem_turnover

@@ -10,18 +10,6 @@ def calc_costs(position, price, rolls_per_year, raw_costs, value_per_point):
     return calc_normalised_cost(raw_costs, all_fills, cost_deflator, value_per_point)
 
 
-def calc_normalised_cost(raw_costs, all_fills, cost_deflator, value_per_point):
-    instrument_currency_costs = [-calc_cost_instr_currency_for_a_fill(fill, value_per_point, raw_costs) for fill in
-                                 all_fills]
-    date_index = [fill.date for fill in all_fills]
-    costs_as_pd_series = pd.Series(instrument_currency_costs, date_index)
-    costs_as_pd_series = costs_as_pd_series.sort_index()
-    costs_as_pd_series = costs_as_pd_series.groupby(costs_as_pd_series.index).sum()
-    reindexed_deflator = cost_deflator.reindex(costs_as_pd_series.index, method="ffill")
-    normalised_costs = reindexed_deflator * costs_as_pd_series
-    return normalised_costs
-
-
 @dataclass
 class Fill:
     date: datetime.datetime
@@ -49,6 +37,18 @@ def calc_all_fills(position, price, rolls_per_year):
     ]
     list_of_all_fills = list_of_trading_fills + list_of_holding_fills
     return list_of_all_fills
+
+
+def calc_normalised_cost(raw_costs, all_fills, cost_deflator, value_per_point):
+    instrument_currency_costs = [-calc_cost_instr_currency_for_a_fill(fill, value_per_point, raw_costs) for fill in
+                                 all_fills]
+    date_index = [fill.date for fill in all_fills]
+    costs_as_pd_series = pd.Series(instrument_currency_costs, date_index)
+    costs_as_pd_series = costs_as_pd_series.sort_index()
+    costs_as_pd_series = costs_as_pd_series.groupby(costs_as_pd_series.index).sum()
+    reindexed_deflator = cost_deflator.reindex(costs_as_pd_series.index, method="ffill")
+    normalised_costs = reindexed_deflator * costs_as_pd_series
+    return normalised_costs
 
 
 def calc_cost_deflator(price):
