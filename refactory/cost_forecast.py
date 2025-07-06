@@ -24,14 +24,35 @@ def calc_annual_cost(forecast_dict, instruments, instrument, rule):
     holding_cost = holding_turnovers * cost_per_trade
 
     annual_cost = transaction_cost + holding_cost
-
     return annual_cost
 
 
-def get_cost_per_trade(instrument_code):
-    # 单次交易成本，包括slippage和commission
+def calc_average_turnover(instruments, forecast_length_weights, rule_name):
+    # 获取交易所有instrument年交易频率
+    turnovers = [instrument_forecast_turnover(instrument_code, rule_name)
+                 for instrument_code in instruments]
+    weighted_avg_turnover = calculate_weighted_average_with_nans(forecast_length_weights, turnovers)
+    return weighted_avg_turnover
 
-    notional_blocks_traded = 1
+
+def instrument_forecast_turnover(instrument_code, rule_name):
+    forecast_raw = get_capped_forecast(instrument_code, rule_name)
+    forecast = forecast_raw.resample("1B").last()
+    turnover_annual = calc_annual_turnover(forecast)
+    return turnover_annual
+
+
+def calc_annual_turnover(forecast):
+    # TODO:改为直接除以forecast_scalling
+    forecast_scalling = 10.0
+    forecast_scalling_daily = pd.Series(np.full(forecast.shape[0], forecast_scalling), forecast.index)
+    forecast_normalised = forecast / forecast_scalling_daily.ffill()
+    turnover_daily = float(forecast_normalised.diff().abs().mean())
+    turnover_annual = turnover_daily * 256
+    return turnover_annual
+
+
+def get_cost_per_trade(instrument_code, notional_blocks_traded=1):
     point_size = get_point_size(instrument_code)  # 指源代码中 get_value_of_block_price_move 返回的是point_size
     per_trade = get_per_trade(instrument_code)
     per_block = get_per_block(instrument_code)
@@ -40,6 +61,7 @@ def get_cost_per_trade(instrument_code):
 
     price = get_daily_price(instrument_code)
 
+    # 单次交易成本，包括slippage和commission
     # FIXME: 在这里作者使用了pd.DateOffset来进行年份计算，而在rolling window中是用365天，原因存疑
     average_price = float(price[price.index[-1] - pd.DateOffset(years=1):].mean())
     commission_percentage = notional_blocks_traded * average_price * point_size * percentage
@@ -55,21 +77,6 @@ def get_cost_per_trade(instrument_code):
     cost_per_trade = cost / ann_std
 
     return cost_per_trade
-
-
-def instrument_forecast_turnover(instrument_code, rule_name):
-    forecast_raw = get_capped_forecast(instrument_code, rule_name)
-    forecast = forecast_raw.resample("1B").last()
-
-    forecast_scalling = 10.0
-    forecast_scalling_daily = pd.Series(np.full(forecast.shape[0], forecast_scalling), forecast.index)
-    forecast_normalised = forecast / forecast_scalling_daily.ffill()
-
-    avg_daily = float(forecast_normalised.diff().abs().mean())
-    annual_turnover_for_forecast = avg_daily * 256
-
-    print('forecast_turnover_for_individual_instrument')
-    return annual_turnover_for_forecast
 
 
 def get_capped_forecast(instrument, rule_name):
@@ -112,11 +119,3 @@ def calculate_weighted_average_with_nans(weights, list_of_values, sum_of_weights
     weighted_value = np.nansum(weights_times_values_as_np)
 
     return weighted_value
-
-
-def calc_average_turnover(pooled_instruments, forecast_length_weights, rule_name):
-    # 获取交易所有instrument年交易频率
-    turnovers = [instrument_forecast_turnover(instrument_code, rule_name)
-                 for instrument_code in pooled_instruments]
-    weighted_avg_turnover = calculate_weighted_average_with_nans(forecast_length_weights, turnovers)
-    return weighted_avg_turnover
