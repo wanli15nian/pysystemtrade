@@ -64,9 +64,6 @@ for instrument in instruments:
     pos_target = target_.loc[instrument]
     pnl = gross_.loc[instrument]
 
-    price_dict = {i1: get_daily_price(i1) for i1 in instruments}
-    forecast_dict = {k: calc_forecasts(v) for k, v in price_dict.items()}
-
     cost_SR_dict = calc_cost_SR(rules, average_turnover_, weighted_turnover_, pnl, forecast, price, pos_target, info)
 
     net_pnl_all = {}
@@ -79,7 +76,7 @@ for instrument in instruments:
         net_pnl_instrument = calc_net_pnl_instrument(cost_SR_dict, forecast1, size, p, target)
         net_pnl_all[ins] = pd.DataFrame(net_pnl_instrument)
 
-    combined_forecast, universal_index = combine_forecast(forecast, forecast_dict, net_pnl_all, price)
+    combined_forecast, universal_index = combine_forecast(forecast, forecast_, net_pnl_all, price)
 
     vol_scalar = calc_volatility_scalar(price, point_size, 500000, 0.25)
     vol_scalar = vol_scalar.reindex(universal_index, method="ffill")
