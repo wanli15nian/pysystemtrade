@@ -31,7 +31,7 @@ def rescale_forecast(forecast, target_scaling=10, upper_cap=20, window=250000, m
     return capped
 
 
-def calculate_forecasts(price):
+def calc_forecasts(price):
     raw_ewmac32 = ewmac(price, 32, 128, 1)
     ewmac32 = rescale_forecast(raw_ewmac32 / floor_vol(price_vol(price)))
     # ewmac32.rename('ewmac32', inplace=True)

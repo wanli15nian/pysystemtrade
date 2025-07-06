@@ -3,7 +3,7 @@ import pandas as pd
 
 from refactory.cost_forecast import calc_annual_cost, instrument_forecast_turnover
 from refactory.data_util import get_point_size, get_daily_price
-from refactory.forecast import calculate_forecasts
+from refactory.forecast import calc_forecasts
 from refactory.target_volatility import calc_target_position
 from refactory.utils import calc_mixed_volatility, get_stdev_estimator_for_instrument_weight, get_mean_estimator, \
     get_corr_estimator_for_instrument_weight, optimisation, single_resampled_set_of_returns, calc_volatility_scalar
@@ -164,15 +164,15 @@ def calc_gross_daily_pnl_dict_for_all_instr(all_instrument_data, all_instruments
 
 def calc_subsystem_position(instruments, instrument, all_instrument_data, trading_rule_list):
     price_dict = {i: get_daily_price(i) for i in instruments}
-    forecast_dict = {k: calculate_forecasts(v) for k, v in price_dict.items()}
+    forecast_dict = {k: calc_forecasts(v) for k, v in price_dict.items()}
 
     price = get_daily_price(instrument)
     point_size = get_point_size(instrument)
 
-    forecast_df = calculate_forecasts(price)
+    forecast = calc_forecasts(price)
     pos_target = calc_target_position(price, point_size, capital=1000000, risk_target=0.16)
 
-    position = forecast_df.mul(pos_target, axis=0) / 10
+    position = forecast.mul(pos_target, axis=0) / 10
     position = position.shift(1)
     gross_pnl = calc_gross_pnl(position, price, point_size)
     gross_pnl = gross_pnl.replace(0, np.nan)
@@ -181,10 +181,11 @@ def calc_subsystem_position(instruments, instrument, all_instrument_data, tradin
     for rule in trading_rule_list:
 
         annual_cost = calc_annual_cost(forecast_dict, instruments, instrument, rule)
+
         gross_daily_pnl_series = gross_pnl[rule]
 
-        forecast = forecast_df[rule]
-        pos_target = pos_target.reindex(forecast.index, method="ffill")
+        forecast_rule = forecast[rule]
+        pos_target = pos_target.reindex(forecast_rule.index, method="ffill")
         ##PROBLEM: cost curve calc remains to be checked
         cost_curve = calc_cost(pos_target=pos_target, price=price,
                                point_size=point_size, trading_cost=annual_cost)
@@ -292,8 +293,8 @@ def calc_subsystem_position(instruments, instrument, all_instrument_data, tradin
     div_mult_unsmoothed_daily[div_mult_unsmoothed_daily.isna()] = 1.0
     div_mult = div_mult_unsmoothed_daily.ewm(span=125).mean()
 
-    # FIXME: combined forecast 有问题
-    combined_forecast_without_cap = (forecast_weights_for_rules * forecast_df).sum(axis=1) * div_mult.ffill()
+    # FIXME: combined forecast_rule 有问题
+    combined_forecast_without_cap = (forecast_weights_for_rules * forecast).sum(axis=1) * div_mult.ffill()
     combined_forecast = combined_forecast_without_cap.clip(20, -20)  # QUESTION: 小数点后8位开始对不上，暂时不管
     vol_scalar = calc_volatility_scalar(instrument, all_instrument_data,
                                         annual_perc_vol_target=0.25,

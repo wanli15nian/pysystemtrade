@@ -36,13 +36,11 @@ def calc_average_turnover(instruments, forecast_length_weights, rule_name):
 
 
 def instrument_forecast_turnover(instrument_code, rule_name):
-    forecast_raw = get_capped_forecast(instrument_code, rule_name)
+    return annual_forecast_turnover(get_capped_forecast(instrument_code, rule_name))
+
+
+def annual_forecast_turnover(forecast_raw):
     forecast = forecast_raw.resample("1B").last()
-    turnover_annual = calc_annual_turnover(forecast)
-    return turnover_annual
-
-
-def calc_annual_turnover(forecast):
     # TODO:改为直接除以forecast_scalling
     forecast_scalling = 10.0
     forecast_scalling_daily = pd.Series(np.full(forecast.shape[0], forecast_scalling), forecast.index)

@@ -5,6 +5,7 @@ from copy import copy
 from refactory.apply_buffer_to_position import calc_buffered_pos_given_raw_pos
 from refactory.cost import calc_costs
 from refactory.data_util import get_daily_price, get_rolls_per_year, get_raw_cost_data, get_point_size
+from refactory.forecast import calc_forecasts
 from refactory.functions import calc_subsystem_position, calc_gross_pnl
 from refactory.prepare_all_instr_data import prepare_all_instr_data
 from refactory.turnover import turnover_x_y, calc_average_position
@@ -12,9 +13,11 @@ from refactory.utils import optimisation, single_resampled_set_of_returns
 
 instruments = ["CORN", "SOFR", "SP500_micro", 'US10']
 
-price_all = pd.concat((
-    get_daily_price(i)
-    for i in instruments), keys=instruments, names=['instrument', 'date'])
+price_all = pd.concat((get_daily_price(i)
+                       for i in instruments), keys=instruments, names=['instrument', 'datetime'])
+
+forecast_all = pd.concat((calc_forecasts(price_all[i])
+                          for i in instruments), keys=instruments, names=['instrument', 'datetime'])
 
 trading_rule_list = ['ewmac32', 'ewmac8']
 all_instrument_data = prepare_all_instr_data(instruments, trading_rule_list)

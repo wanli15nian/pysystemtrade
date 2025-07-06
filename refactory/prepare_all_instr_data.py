@@ -2,7 +2,7 @@ from refactory.cost_forecast import instrument_forecast_turnover
 
 from refactory.data_util import get_daily_price, get_raw_carry_price, get_point_size, get_raw_cost_data, \
     get_rolls_per_year
-from refactory.forecast import calculate_forecasts
+from refactory.forecast import calc_forecasts
 from refactory.target_volatility import calc_target_position
 
 
@@ -14,7 +14,7 @@ def prepare_all_instr_data(all_instruments, trading_rule_list):
         price = get_daily_price(instrument)
         individual_instr_data['price'] = price
 
-        forecast_df = calculate_forecasts(price)
+        forecast_df = calc_forecasts(price)
         individual_instr_data['forecast_df'] = forecast_df
 
         turnover_dict = {}
