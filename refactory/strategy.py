@@ -18,6 +18,7 @@ from refactory.turnover import turnover_x_y, calc_average_position
 from refactory.utils import optimisation, single_resampled_set_of_returns, calc_volatility_scalar
 
 instruments = ["CORN", "SOFR", "SP500_micro", 'US10']
+trading_rule_list = ['ewmac32', 'ewmac8']
 
 info_ = get_instrument_info().loc[instruments]
 
@@ -33,7 +34,6 @@ target_ = pd.concat((calc_target_position(price_.loc[i], info_.loc[i], capital=1
 gross_ = pd.concat((calc_gross(forecast_.loc[i], target_.loc[i], price_.loc[i], info_.loc[i])
                     for i in instruments), keys=instruments, names=['instrument', 'datetime'])
 
-trading_rule_list = ['ewmac32', 'ewmac8']
 all_instrument_data = prepare_all_instr_data(instruments, trading_rule_list)
 
 net_dict = {}
@@ -63,6 +63,8 @@ for instrument in instruments:
     forecast_dict = {k: calc_forecasts(v) for k, v in price_dict.items()}
     cost_SR_dict = {}
     for rule in trading_rule_list:
+        forecast_rule = forecast[rule]
+
         # 单个rule，所有品种一起算average_turnover
         turnovers1 = {i1: all_instrument_data[i1]['turnover_dict'] for i1 in all_instrument_data}
         all_turnovers = [turnovers1[i1][rule] for i1 in instruments]
@@ -79,7 +81,6 @@ for instrument in instruments:
 
         # 单个rule，单个品种，算cost
         gross_pnl_rule = pnl[rule]
-        forecast_rule = forecast[rule]
         pooled_cost = calc_cost_SR_by_rule(average_turnover, forecast_rule, gross_pnl_rule, per_block, per_trade,
                                            percentage, point_size, pos_target, price, rolls_per_year, spread_cost,
                                            weighted_turnover)
