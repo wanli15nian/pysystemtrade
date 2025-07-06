@@ -41,6 +41,7 @@ weighted_turnover_ = turnover_.apply(lambda x: calculate_weighted_turnover(turno
 cost_sr_ = pd.DataFrame([calc_cost_SR(rules, average_turnover_, weighted_turnover_, gross_.loc[i], forecast_.loc[i],
                                       price_.loc[i], target_.loc[i], info_.loc[i])
                          for i in instruments], index=instruments, columns=rules)
+
 net_ = pd.concat([calc_net_pnl(gross_.loc[i], cost_sr_.loc[i])
                   for i in instruments], keys=instruments, names=['instrument', 'datetime'])
 
