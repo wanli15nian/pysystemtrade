@@ -3,10 +3,6 @@ import pandas as pd
 from copy import copy
 from scipy.optimize import minimize
 
-from refactory.data_util import get_point_size, get_percentage, get_per_block, get_per_trade, get_spread_cost, \
-    get_daily_price
-from refactory.forecast import ewmac, price_vol, floor_vol, rescale_forecast
-
 
 def calc_mixed_volatility(daily_returns, days=35, min_periods=10, slow_vol_years=20,
                           proportion_of_slow_vol=0.3, vol_abs_min=0.0000000001,
@@ -125,34 +121,6 @@ def calculate_weighted_average_with_nans(weights, list_of_values, sum_of_weights
     return weighted_value
 
 
-def get_cost_per_trade(instrument_code):
-    notional_blocks_traded = 1
-
-    point_size = get_point_size(instrument_code)  # 指源代码中 get_value_of_block_price_move 返回的是point_size
-    per_trade = get_per_trade(instrument_code)
-    per_block = get_per_block(instrument_code)
-    percentage = get_percentage(instrument_code)
-    price_slippage = get_spread_cost(instrument_code)
-
-    price = get_daily_price(instrument_code)
-
-    # FIXME: 在这里作者使用了pd.DateOffset来进行年份计算，而在rolling window中是用365天，原因存疑
-    average_price = float(price[price.index[-1] - pd.DateOffset(years=1):].mean())
-    commission_percentage = notional_blocks_traded * average_price * point_size * percentage
-    commission_per_block = notional_blocks_traded * per_block
-    commission = max([per_trade, commission_per_block, commission_percentage])
-    slippage = notional_blocks_traded * price_slippage * point_size
-    cost = commission + slippage
-
-    vol_daily = calc_mixed_volatility(price.diff(), slow_vol_years=10)
-    vol_daily_average = float(vol_daily[price.index[-1] - pd.DateOffset(years=1):].mean())
-    ann_std = vol_daily_average * 16 * point_size
-
-    cost_per_trade = cost / ann_std
-
-    return cost_per_trade
-
-
 def single_resampled_set_of_returns(data_dict, frequency: str):
     returns_as_list = []
     for _, instrument_returns in data_dict.items():
@@ -229,38 +197,3 @@ def calc_volatility_scalar(instrument_code, all_instrument_data, annual_perc_vol
     vol_scalar = cash_vol_target / value_vol
 
     return vol_scalar
-
-
-def forecast_turnover_for_indiv_instr(instrument_code, rule_name):
-    forecast = get_capped_forecast(instrument_code, rule_name)
-
-    average_forecast_for_turnover = 10.0
-    y = average_forecast_for_turnover
-    daily_forecast = forecast.resample("1B").last()
-    daily_y = pd.Series(np.full(daily_forecast.shape[0], float(y)), daily_forecast.index)
-    x_normalised_for_y = daily_forecast / daily_y.ffill()
-    avg_daily = float(x_normalised_for_y.diff().abs().mean())
-    annual_turnover_for_forecast = avg_daily * 256
-    print('forecast_turnover_for_individual_instrument')
-    return annual_turnover_for_forecast
-
-
-def get_capped_forecast(instrument, rule_name):
-    '''
-    Forecast 不是对当天价格的预判
-    Forecast 根据包括当天在内的价格数据，对未来趋势进行判断
-    究竟趋势如何就根据过去几天的价格变化
-    '''
-    price = get_daily_price(instrument)
-    if rule_name == 'ewmac32':
-        raw_ewmac32 = ewmac(price, 32, 128, 1)
-        ewmac32 = rescale_forecast(raw_ewmac32 / floor_vol(price_vol(price)))
-        ewmac32.rename('ewmac32', inplace=True)
-        return ewmac32
-    if rule_name == 'ewmac8':
-        raw_ewmac8 = ewmac(price, 8, 32, 1)
-        ewmac8 = rescale_forecast(raw_ewmac8 / floor_vol(price_vol(price)))
-        ewmac8.rename('ewmac8', inplace=True)
-        return ewmac8
-    else:
-        raise 'Rule not defined '

@@ -1,11 +1,13 @@
 import numpy as np
 import pandas as pd
 
+from refactory.cost_SR import get_cost_per_trade
 from refactory.data_util import get_point_size, get_rolls_per_year, get_daily_price
 from refactory.forecast import calculate_forecasts
 from refactory.target_volatility import calc_target_position
-from refactory.utils import calc_mixed_volatility, get_cost_per_trade, forecast_turnover_for_indiv_instr, \
-    calculate_weighted_average_with_nans, get_stdev_estimator_for_instrument_weight, get_mean_estimator, \
+from refactory.turnover_forecast import forecast_turnover_for_indiv_instr
+from refactory.utils import calc_mixed_volatility, calculate_weighted_average_with_nans, \
+    get_stdev_estimator_for_instrument_weight, get_mean_estimator, \
     get_corr_estimator_for_instrument_weight, optimisation, single_resampled_set_of_returns, calc_volatility_scalar
 
 
@@ -163,32 +165,18 @@ def calc_gross_daily_pnl_dict_for_all_instr(all_instrument_data, all_instruments
 
 
 def calc_annual_trading_cost_per_contract(instrument_code, rule_name, pooled_instruments, forecast_length_weights):
-    # 单次交易成本，包括slippage和commission
+    # 单次交易成本
     cost_per_trade = get_cost_per_trade(instrument_code)
 
-    # transaction cost
-
-    # 获取交易所有instr 年交易频率
+    # 获取交易所有instrument年交易频率
     turnovers = [forecast_turnover_for_indiv_instr(instrument_code, rule_name)
                  for instrument_code in pooled_instruments]
 
     weighted_avg_turnover = calculate_weighted_average_with_nans(forecast_length_weights, turnovers)
-    transaction_cost = cost_per_trade * weighted_avg_turnover
-    '''
-    交易频率和历史数据线性相关，历史数据越多，交易频率可以越高
-    反之，即使根据Forecast计算应该频繁交易，但历史数据不足会导致交易频率受限
-    更多的是一种自我设限的操作
-    '''
+    transaction_cost = weighted_avg_turnover * cost_per_trade
 
-    # holding cost
-    hold_turnovers = get_rolls_per_year(instrument_code) * 2.0
-    holding_cost = hold_turnovers * cost_per_trade
-
-    '''
-    期货合约进行换仓的时候，有卖出旧合约和Buy新合约两个操作，所以乘2
-    然后乘上单次交易成本
-    所以属于持仓成本
-    '''
+    holding_turnovers = get_rolls_per_year(instrument_code) * 2.0
+    holding_cost = holding_turnovers * cost_per_trade
 
     trading_cost = transaction_cost + holding_cost
     print('calc_trading_cost')
@@ -381,7 +369,6 @@ def calc_daily_gross_pnl_in_points(positions: pd.Series, prices: pd.Series):
     因为实际持仓和价格变化都是当天收盘之后算出来的
     所以第一天的实际持仓算出来后，第二天会那么持仓，然后吃满第二天的价格变化
     pnl也会算进第二天里
-
     需要去算具体金额的盈亏，还得乘以point_size, 也就是比如说一手多少吨
     '''
     pos_series = positions.groupby(positions.index).last()  # 得到当天最后的持仓
