@@ -26,6 +26,9 @@ price_all = pd.concat((get_daily_price(i)
 forecast_all = pd.concat((calc_forecasts(price_all[i])
                           for i in instruments), keys=instruments, names=['instrument', 'datetime'])
 
+target_all = pd.concat((calc_target_position(price_all[i], info_all.loc[i], capital=1000000, risk_target=0.16)
+                        for i in instruments), keys=instruments, names=['instrument', 'datetime'])
+
 trading_rule_list = ['ewmac32', 'ewmac8']
 all_instrument_data = prepare_all_instr_data(instruments, trading_rule_list)
 
@@ -47,10 +50,8 @@ for instrument in instruments:
 
     price = get_daily_price(instrument)
     forecast = calc_forecasts(price)
-    
-    raw_costs = get_raw_cost_data(instrument)
 
-    pos_target = calc_target_position(price, point_size, capital=1000000, risk_target=0.16)
+    pos_target = calc_target_position(price, info, capital=1000000, risk_target=0.16)
     position1 = forecast.mul(pos_target, axis=0) / 10
     position1 = position1.shift(1)
     pnl = calc_gross_pnl(position1, price, point_size)
@@ -105,6 +106,8 @@ for instrument in instruments:
     position = position_buffered.shift(1)
 
     gross_pnl = calc_gross_pnl(position, price, point_size)
+
+    raw_costs = get_raw_cost_data(instrument)
     normalised_costs = calc_costs(position, price, rolls_per_year, raw_costs, point_size)
     net_pnl = gross_pnl.add(normalised_costs, fill_value=0).resample('B').sum()
 

@@ -4,8 +4,8 @@ import pandas as pd
 from refactory.cost_forecast import annual_forecast_turnover, \
     calc_annual_cost, \
     get_cost_per_trade
-from refactory.utils import calc_mixed_volatility, get_stdev_estimator_for_instrument_weight, get_mean_estimator, \
-    get_corr_estimator_for_instrument_weight, optimisation, single_resampled_set_of_returns
+from refactory.utils import get_stdev_estimator_for_instrument_weight, get_mean_estimator, \
+    get_corr_estimator_for_instrument_weight, optimisation, single_resampled_set_of_returns, calc_mixed_volatility
 
 
 def generate_fit_end_list(start_date, end_date):
@@ -129,19 +129,6 @@ def calc_div_mult_single_period(corr, weights, dm_max=2.5):
 #     return position_buffered
 
 
-def calc_cost(pos_target, price, point_size, trading_cost):
-    # Actually output in price space to match gross returns
-    # These will be annualised figure, make it a small loss every day
-    # FIXME: 完全没有看明白这个calc_cost的计算逻辑
-    annualised_price_vol_points = calc_mixed_volatility(price.diff(), slow_vol_years=10)
-    sr_cost_as_annualised_figure = (-trading_cost * pos_target * annualised_price_vol_points * 16).bfill()
-    period_intervals_in_seconds = sr_cost_as_annualised_figure.index.to_series().diff().dt.total_seconds()
-    costs_in_points = sr_cost_as_annualised_figure * period_intervals_in_seconds / (365.25 * 24 * 60 * 60)
-    costs = costs_in_points * point_size  # 后续有个fx 的序列，但目前不加
-    print('calc_cost')
-    return costs
-
-
 def combine_forecast(forecast, forecast_dict, net_pnl_all, price):
     # forecast_df_list = [all_instrument_data[instrument]['forecast_df'] for instrument in instruments]
     forecast_df_list = [v for k, v in forecast_dict.items()]
@@ -243,6 +230,19 @@ def calc_cost_SR_by_rule(average_turnover, forecast_rule, gross_rule_pnl, per_bl
     cost_multiplier = 2
     pooled_cost = instr_cost_per_turnover * average_turnover * cost_multiplier
     return pooled_cost
+
+
+def calc_cost(pos_target, price, point_size, trading_cost):
+    # Actually output in price space to match gross returns
+    # These will be annualised figure, make it a small loss every day
+    # FIXME: 完全没有看明白这个calc_cost的计算逻辑
+    annualised_price_vol_points = calc_mixed_volatility(price.diff(), slow_vol_years=10)
+    sr_cost_as_annualised_figure = (-trading_cost * pos_target * annualised_price_vol_points * 16).bfill()
+    period_intervals_in_seconds = sr_cost_as_annualised_figure.index.to_series().diff().dt.total_seconds()
+    costs_in_points = sr_cost_as_annualised_figure * period_intervals_in_seconds / (365.25 * 24 * 60 * 60)
+    costs = costs_in_points * point_size  # 后续有个fx 的序列，但目前不加
+    print('calc_cost')
+    return costs
 
 
 def calc_gross_pnl(position, price, point_size):
