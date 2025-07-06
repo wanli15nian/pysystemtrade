@@ -71,10 +71,9 @@ for instrument in instruments:
     vol_scalar = vol_scalar.reindex(universal_index, method="ffill")
     subsystem_position_raw = vol_scalar * combined_forecast / 10.0
     print('calc_subsystem_position')
-    position_raw, scalar = subsystem_position_raw, vol_scalar
-    subsystem_positions.append(position_raw)
 
-    position_buffered = calc_buffered_pos_given_raw_pos(position_raw, scalar, 0.10)
+    subsystem_positions.append(subsystem_position_raw)
+    position_buffered = calc_buffered_pos_given_raw_pos(subsystem_position_raw, vol_scalar, 0.10)
     position = position_buffered.shift(1)
 
     gross_pnl = calc_gross_pnl(position, price, point_size)
@@ -90,7 +89,7 @@ for instrument in instruments:
 
     daily_price = get_daily_price(instrument)
     average_position_for_turnover = calc_average_position(daily_price, point_size)
-    subsystem_turnover = turnover_x_y(position_raw, average_position_for_turnover)
+    subsystem_turnover = turnover_x_y(subsystem_position_raw, average_position_for_turnover)
     turnover_dict[instrument] = subsystem_turnover
     print('calc_subsystem_turnover')
 
