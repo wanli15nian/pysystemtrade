@@ -37,7 +37,8 @@ turnover_dict = {}
 subsystem_positions = []
 
 for instrument in instruments:
-    price = get_daily_price(instrument)
+
+    price = price_all[instrument]
 
     rolls_per_year = get_rolls_per_year(instrument)
     raw_costs = get_raw_cost_data(instrument)
@@ -112,7 +113,7 @@ for instrument in instruments:
     costs_dict[instrument] = normalised_costs
     print('calc_pnl_across_subsytem_for_indiv_instr')
 
-    daily_price = get_daily_price(instrument)
+    daily_price = price
     average_position_for_turnover = calc_average_position(daily_price, point_size)
     subsystem_turnover = turnover_x_y(position_raw, average_position_for_turnover)
     turnover_dict[instrument] = subsystem_turnover
