@@ -165,9 +165,6 @@ def calc_avg_corr(corr_matrix_df):
     return avg_corr
 avg_corr = calc_avg_corr(corr_matrix_df)
 
-size_index = range(len(corr_matrix_df.columns))
-
-
 def _od(i, j, offdiag, diag):
     if i == j:
         return diag
@@ -175,14 +172,17 @@ def _od(i, j, offdiag, diag):
         return offdiag
 
 
-corr_matrix_values_as_list = [
-    [_od(i, j, offdiag=avg_corr, diag=1.0) for i in size_index] for j in size_index
-]
-corr_matrix_without_columns = np.array(corr_matrix_values_as_list)
-prior_corr = pd.DataFrame(corr_matrix_without_columns, columns=instruments, index=instruments)
+def calc_avg_corr_matrix(instruments, avg_corr):
+    corr_matrix_values_as_list = [
+        [_od(i, j, offdiag=avg_corr, diag=1.0) for i in range(len(instruments))] for j in range(len(instruments))
+    ]
+    corr_matrix_without_columns = np.array(corr_matrix_values_as_list)
+    avg_corr_matrix = pd.DataFrame(corr_matrix_without_columns, columns=instruments, index=instruments)
+    return avg_corr_matrix
+avg_corr_matrix = calc_avg_corr_matrix(instruments, avg_corr)
 
 shrinkage_corr = 0.5
-shrunk_corr_without_columns = (shrinkage_corr * prior_corr.values + (1 - shrinkage_corr) * corr_matrix_df.values)
+shrunk_corr_without_columns = (shrinkage_corr * avg_corr_matrix.values + (1 - shrinkage_corr) * corr_matrix_df.values)
 shrunk_corr = pd.DataFrame(shrunk_corr_without_columns, columns=instruments, index=instruments)
 
 shrinkage_sr = 0.9
