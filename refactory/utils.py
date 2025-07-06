@@ -8,27 +8,6 @@ from refactory.data_util import get_point_size, get_percentage, get_per_block, g
 from refactory.forecast import ewmac, price_vol, floor_vol, rescale_forecast
 
 
-def get_capped_forecast(instrument, rule_name):
-    '''
-    Forecast 不是对当天价格的预判
-    Forecast 根据包括当天在内的价格数据，对未来趋势进行判断
-    究竟趋势如何就根据过去几天的价格变化
-    '''
-    price = get_daily_price(instrument)
-    if rule_name == 'ewmac32':
-        raw_ewmac32 = ewmac(price, 32, 128, 1)
-        ewmac32 = rescale_forecast(raw_ewmac32 / floor_vol(price_vol(price)))
-        ewmac32.rename('ewmac32', inplace=True)
-        return ewmac32
-    if rule_name == 'ewmac8':
-        raw_ewmac8 = ewmac(price, 8, 32, 1)
-        ewmac8 = rescale_forecast(raw_ewmac8 / floor_vol(price_vol(price)))
-        ewmac8.rename('ewmac8', inplace=True)
-        return ewmac8
-    else:
-        raise 'Rule not defined '
-
-
 def calc_mixed_volatility(daily_returns, days=35, min_periods=10, slow_vol_years=20,
                           proportion_of_slow_vol=0.3, vol_abs_min=0.0000000001,
                           vol_multiplier=1.0, backfill=False):
@@ -147,32 +126,30 @@ def calculate_weighted_average_with_nans(weights, list_of_values, sum_of_weights
 
 
 def get_cost_per_trade(instrument_code):
-    block_price_multiplier = get_point_size(instrument_code)  # 指源代码中 get_value_of_block_price_move 返回的是point_size
     notional_blocks_traded = 1
 
-    price_slippage = get_spread_cost(instrument_code)  # TODO: 验证spread_cost和price_slippage是不是一个事情
-    slippage = abs(notional_blocks_traded) * price_slippage * block_price_multiplier
-
-    start_date = get_daily_price(instrument_code).index[-1] - pd.DateOffset(years=1)
-    # FIXME: 在这里作者使用了pd.DateOffset来进行年份计算，而在rolling window中是用365天，原因存疑
-    average_price = float(get_daily_price(instrument_code)[start_date:].mean())
-    price_returns = get_daily_price(instrument_code).diff()  # FIXME: 又重复get了一次价格， 虽然源代码也是这么写的
-    daily_vol = calc_mixed_volatility(price_returns, slow_vol_years=10)  # TODO: 后续看是否完全复用
-    average_vol = float(daily_vol[start_date:].mean())
-    ann_stdev_price_units = average_vol * 16
-    value_per_block = average_price * block_price_multiplier
-
+    point_size = get_point_size(instrument_code)  # 指源代码中 get_value_of_block_price_move 返回的是point_size
     per_trade = get_per_trade(instrument_code)
     per_block = get_per_block(instrument_code)
     percentage = get_percentage(instrument_code)
+    price_slippage = get_spread_cost(instrument_code)
 
-    per_block_commission = notional_blocks_traded * per_block
-    percentage_commission = (notional_blocks_traded * value_per_block * percentage)
-    commission = max([per_trade, per_block_commission, percentage_commission])
+    price = get_daily_price(instrument_code)
 
-    cost_instrument_currency = commission + slippage
-    ann_stdev_instrument_currency = ann_stdev_price_units * block_price_multiplier
-    cost_per_trade = cost_instrument_currency / ann_stdev_instrument_currency
+    # FIXME: 在这里作者使用了pd.DateOffset来进行年份计算，而在rolling window中是用365天，原因存疑
+    average_price = float(price[price.index[-1] - pd.DateOffset(years=1):].mean())
+    commission_percentage = notional_blocks_traded * average_price * point_size * percentage
+    commission_per_block = notional_blocks_traded * per_block
+    commission = max([per_trade, commission_per_block, commission_percentage])
+    slippage = notional_blocks_traded * price_slippage * point_size
+    cost = commission + slippage
+
+    vol_daily = calc_mixed_volatility(price.diff(), slow_vol_years=10)
+    vol_daily_average = float(vol_daily[price.index[-1] - pd.DateOffset(years=1):].mean())
+    ann_std = vol_daily_average * 16 * point_size
+
+    cost_per_trade = cost / ann_std
+
     return cost_per_trade
 
 
@@ -266,3 +243,24 @@ def forecast_turnover_for_indiv_instr(instrument_code, rule_name):
     annual_turnover_for_forecast = avg_daily * 256
     print('forecast_turnover_for_individual_instrument')
     return annual_turnover_for_forecast
+
+
+def get_capped_forecast(instrument, rule_name):
+    '''
+    Forecast 不是对当天价格的预判
+    Forecast 根据包括当天在内的价格数据，对未来趋势进行判断
+    究竟趋势如何就根据过去几天的价格变化
+    '''
+    price = get_daily_price(instrument)
+    if rule_name == 'ewmac32':
+        raw_ewmac32 = ewmac(price, 32, 128, 1)
+        ewmac32 = rescale_forecast(raw_ewmac32 / floor_vol(price_vol(price)))
+        ewmac32.rename('ewmac32', inplace=True)
+        return ewmac32
+    if rule_name == 'ewmac8':
+        raw_ewmac8 = ewmac(price, 8, 32, 1)
+        ewmac8 = rescale_forecast(raw_ewmac8 / floor_vol(price_vol(price)))
+        ewmac8.rename('ewmac8', inplace=True)
+        return ewmac8
+    else:
+        raise 'Rule not defined '

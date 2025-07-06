@@ -33,39 +33,6 @@ def calc_cost(pos_target, price, point_size, trading_cost):
     return costs
 
 
-def calc_annual_trading_cost_per_contract(instrument_code, rule_name, pooled_instruments, forecast_length_weights):
-    # 单次交易成本，包括slippage和commission
-    cost_per_trade = get_cost_per_trade(instrument_code)
-
-    # transaction cost
-
-    # 获取交易所有instr 年交易频率
-    turnovers = [forecast_turnover_for_indiv_instr(instrument_code, rule_name)
-                 for instrument_code in pooled_instruments]
-
-    weighted_avg_turnover = calculate_weighted_average_with_nans(forecast_length_weights, turnovers)
-    transaction_cost = cost_per_trade * weighted_avg_turnover
-    '''
-    交易频率和历史数据线性相关，历史数据越多，交易频率可以越高
-    反之，即使根据Forecast计算应该频繁交易，但历史数据不足会导致交易频率受限
-    更多的是一种自我设限的操作
-    '''
-
-    # holding cost
-    hold_turnovers = get_rolls_per_year(instrument_code) * 2.0
-    holding_cost = hold_turnovers * cost_per_trade
-
-    '''
-    期货合约进行换仓的时候，有卖出旧合约和Buy新合约两个操作，所以乘2
-    然后乘上单次交易成本
-    所以属于持仓成本
-    '''
-
-    trading_cost = transaction_cost + holding_cost
-    print('calc_trading_cost')
-    return trading_cost
-
-
 def calc_forecast_weights(instruments, pnl_df, fit_end, span_multiple=50000,
                           min_periods_corr_multiple=10, min_periods_multiple=5):
     # instruments = trading_instruments
@@ -195,6 +162,39 @@ def calc_gross_daily_pnl_dict_for_all_instr(all_instrument_data, all_instruments
     return gross_daily_pnl_dict
 
 
+def calc_annual_trading_cost_per_contract(instrument_code, rule_name, pooled_instruments, forecast_length_weights):
+    # 单次交易成本，包括slippage和commission
+    cost_per_trade = get_cost_per_trade(instrument_code)
+
+    # transaction cost
+
+    # 获取交易所有instr 年交易频率
+    turnovers = [forecast_turnover_for_indiv_instr(instrument_code, rule_name)
+                 for instrument_code in pooled_instruments]
+
+    weighted_avg_turnover = calculate_weighted_average_with_nans(forecast_length_weights, turnovers)
+    transaction_cost = cost_per_trade * weighted_avg_turnover
+    '''
+    交易频率和历史数据线性相关，历史数据越多，交易频率可以越高
+    反之，即使根据Forecast计算应该频繁交易，但历史数据不足会导致交易频率受限
+    更多的是一种自我设限的操作
+    '''
+
+    # holding cost
+    hold_turnovers = get_rolls_per_year(instrument_code) * 2.0
+    holding_cost = hold_turnovers * cost_per_trade
+
+    '''
+    期货合约进行换仓的时候，有卖出旧合约和Buy新合约两个操作，所以乘2
+    然后乘上单次交易成本
+    所以属于持仓成本
+    '''
+
+    trading_cost = transaction_cost + holding_cost
+    print('calc_trading_cost')
+    return trading_cost
+
+
 def calc_subsystem_position(instruments, instrument, all_instrument_data, trading_rule_list):
     price_dict = {i: get_daily_price(i) for i in instruments}
     forecast_dict = {k: calculate_forecasts(v) for k, v in price_dict.items()}
@@ -203,7 +203,7 @@ def calc_subsystem_position(instruments, instrument, all_instrument_data, tradin
 
     price = get_daily_price(instrument)
     point_size = get_point_size(instrument)
-    
+
     forecast_df = calculate_forecasts(price)
     pos_target = calc_target_position(price, point_size, capital=1000000, risk_target=0.16)
 
@@ -215,10 +215,8 @@ def calc_subsystem_position(instruments, instrument, all_instrument_data, tradin
     dict_of_instr_cost_sr_with_pooling = {}
     for rule in trading_rule_list:
 
-        average_turnover = average_turnover_across_instruments(all_instrument_data, instruments, rule)
-
         forecast = forecast_df[rule]
-        pos_target = pos_target.reindex(forecast.index, method="ffill")
+
         # Annual trading cost is calculated using pooled instruments, hence "all_instruments" is passed
         # Trading cost is the sum of holding and transaction cost
         annual_trading_cost_per_contract = calc_annual_trading_cost_per_contract(instrument, rule,
@@ -226,11 +224,12 @@ def calc_subsystem_position(instruments, instrument, all_instrument_data, tradin
                                                                                  forecast_length_weights)
         gross_daily_pnl_series = gross_pnl[rule]
 
+        pos_target = pos_target.reindex(forecast.index, method="ffill")
         ##PROBLEM: cost curve calc remains to be checked
         cost_curve = calc_cost(pos_target=pos_target, price=price,
                                point_size=point_size, trading_cost=annual_trading_cost_per_contract)
         '''
-        annual_cost_SR 算出交易成本与gross returns 波动的比例
+        cost_SR_annual 算出交易成本与gross returns 波动的比例
         越高，说明成本越难以接受
         当annual_cost_SR等于1的时候，就算gross returns 总是赚的，也会被交易成本给消耗掉
         '''
@@ -242,12 +241,12 @@ def calc_subsystem_position(instruments, instrument, all_instrument_data, tradin
 
         gross_daily_pnl_series = gross_daily_pnl_series.replace(0, np.nan)
         gross_daily_pnl_std = gross_daily_pnl_series.std()
-        annual_cost_SR = 16 * cost_curve_mean / gross_daily_pnl_std
+        cost_SR_annual = 16 * cost_curve_mean / gross_daily_pnl_std
 
         turnover = forecast_turnover_for_indiv_instr(instrument, rule)
-        instr_annual_cost_sr = annual_cost_SR
-        instr_cost_per_turnover = instr_annual_cost_sr / turnover
+        instr_cost_per_turnover = cost_SR_annual / turnover
 
+        average_turnover = average_turnover_across_instruments(all_instrument_data, instruments, rule)
         cost_multiplier = 2
         pooled_cost = instr_cost_per_turnover * average_turnover * cost_multiplier
         dict_of_instr_cost_sr_with_pooling[rule] = pooled_cost
@@ -360,6 +359,20 @@ def average_turnover_across_instruments(all_instrument_data, instruments, rule):
     return average_turnover_across_assets
 
 
+def calc_gross_pnl(position, price, point_size):
+    pnl_in_points = calc_daily_gross_pnl_in_points(positions=position, prices=price)
+    pnl = pnl_in_points * point_size
+    daily_pnl = pnl.resample("B").sum()
+    daily_pnl = daily_pnl.squeeze()
+    print('calc_gross_instrument_pnl')
+    # FIXME: 鉴于forecast是个两列的df, daily_pnl_gross也是个两列的df
+    # 这就有问题了，应该如何理解这两列的实际持仓呢
+    # 计算过程中，我们本质上是把每个rule当成了单独的portfolio来算的，所以才有了用position_target直接乘上去
+    # 得出的daily_pnl_gross不能是直接相加吧，如果是的话就不合理了
+    # 举例，两个forecast 给出了很弱的信号，所以实际持仓都是目标持仓的60%, 如果直接相加的，反而会导致最终持仓到了目标持仓的120%
+    return daily_pnl
+
+
 def calc_daily_gross_pnl_in_points(positions: pd.Series, prices: pd.Series):
     # TODO: 清理，这里为什么还要shift一次，可能会有问题
     '''
@@ -381,17 +394,3 @@ def calc_daily_gross_pnl_in_points(positions: pd.Series, prices: pd.Series):
     daily_pnl_in_points = adjusted_pos_price_series.mul(daily_price_change, axis=0)
     daily_pnl_in_points[daily_pnl_in_points.isna()] = 0.0
     return daily_pnl_in_points
-
-
-def calc_gross_pnl(position, price, point_size):
-    pnl_in_points = calc_daily_gross_pnl_in_points(positions=position, prices=price)
-    pnl = pnl_in_points * point_size
-    daily_pnl = pnl.resample("B").sum()
-    daily_pnl = daily_pnl.squeeze()
-    print('calc_gross_instrument_pnl')
-    # FIXME: 鉴于forecast是个两列的df, daily_pnl_gross也是个两列的df
-    # 这就有问题了，应该如何理解这两列的实际持仓呢
-    # 计算过程中，我们本质上是把每个rule当成了单独的portfolio来算的，所以才有了用position_target直接乘上去
-    # 得出的daily_pnl_gross不能是直接相加吧，如果是的话就不合理了
-    # 举例，两个forecast 给出了很弱的信号，所以实际持仓都是目标持仓的60%, 如果直接相加的，反而会导致最终持仓到了目标持仓的120%
-    return daily_pnl
