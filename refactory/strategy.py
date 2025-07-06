@@ -19,16 +19,19 @@ from refactory.utils import optimisation, single_resampled_set_of_returns, calc_
 
 instruments = ["CORN", "SOFR", "SP500_micro", 'US10']
 
-info_all = get_instrument_info().loc[instruments]
+info_ = get_instrument_info().loc[instruments]
 
-price_all = pd.concat((get_daily_price(i)
+price_ = pd.concat((get_daily_price(i)
+                    for i in instruments), keys=instruments, names=['instrument', 'datetime'])
+
+forecast_ = pd.concat((calc_forecasts(price_.loc[i])
                        for i in instruments), keys=instruments, names=['instrument', 'datetime'])
 
-forecast_all = pd.concat((calc_forecasts(price_all.loc[i])
-                          for i in instruments), keys=instruments, names=['instrument', 'datetime'])
+target_ = pd.concat((calc_target_position(price_.loc[i], info_.loc[i], capital=1000000, risk_target=0.16)
+                     for i in instruments), keys=instruments, names=['instrument', 'datetime'])
 
-target_all = pd.concat((calc_target_position(price_all.loc[i], info_all.loc[i], capital=1000000, risk_target=0.16)
-                        for i in instruments), keys=instruments, names=['instrument', 'datetime'])
+gross_ = pd.concat((calc_gross(forecast_.loc[i], target_.loc[i], price_.loc[i], info_.loc[i])
+                    for i in instruments), keys=instruments, names=['instrument', 'datetime'])
 
 trading_rule_list = ['ewmac32', 'ewmac8']
 all_instrument_data = prepare_all_instr_data(instruments, trading_rule_list)
@@ -41,7 +44,7 @@ subsystem_positions = []
 
 for instrument in instruments:
 
-    info = info_all.loc[instrument]
+    info = info_.loc[instrument]
     rolls_per_year = int(info['rolls_per_year'])  # TODO: 用【】取会自动转为浮点型，临时方案是强制给转成整型
     point_size = info['point_size']
     spread_cost = info['spread_cost']
@@ -49,9 +52,9 @@ for instrument in instruments:
     per_block = info['per_block']
     percentage = info['percentage']
 
-    price = price_all.loc[instrument]
-    forecast = forecast_all.loc[instrument]
-    pos_target = target_all.loc[instrument]
+    price = price_.loc[instrument]
+    forecast = forecast_.loc[instrument]
+    pos_target = target_.loc[instrument]
     # pos_target = calc_target_position(price, info, capital=1000000, risk_target=0.16)
 
     pnl = calc_gross(forecast, pos_target, price, info)
