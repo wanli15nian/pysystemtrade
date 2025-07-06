@@ -42,19 +42,18 @@ for instrument in instruments:
     rolls_per_year = get_rolls_per_year(instrument)
     raw_costs = get_raw_cost_data(instrument)
     point_size = get_point_size(instrument)
-    block_move_value = point_size
-
-    year = get_rolls_per_year(instrument)
-    size = get_point_size(instrument)  # 指源代码中 get_value_of_block_price_move 返回的是point_size
+    spread_cost = get_spread_cost(instrument)
     per_trade = get_per_trade(instrument)
     per_block = get_per_block(instrument)
     percentage = get_percentage(instrument)
-    spread_cost = get_spread_cost(instrument)
+
     forecast = calc_forecasts(price)
-    pos_target = calc_target_position(price, size, capital=1000000, risk_target=0.16)
+
+    pos_target = calc_target_position(price, point_size, capital=1000000, risk_target=0.16)
     position1 = forecast.mul(pos_target, axis=0) / 10
     position1 = position1.shift(1)
-    pnl = calc_gross_pnl(position1, price, size)
+    pnl = calc_gross_pnl(position1, price, point_size)
+
     price_dict = {i1: get_daily_price(i1) for i1 in instruments}
     forecast_dict = {k: calc_forecasts(v) for k, v in price_dict.items()}
     cost_SR_dict = {}
@@ -77,7 +76,7 @@ for instrument in instruments:
         gross_pnl_rule = pnl[rule]
         forecast_rule = forecast[rule]
         pooled_cost = calc_cost_SR_by_rule(average_turnover, forecast_rule, gross_pnl_rule, per_block, per_trade,
-                                           percentage, size, pos_target, price, year, spread_cost,
+                                           percentage, point_size, pos_target, price, rolls_per_year, spread_cost,
                                            weighted_turnover)
 
         cost_SR_dict[rule] = pooled_cost
@@ -94,8 +93,7 @@ for instrument in instruments:
 
     combined_forecast, universal_index = combine_forecast(forecast, forecast_dict, net_pnl_all, price)
 
-    size1 = all_instrument_data[instrument]['point_size']
-    vol_scalar = calc_volatility_scalar(price, size1, 500000, 0.25)
+    vol_scalar = calc_volatility_scalar(price, point_size, 500000, 0.25)
     vol_scalar = vol_scalar.reindex(universal_index, method="ffill")
     subsystem_position_raw = vol_scalar * combined_forecast / 10.0
     print('calc_subsystem_position')
@@ -106,7 +104,7 @@ for instrument in instruments:
     position = position_buffered.shift(1)
 
     gross_pnl = calc_gross_pnl(position, price, point_size)
-    normalised_costs = calc_costs(position, price, rolls_per_year, raw_costs, block_move_value)
+    normalised_costs = calc_costs(position, price, rolls_per_year, raw_costs, point_size)
     net_pnl = gross_pnl.add(normalised_costs, fill_value=0).resample('B').sum()
 
     net_dict[instrument] = net_pnl
@@ -115,7 +113,7 @@ for instrument in instruments:
     print('calc_pnl_across_subsytem_for_indiv_instr')
 
     daily_price = get_daily_price(instrument)
-    average_position_for_turnover = calc_average_position(daily_price, block_move_value)
+    average_position_for_turnover = calc_average_position(daily_price, point_size)
     subsystem_turnover = turnover_x_y(position_raw, average_position_for_turnover)
     turnover_dict[instrument] = subsystem_turnover
     print('calc_subsystem_turnover')
