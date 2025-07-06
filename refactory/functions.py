@@ -177,21 +177,30 @@ def calc_subsystem_position(instruments, instrument, all_instrument_data, tradin
     dict_of_instr_cost_sr_with_pooling = {}
     for rule in trading_rule_list:
 
+        # 单个rule，所有品种一起算average_turnover
+        turnovers1 = {i: all_instrument_data[i]['turnover_dict'] for i in all_instrument_data}
+        all_turnovers = [turnovers1[i][rule] for i in instruments]
+        average_turnover = np.nanmean(all_turnovers)
+
         # 单个rule，所有品种一起算turnover
+        # 传入rule的forecast的multiindex
         price_dict = {i: get_daily_price(i) for i in instruments}
         forecast_dict = {k: calc_forecasts(v) for k, v in price_dict.items()}
-        # TODO:传入rule的forecast的multiindex
         weights = calc_turnover_weights(forecast_dict)
         turnovers = [annual_forecast_turnover(get_capped_forecast(instrument_code, rule))
                      for instrument_code in instruments]
-        turnover1 = calculate_weighted_turnover(weights, turnovers)
+        weighted_turnover = calculate_weighted_turnover(weights, turnovers)
 
         # 单个rule，单个品种，算cost
+        gross_rule_pnl = gross_pnl[rule]
+        forecast_rule = forecast[rule]
+        # forecast_rule = get_capped_forecast(instrument, rule)
         rolls_per_year = get_rolls_per_year(instrument)
         cost_per_trade = get_cost_per_trade(instrument)
-        annual_cost = calc_annual_cost(turnover1, cost_per_trade, rolls_per_year)
 
-        pos_target = pos_target.reindex(forecast.index, method="ffill")
+        annual_cost = calc_annual_cost(weighted_turnover, cost_per_trade, rolls_per_year)
+
+        # pos_target = pos_target.reindex(forecast_rule.index, method="ffill")
         ##PROBLEM: cost curve calc remains to be checked
         cost_curve = calc_cost(pos_target=pos_target, price=price,
                                point_size=point_size, trading_cost=annual_cost)
@@ -201,16 +210,15 @@ def calc_subsystem_position(instruments, instrument, all_instrument_data, tradin
             cost_curve.iloc[:13] = np.nan  # QUESTION: 为什么到了US10是前13个数字
         cost_curve_mean = cost_curve.mean()
 
-        gross_daily_pnl_series = gross_pnl[rule]
-        gross_daily_pnl_std = gross_daily_pnl_series.std()
+        gross_daily_pnl_std = gross_rule_pnl.std()
         cost_SR_annual = 16 * cost_curve_mean / gross_daily_pnl_std
 
-        turnover = annual_forecast_turnover(get_capped_forecast(instrument, rule))
+        turnover = annual_forecast_turnover(forecast_rule)
         instr_cost_per_turnover = cost_SR_annual / turnover
 
-        average_turnover = average_turnover_across_instruments(all_instrument_data, instruments, rule)
         cost_multiplier = 2
         pooled_cost = instr_cost_per_turnover * average_turnover * cost_multiplier
+
         dict_of_instr_cost_sr_with_pooling[rule] = pooled_cost
 
     gross_daily_pnl_dict = calc_gross_daily_pnl_dict_for_all_instr(all_instrument_data, instruments)
@@ -304,13 +312,6 @@ def calc_subsystem_position(instruments, instrument, all_instrument_data, tradin
     subsystem_position_raw = vol_scalar * combined_forecast / 10.0
     print('calc_subsystem_position')
     return subsystem_position_raw, vol_scalar
-
-
-def average_turnover_across_instruments(all_instrument_data, instruments, rule):
-    turnovers = {instrument: all_instrument_data[instrument]['turnover_dict'] for instrument in all_instrument_data}
-    all_turnovers = [turnovers[instrument][rule] for instrument in (instruments)]
-    average_turnover_across_assets = np.nanmean(all_turnovers)
-    return average_turnover_across_assets
 
 
 def calc_gross_pnl(position, price, point_size):
