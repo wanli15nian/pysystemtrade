@@ -54,10 +54,10 @@ for instrument in instruments:
     info = info_.loc[instrument]
     rolls_per_year = int(info['rolls_per_year'])  # TODO: 用【】取会自动转为浮点型，临时方案是强制给转成整型
     point_size = info['point_size']
-    spread_cost = info['spread_cost']
-    per_trade = info['per_trade']
-    per_block = info['per_block']
-    percentage = info['percentage']
+    # spread_cost = info['spread_cost']
+    # per_trade = info['per_trade']
+    # per_block = info['per_block']
+    # percentage = info['percentage']
 
     price = price_.loc[instrument]
     forecast = forecast_.loc[instrument]
