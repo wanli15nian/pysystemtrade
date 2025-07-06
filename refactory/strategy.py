@@ -121,45 +121,51 @@ def calc_net_returns_dict(instruments, cost_df, gross_pnl_df):
     return net_return_dict
 net_returns_dict = calc_net_returns_dict(instruments, cost_df, gross_pnl_df)
 
-net_return_df_unresampled = pd.DataFrame(net_returns_dict)
-net_return_df = single_resampled_set_of_returns({'asset': net_return_df_unresampled}, 'W')
+def resample_net_returns(net_returns_dict):
+    net_return_df_unresampled = pd.DataFrame(net_returns_dict)
+    net_return_df = single_resampled_set_of_returns({'asset': net_return_df_unresampled}, 'W')
+    return net_return_df
 
-start = net_return_df.index[0]
-end = net_return_df.index[-1]
+net_return_df = resample_net_returns(net_returns_dict)
 
 # sample method is INSAMPLE
-fit_dates = f'Fit from {start} to {end}, use from {start} to {end}'
-
-corr = net_return_df.ewm(span=500000, min_periods=10, ignore_na=True).corr(pairwise=True)
-
-size_of_matrix = len(corr.columns)
-corr_matrix_values = (
-    corr[corr.index.get_level_values(0) < end]
-    .tail(size_of_matrix)
-    .values)
-corr_matrix_values[corr_matrix_values < 0.0] = 0.0
-
-exponential_mean = net_return_df.ewm(span=50000, min_periods=5).mean()
+start = net_return_df.index[0]
+end = net_return_df.index[-1]
 matching_index_size = net_return_df.index[net_return_df.index < end].size
 last_index = matching_index_size - 1
-mean = exponential_mean.iloc[last_index]
-mean = mean * 365.25 / 7.0  # Number of weeks in a year
-
-exponential_std = net_return_df.ewm(span=50000, min_periods=5).std()
-std = exponential_std.iloc[last_index]
-std = std * (365.25 / 7.0) ** 0.5
-
 data_length = len(net_return_df.index)
 frequency = 'W'
+def calc_corr_matrix(net_return_df, span=500000, min_periods=10, ignore_na=True, pairwise=True):
+    corr = net_return_df.ewm(span=span, min_periods=min_periods, ignore_na=ignore_na).corr(pairwise=pairwise)
+    size_of_matrix = len(corr.columns)
+    corr_matrix_values = (corr[corr.index.get_level_values(0) < end].tail(size_of_matrix).values)
+    corr_matrix_values[corr_matrix_values < 0.0] = 0.0
+    corr_matrix_df = pd.DataFrame(corr_matrix_values, columns=corr.columns)
+    return corr_matrix_df
+
+corr_matrix_df = calc_corr_matrix(net_return_df)
+
+def calc_annualised_return_mean(net_return_df, span=50000, min_periods=5):
+    exponential_mean = net_return_df.ewm(span=span, min_periods=min_periods).mean()
+    mean = exponential_mean.iloc[last_index]* 365.25 / 7.0
+    return mean
+annualised_return_mean = calc_annualised_return_mean(net_return_df)
+
+def calc_annualised_return_std(net_return_df, span=50000, min_periods=5):
+    exponential_std = net_return_df.ewm(span=span, min_periods=min_periods).std()
+    std = exponential_std.iloc[last_index] * (365.25 / 7.0) ** 0.5
+    return std
+annualised_return_std = calc_annualised_return_std(net_return_df)
 
 # Shrinkage
-corr_matrix_values = pd.DataFrame(corr_matrix_values, columns=corr.columns)
-new_corr_values = copy(corr_matrix_values.values)
-np.fill_diagonal(new_corr_values, np.nan)
-avg_corr = np.nanmean(new_corr_values)
-instruments_used = corr_matrix_values.columns
+def calc_avg_corr(corr_matrix_df):
+    new_corr_values = copy(corr_matrix_df.values)
+    np.fill_diagonal(new_corr_values, np.nan)
+    avg_corr = np.nanmean(new_corr_values)
+    return avg_corr
+avg_corr = calc_avg_corr(corr_matrix_df)
 
-size_index = range(len(corr_matrix_values.columns))
+size_index = range(len(corr_matrix_df.columns))
 
 
 def _od(i, j, offdiag, diag):
@@ -173,33 +179,33 @@ corr_matrix_values_as_list = [
     [_od(i, j, offdiag=avg_corr, diag=1.0) for i in size_index] for j in size_index
 ]
 corr_matrix_without_columns = np.array(corr_matrix_values_as_list)
-prior_corr = pd.DataFrame(corr_matrix_without_columns, columns=instruments_used, index=instruments_used)
+prior_corr = pd.DataFrame(corr_matrix_without_columns, columns=instruments, index=instruments)
 
 shrinkage_corr = 0.5
-shrunk_corr_without_columns = (shrinkage_corr * prior_corr.values + (1 - shrinkage_corr) * corr_matrix_values.values)
-shrunk_corr = pd.DataFrame(shrunk_corr_without_columns, columns=instruments_used, index=instruments_used)
+shrunk_corr_without_columns = (shrinkage_corr * prior_corr.values + (1 - shrinkage_corr) * corr_matrix_df.values)
+shrunk_corr = pd.DataFrame(shrunk_corr_without_columns, columns=instruments, index=instruments)
 
 shrinkage_sr = 0.9
 target_sr = 0.5
-sr_estimates = [asset_mean / asset_stdev for (asset_mean, asset_stdev) in zip(mean, std)]
+sr_estimates = [asset_mean / asset_stdev for (asset_mean, asset_stdev) in zip(annualised_return_mean, annualised_return_std)]
 post_sr_list = [(shrinkage_sr * target_sr) + (1 - shrinkage_sr) * estimatedSR for estimatedSR in sr_estimates]
-shrunk_means_values = [asset_sr * asset_stdev for (asset_sr, asset_stdev) in zip(post_sr_list, std)]
-shrunk_means = [(asset_name, mean_value) for (asset_name, mean_value) in zip(instruments_used, shrunk_means_values)]
+shrunk_means_values = [asset_sr * asset_stdev for (asset_sr, asset_stdev) in zip(post_sr_list, annualised_return_std)]
+shrunk_means = [(asset_name, mean_value) for (asset_name, mean_value) in zip(instruments, shrunk_means_values)]
 
 ## 这里相当于默认asset 的命名顺序不变，有风险
 
-avg_std = np.nanmean(std)
-norm_factor = [asset_stdev / avg_std for asset_stdev in std]
+avg_std = np.nanmean(annualised_return_std)
+norm_factor = [asset_stdev / avg_std for asset_stdev in annualised_return_std]
 with np.errstate(invalid='ignore'):
     norm_means = [shrunk_means_values[i] / norm_factor[i] for (i, notUsed) in enumerate(shrunk_means)]
-    norm_stdev = [std.iloc[i] / norm_factor[i] for (i, notUsed) in enumerate(std)]
+    norm_stdev = [annualised_return_std.iloc[i] / norm_factor[i] for (i, notUsed) in enumerate(annualised_return_std)]
 
 mean_list = [target_sr * asset_stdev for asset_stdev in norm_stdev]
 
-equalised_mean = {(asset_name, mean) for (asset_name, mean) in zip(instruments_used, mean_list)}
-equalised_std = {(asset_name, std) for (asset_name, std) in zip(instruments_used, norm_stdev)}
-weights = optimisation(len(instruments_used), corr=shrunk_corr.values, norm_mean=mean_list, norm_stdev=norm_stdev)
-weights_dict = {asset_name: weight for (asset_name, weight) in zip(instruments_used, weights)}
+equalised_mean = {(asset_name, mean) for (asset_name, mean) in zip(instruments, mean_list)}
+equalised_std = {(asset_name, std) for (asset_name, std) in zip(instruments, norm_stdev)}
+weights = optimisation(len(instruments), corr=shrunk_corr.values, norm_mean=mean_list, norm_stdev=norm_stdev)
+weights_dict = {asset_name: weight for (asset_name, weight) in zip(instruments, weights)}
 ## 在这里跳过clean weights 步骤
 weight_index = [start]  ## 这里应该是list of starting dates
 weights = pd.DataFrame(weights_dict, index=weight_index)
