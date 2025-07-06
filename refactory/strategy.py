@@ -112,30 +112,16 @@ subsystem_positions.columns = instruments
 
 # SR 的Index 问题还是没有处理好，源代码为resample("B"), 现为很奇怪的resample
 def calc_sr_dict(instruments, cost_df, gross_pnl_df):
-    SR_dict = {}
-    for instrument in instruments:
-        daily_returns = cost_df[instrument].mean()
-        daily_gross_return_std = gross_pnl_df[instrument].std()
-        annual_SR = 16 * daily_returns / daily_gross_return_std
-        SR_dict[instrument] = annual_SR
-    return SR_dict
-sr_dict = calc_sr_dict(instruments, cost_df, gross_pnl_df)
-
-def calc_net_returns_dict(instruments, gross_pnl_df, SR_dict):
     net_return_as_dict = {}
     for instrument in instruments:
-        daily_gross_returns_for_instr = gross_pnl_df[instrument]
-        daily_gross_return_std = daily_gross_returns_for_instr.std()
-        daily_asset_sr_cost = SR_dict[instrument] / 16
-        daily_returns_cost = daily_gross_return_std * daily_asset_sr_cost
-        daily_returns_cost_as_list = [daily_returns_cost] * len(daily_gross_returns_for_instr.index)
-        daily_returns_cost_as_ts = pd.Series(daily_returns_cost_as_list, daily_gross_returns_for_instr.index)
-        net_returns = daily_gross_returns_for_instr + daily_returns_cost_as_ts
+        index_used = gross_pnl_df[instrument].index
+        daily_returns = cost_df[instrument].mean()
+        daily_returns_cost_as_list = [daily_returns] * len(index_used)
+        daily_returns_cost_as_ts = pd.Series(daily_returns_cost_as_list, index_used)
+        net_returns = gross_pnl_df[instrument] + daily_returns_cost_as_ts
         net_return_as_dict[instrument] = net_returns
-
     return net_return_as_dict
-
-net_returns_dict = calc_net_returns_dict(instruments, gross_pnl_df, sr_dict)
+net_returns_dict = calc_sr_dict(instruments, cost_df, gross_pnl_df)
 
 net_return_df_unresampled = pd.DataFrame(net_returns_dict)
 net_return_dict = {'asset': net_return_df_unresampled}
