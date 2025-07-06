@@ -8,6 +8,26 @@ from refactory.forecast import ewmac, rescale_forecast, floor_vol, price_vol
 from refactory.utils import calc_mixed_volatility
 
 
+def calc_annual_cost(forecast_dict, instruments, instrument, rule):
+    rolls_per_year = get_rolls_per_year(instrument)
+
+    cost_per_trade = get_cost_per_trade(instrument)
+
+    # 用历史数据的多少来决定每个instrument的权重
+    forecast_length = [len(v) for k, v in forecast_dict.items()]
+    total_length = float(sum(forecast_length))
+    weights = [l / total_length for l in forecast_length]
+    weighted_avg_turnover = calc_average_turnover(instruments, weights, rule)
+    transaction_cost = weighted_avg_turnover * cost_per_trade
+
+    holding_turnovers = rolls_per_year * 2.0
+    holding_cost = holding_turnovers * cost_per_trade
+
+    annual_cost = transaction_cost + holding_cost
+
+    return annual_cost
+
+
 def get_cost_per_trade(instrument_code):
     # 单次交易成本，包括slippage和commission
 
@@ -35,23 +55,6 @@ def get_cost_per_trade(instrument_code):
     cost_per_trade = cost / ann_std
 
     return cost_per_trade
-
-
-def calc_annual_cost(forecast_dict, instruments, instrument, rule):
-    # 用历史数据的多少来决定每个instrument的权重
-    forecast_length = [len(v) for k, v in forecast_dict.items()]
-    total_length = float(sum(forecast_length))
-    weights = [forecast_length / total_length for forecast_length in forecast_length]
-
-    # 单次交易成本
-    cost_per_trade = get_cost_per_trade(instrument)
-    weighted_avg_turnover = calc_average_turnover(instruments, weights, rule)
-    transaction_cost = weighted_avg_turnover * cost_per_trade
-    holding_turnovers = get_rolls_per_year(instrument) * 2.0
-    holding_cost = holding_turnovers * cost_per_trade
-    annual_cost = transaction_cost + holding_cost
-    print('calc_trading_cost')
-    return annual_cost
 
 
 def instrument_forecast_turnover(instrument_code, rule_name):
