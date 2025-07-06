@@ -54,7 +54,6 @@ turnover_dict = {}
 subsystem_positions = []
 
 for instrument in instruments:
-
     info = info_.loc[instrument]
     rolls_per_year = int(info['rolls_per_year'])  # TODO: 用【】取会自动转为浮点型，临时方案是强制给转成整型
     point_size = info['point_size']
@@ -65,23 +64,6 @@ for instrument in instruments:
 
     price = price_.loc[instrument]
     forecast = forecast_.loc[instrument]
-    pos_target = target_.loc[instrument]
-    pnl = gross_.loc[instrument]
-
-    cost_SR_dict = calc_cost_SR(rules, average_turnover_, weighted_turnover_, pnl, forecast, price, pos_target, info)
-
-    net_pnl_all = {}
-    for ins in instruments:
-        # p = all_instrument_data[ins]['price']
-        # size = all_instrument_data[ins]['point_size']
-        # forecast1 = all_instrument_data[ins]['forecast_df']
-        # target = all_instrument_data[ins]['position_target']
-        # size1 = size['point_size']
-        # position1 = forecast1.mul(target, axis=0) / 10
-        # position1 = position1.shift(1)
-        # gross = calc_gross_pnl(position1, p, size1)
-        gross = gross_.loc[ins]
-        net_pnl_all[ins] = calc_net_pnl(gross, cost_SR_dict)
 
     grouped = net_.groupby(level='instrument')
     net_pnl_all = {ins: group.reset_index(level='instrument', drop=True) for ins, group in grouped}
