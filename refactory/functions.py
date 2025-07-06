@@ -1,13 +1,12 @@
 import numpy as np
 import pandas as pd
 
-from refactory.cost_SR import get_cost_per_trade
-from refactory.data_util import get_point_size, get_rolls_per_year, get_daily_price
+from refactory.cost_SR import calc_annual_trading_cost_per_contract
+from refactory.data_util import get_point_size, get_daily_price
 from refactory.forecast import calculate_forecasts
 from refactory.target_volatility import calc_target_position
-from refactory.turnover_forecast import forecast_turnover_for_indiv_instr
-from refactory.utils import calc_mixed_volatility, calculate_weighted_average_with_nans, \
-    get_stdev_estimator_for_instrument_weight, get_mean_estimator, \
+from refactory.turnover_forecast import instrument_forecast_turnover
+from refactory.utils import calc_mixed_volatility, get_stdev_estimator_for_instrument_weight, get_mean_estimator, \
     get_corr_estimator_for_instrument_weight, optimisation, single_resampled_set_of_returns, calc_volatility_scalar
 
 
@@ -164,30 +163,9 @@ def calc_gross_daily_pnl_dict_for_all_instr(all_instrument_data, all_instruments
     return gross_daily_pnl_dict
 
 
-def calc_annual_trading_cost_per_contract(instrument_code, rule_name, pooled_instruments, forecast_length_weights):
-    # 单次交易成本
-    cost_per_trade = get_cost_per_trade(instrument_code)
-
-    # 获取交易所有instrument年交易频率
-    turnovers = [forecast_turnover_for_indiv_instr(instrument_code, rule_name)
-                 for instrument_code in pooled_instruments]
-
-    weighted_avg_turnover = calculate_weighted_average_with_nans(forecast_length_weights, turnovers)
-    transaction_cost = weighted_avg_turnover * cost_per_trade
-
-    holding_turnovers = get_rolls_per_year(instrument_code) * 2.0
-    holding_cost = holding_turnovers * cost_per_trade
-
-    trading_cost = transaction_cost + holding_cost
-    print('calc_trading_cost')
-    return trading_cost
-
-
 def calc_subsystem_position(instruments, instrument, all_instrument_data, trading_rule_list):
     price_dict = {i: get_daily_price(i) for i in instruments}
     forecast_dict = {k: calculate_forecasts(v) for k, v in price_dict.items()}
-
-    forecast_length_weights = calc_forecast_length_weights(forecast_dict)
 
     price = get_daily_price(instrument)
     point_size = get_point_size(instrument)
@@ -203,19 +181,14 @@ def calc_subsystem_position(instruments, instrument, all_instrument_data, tradin
     dict_of_instr_cost_sr_with_pooling = {}
     for rule in trading_rule_list:
 
-        forecast = forecast_df[rule]
-
-        # Annual trading cost is calculated using pooled instruments, hence "all_instruments" is passed
-        # Trading cost is the sum of holding and transaction cost
-        annual_trading_cost_per_contract = calc_annual_trading_cost_per_contract(instrument, rule,
-                                                                                 instruments,
-                                                                                 forecast_length_weights)
+        annual_cost = calc_annual_cost(forecast_dict, instruments, instrument, rule)
         gross_daily_pnl_series = gross_pnl[rule]
 
+        forecast = forecast_df[rule]
         pos_target = pos_target.reindex(forecast.index, method="ffill")
         ##PROBLEM: cost curve calc remains to be checked
         cost_curve = calc_cost(pos_target=pos_target, price=price,
-                               point_size=point_size, trading_cost=annual_trading_cost_per_contract)
+                               point_size=point_size, trading_cost=annual_cost)
         '''
         cost_SR_annual 算出交易成本与gross returns 波动的比例
         越高，说明成本越难以接受
@@ -231,7 +204,7 @@ def calc_subsystem_position(instruments, instrument, all_instrument_data, tradin
         gross_daily_pnl_std = gross_daily_pnl_series.std()
         cost_SR_annual = 16 * cost_curve_mean / gross_daily_pnl_std
 
-        turnover = forecast_turnover_for_indiv_instr(instrument, rule)
+        turnover = instrument_forecast_turnover(instrument, rule)
         instr_cost_per_turnover = cost_SR_annual / turnover
 
         average_turnover = average_turnover_across_instruments(all_instrument_data, instruments, rule)
@@ -330,6 +303,14 @@ def calc_subsystem_position(instruments, instrument, all_instrument_data, tradin
     subsystem_position_raw = vol_scalar * combined_forecast / 10.0
     print('calc_subsystem_position')
     return subsystem_position_raw, vol_scalar
+
+
+def calc_annual_cost(forecast_dict, instruments, instrument, rule):
+    forecast_length_weights = calc_forecast_length_weights(forecast_dict)
+    annual_trading_cost_per_contract = calc_annual_trading_cost_per_contract(instrument, rule,
+                                                                             instruments,
+                                                                             forecast_length_weights)
+    return annual_trading_cost_per_contract
 
 
 def calc_forecast_length_weights(forecast_dict):

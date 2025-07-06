@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-from copy import copy
 from scipy.optimize import minimize
 
 
@@ -98,27 +97,6 @@ def optimisation(number, corr, norm_mean, norm_stdev):
     ans = minimize(neg_SR, start_weights, (sigma, mus), method='SLSQP', constraints=cdict, bounds=bounds, tol=0.00001)
     weight = ans['x']
     return weight
-
-
-def calculate_weighted_average_with_nans(weights, list_of_values, sum_of_weights_should_be=1.0):
-    ## easier to work in np space
-    np_weights = np.array(weights)
-    np_values = np.array(list_of_values)
-
-    # get safe weights
-    weights_times_values_as_np = np_weights * np_values
-    empty_weights = np.isnan(weights_times_values_as_np)
-    np_weights[empty_weights] = 0.0
-    weights_without_nan = copy(np_weights)
-
-    sum_of_values = np.nansum(weights_without_nan)
-    renormalise_multiplier = sum_of_weights_should_be / sum_of_values
-    normalised_weights = weights_without_nan * renormalise_multiplier
-
-    weights_times_values_as_np = normalised_weights * np_values
-    weighted_value = np.nansum(weights_times_values_as_np)
-
-    return weighted_value
 
 
 def single_resampled_set_of_returns(data_dict, frequency: str):

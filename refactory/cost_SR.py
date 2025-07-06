@@ -1,7 +1,8 @@
 import pandas as pd
 
 from refactory.data_util import get_point_size, get_per_trade, get_per_block, get_percentage, get_spread_cost, \
-    get_daily_price
+    get_daily_price, get_rolls_per_year
+from refactory.turnover_forecast import calc_average_turnover
 from refactory.utils import calc_mixed_volatility
 
 
@@ -32,3 +33,18 @@ def get_cost_per_trade(instrument_code):
     cost_per_trade = cost / ann_std
 
     return cost_per_trade
+
+
+def calc_annual_trading_cost_per_contract(instrument_code, rule_name, pooled_instruments, forecast_length_weights):
+    # 单次交易成本
+    cost_per_trade = get_cost_per_trade(instrument_code)
+
+    weighted_avg_turnover = calc_average_turnover(pooled_instruments, forecast_length_weights, rule_name)
+    transaction_cost = weighted_avg_turnover * cost_per_trade
+
+    holding_turnovers = get_rolls_per_year(instrument_code) * 2.0
+    holding_cost = holding_turnovers * cost_per_trade
+
+    trading_cost = transaction_cost + holding_cost
+    print('calc_trading_cost')
+    return trading_cost
