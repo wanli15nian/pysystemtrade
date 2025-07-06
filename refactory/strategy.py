@@ -185,35 +185,29 @@ def calc_shrunk_means(annualised_return_mean, annualised_return_std, shrinkage_s
     shrunk_means = [(asset_name, mean_value) for (asset_name, mean_value) in zip(instruments, shrunk_means_values)]
     return shrunk_means
 
-shrunk_means = calc_shrunk_means(annualised_return_mean, annualised_return_std)
-
-norm_std = [annualised_return_std.mean()]*4
-
 target_sr = 0.5
+shrunk_means = calc_shrunk_means(annualised_return_mean, annualised_return_std)
+norm_std = [annualised_return_std.mean()]*4
 mean_list = [target_sr * asset_stdev for asset_stdev in norm_std]
-
-equalised_mean = {(asset_name, mean) for (asset_name, mean) in zip(instruments, mean_list)}
-equalised_std = {(asset_name, std) for (asset_name, std) in zip(instruments, norm_std)}
 weights = optimisation(len(instruments), corr=shrunk_corr.values, norm_mean=mean_list, norm_stdev=norm_std)
-weights_dict = {asset_name: weight for (asset_name, weight) in zip(instruments, weights)}
+weights_df = pd.DataFrame({asset_name: weight for (asset_name, weight) in zip(instruments, weights)}, index=[start])
 
-## 在这里跳过clean weights 步骤
-weight_index = [start]  ## 这里应该是list of starting dates
-weights = pd.DataFrame(weights_dict, index=weight_index)
 
 pdm_ffill = subsystem_positions.ffill()
 ## Set leading all nan to zero so weights not set to zero
 p_or_f_notnan = ~pdm_ffill.isna()
 pdm_ffill[p_or_f_notnan.sum(axis=1) == 0] = 0
 
-adj_weights = weights.groupby(level=0).last()
-adj_weights = adj_weights.reindex(pdm_ffill.index, method="ffill")
-instrument_weights = adj_weights[subsystem_positions.columns]
-instrument_weights[np.isnan(pdm_ffill)] = 0.0
-daily_unsmoothed_instr_weights = instrument_weights.resample('1B').mean()
 
-smooth_weighting = 125
-smoothed_instr_weights = daily_unsmoothed_instr_weights.ewm(span=smooth_weighting).mean()
+def calc_smoothed_instr_weights(weights_df, smooth_weighting=125):
+    instrument_weights = weights_df.reindex(pdm_ffill.index, method="ffill")
+    instrument_weights[np.isnan(pdm_ffill)] = 0.0
+    daily_unsmoothed_instr_weights = instrument_weights.resample('1B').mean()
+    smoothed_instr_weights = daily_unsmoothed_instr_weights.ewm(span=smooth_weighting).mean()
+    return smoothed_instr_weights
+
+smoothed_instr_weights = calc_smoothed_instr_weights(weights_df)
+
 
 sum_weights = smoothed_instr_weights.sum(axis=1)
 zero_rows = sum_weights == 0.0
