@@ -165,13 +165,6 @@ def calc_avg_corr(corr_matrix_df):
     return avg_corr
 avg_corr = calc_avg_corr(corr_matrix_df)
 
-def _od(i, j, offdiag, diag):
-    if i == j:
-        return diag
-    else:
-        return offdiag
-
-
 def calc_avg_corr_matrix(instruments, avg_corr):
     n = len(instruments)
     corr_matrix = np.full((n, n), avg_corr)  # Fill entire matrix with avg_corr
@@ -179,25 +172,28 @@ def calc_avg_corr_matrix(instruments, avg_corr):
     return pd.DataFrame(corr_matrix, index=instruments, columns=instruments)
 avg_corr_matrix = calc_avg_corr_matrix(instruments, avg_corr)
 
-shrinkage_corr = 0.5
-shrunk_corr_without_columns = (shrinkage_corr * avg_corr_matrix.values + (1 - shrinkage_corr) * corr_matrix_df.values)
-shrunk_corr = pd.DataFrame(shrunk_corr_without_columns, columns=instruments, index=instruments)
 
-shrinkage_sr = 0.9
-target_sr = 0.5
-sr_estimates = [asset_mean / asset_stdev for (asset_mean, asset_stdev) in zip(annualised_return_mean, annualised_return_std)]
-post_sr_list = [(shrinkage_sr * target_sr) + (1 - shrinkage_sr) * estimatedSR for estimatedSR in sr_estimates]
-shrunk_means_values = [asset_sr * asset_stdev for (asset_sr, asset_stdev) in zip(post_sr_list, annualised_return_std)]
-shrunk_means = [(asset_name, mean_value) for (asset_name, mean_value) in zip(instruments, shrunk_means_values)]
+def calc_shrunk_corr(avg_corr_matrix, shrinkage_corr=0.5):
+    shrunk_corr_without_columns = (shrinkage_corr * avg_corr_matrix.values + (1 - shrinkage_corr) * corr_matrix_df.values)
+    return pd.DataFrame(shrunk_corr_without_columns, columns=instruments, index=instruments)
+shrunk_corr = calc_shrunk_corr(avg_corr_matrix)
 
-## 这里相当于默认asset 的命名顺序不变，有风险
+def calc_shrunk_means(annualised_return_mean, annualised_return_std, shrinkage_sr=0.9, target_sr=0.5):
+    sr_estimates = (annualised_return_mean/annualised_return_std).to_list()
+    post_sr_list = [(shrinkage_sr * target_sr) + (1 - shrinkage_sr) * estimatedSR for estimatedSR in sr_estimates]
+    shrunk_means_values = (post_sr_list * annualised_return_std).to_list()
+    shrunk_means = [(asset_name, mean_value) for (asset_name, mean_value) in zip(instruments, shrunk_means_values)]
+    return shrunk_means
+
+shrunk_means = calc_shrunk_means(annualised_return_mean, annualised_return_std)
+
 
 avg_std = np.nanmean(annualised_return_std)
 norm_factor = [asset_stdev / avg_std for asset_stdev in annualised_return_std]
 with np.errstate(invalid='ignore'):
-    norm_means = [shrunk_means_values[i] / norm_factor[i] for (i, notUsed) in enumerate(shrunk_means)]
     norm_stdev = [annualised_return_std.iloc[i] / norm_factor[i] for (i, notUsed) in enumerate(annualised_return_std)]
 
+target_sr = 0.5
 mean_list = [target_sr * asset_stdev for asset_stdev in norm_stdev]
 
 equalised_mean = {(asset_name, mean) for (asset_name, mean) in zip(instruments, mean_list)}
