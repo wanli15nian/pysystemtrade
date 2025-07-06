@@ -1,4 +1,4 @@
-from refactory.cost_forecast import instrument_forecast_turnover
+from refactory.cost_forecast import annual_forecast_turnover, get_capped_forecast
 
 from refactory.data_util import get_daily_price, get_raw_carry_price, get_point_size, get_raw_cost_data, \
     get_rolls_per_year
@@ -19,7 +19,7 @@ def prepare_all_instr_data(all_instruments, trading_rule_list):
 
         turnover_dict = {}
         for rule_name in trading_rule_list:
-            turnover = instrument_forecast_turnover(instrument, rule_name)
+            turnover = annual_forecast_turnover(get_capped_forecast(instrument, rule_name))
             turnover_dict[rule_name] = turnover
         individual_instr_data['turnover_dict'] = turnover_dict
 

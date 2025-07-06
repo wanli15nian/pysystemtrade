@@ -3,51 +3,46 @@ import pandas as pd
 from copy import copy
 
 from refactory.data_util import get_point_size, get_per_trade, get_per_block, get_percentage, get_spread_cost, \
-    get_daily_price, get_rolls_per_year
+    get_daily_price
 from refactory.forecast import ewmac, rescale_forecast, floor_vol, price_vol
 from refactory.utils import calc_mixed_volatility
 
 
-def calc_annual_cost(forecast_dict, instruments, instrument, rule):
-    rolls_per_year = get_rolls_per_year(instrument)
-
-    cost_per_trade = get_cost_per_trade(instrument)
-
-    # 用历史数据的多少来决定每个instrument的权重
-    forecast_length = [len(v) for k, v in forecast_dict.items()]
-    total_length = float(sum(forecast_length))
-    weights = [l / total_length for l in forecast_length]
-    weighted_avg_turnover = calc_average_turnover(instruments, weights, rule)
-    transaction_cost = weighted_avg_turnover * cost_per_trade
-
+def calc_annual_cost(turnover, cost_per_trade, rolls_per_year):
+    transaction_cost = turnover * cost_per_trade
     holding_turnovers = rolls_per_year * 2.0
     holding_cost = holding_turnovers * cost_per_trade
-
     annual_cost = transaction_cost + holding_cost
     return annual_cost
 
 
-def calc_average_turnover(instruments, forecast_length_weights, rule_name):
-    # 获取交易所有instrument年交易频率
-    turnovers = [instrument_forecast_turnover(instrument_code, rule_name)
-                 for instrument_code in instruments]
-    weighted_avg_turnover = calculate_weighted_average_with_nans(forecast_length_weights, turnovers)
-    return weighted_avg_turnover
+def calculate_weighted_turnover(weights, list_of_values, sum_of_weights_should_be=1.0):
+    ## easier to work in np space
+    np_weights = np.array(weights)
+    np_values = np.array(list_of_values)
+
+    # get safe weights
+    weights_times_values_as_np = np_weights * np_values
+    empty_weights = np.isnan(weights_times_values_as_np)
+    np_weights[empty_weights] = 0.0
+    weights_without_nan = copy(np_weights)
+
+    sum_of_values = np.nansum(weights_without_nan)
+    renormalise_multiplier = sum_of_weights_should_be / sum_of_values
+    normalised_weights = weights_without_nan * renormalise_multiplier
+
+    weights_times_values_as_np = normalised_weights * np_values
+    weighted_value = np.nansum(weights_times_values_as_np)
+
+    return weighted_value
 
 
-def instrument_forecast_turnover(instrument_code, rule_name):
-    return annual_forecast_turnover(get_capped_forecast(instrument_code, rule_name))
-
-
-def annual_forecast_turnover(forecast_raw):
-    forecast = forecast_raw.resample("1B").last()
-    # TODO:改为直接除以forecast_scalling
-    forecast_scalling = 10.0
-    forecast_scalling_daily = pd.Series(np.full(forecast.shape[0], forecast_scalling), forecast.index)
-    forecast_normalised = forecast / forecast_scalling_daily.ffill()
-    turnover_daily = float(forecast_normalised.diff().abs().mean())
-    turnover_annual = turnover_daily * 256
-    return turnover_annual
+def calc_turnover_weights(forecast_all):
+    # 用历史数据的多少来决定每个instrument的权重
+    forecast_length = [len(v) for k, v in forecast_all.items()]
+    total_length = float(sum(forecast_length))
+    weights = [l / total_length for l in forecast_length]
+    return weights
 
 
 def get_cost_per_trade(instrument_code, notional_blocks_traded=1):
@@ -77,6 +72,17 @@ def get_cost_per_trade(instrument_code, notional_blocks_traded=1):
     return cost_per_trade
 
 
+def annual_forecast_turnover(forecast_raw):
+    forecast = forecast_raw.resample("1B").last()
+    # TODO:改为直接除以forecast_scalling
+    forecast_scalling = 10.0
+    forecast_scalling_daily = pd.Series(np.full(forecast.shape[0], forecast_scalling), forecast.index)
+    forecast_normalised = forecast / forecast_scalling_daily.ffill()
+    turnover_daily = float(forecast_normalised.diff().abs().mean())
+    turnover_annual = turnover_daily * 256
+    return turnover_annual
+
+
 def get_capped_forecast(instrument, rule_name):
     '''
     Forecast 不是对当天价格的预判
@@ -96,24 +102,3 @@ def get_capped_forecast(instrument, rule_name):
         return ewmac8
     else:
         raise 'Rule not defined '
-
-
-def calculate_weighted_average_with_nans(weights, list_of_values, sum_of_weights_should_be=1.0):
-    ## easier to work in np space
-    np_weights = np.array(weights)
-    np_values = np.array(list_of_values)
-
-    # get safe weights
-    weights_times_values_as_np = np_weights * np_values
-    empty_weights = np.isnan(weights_times_values_as_np)
-    np_weights[empty_weights] = 0.0
-    weights_without_nan = copy(np_weights)
-
-    sum_of_values = np.nansum(weights_without_nan)
-    renormalise_multiplier = sum_of_weights_should_be / sum_of_values
-    normalised_weights = weights_without_nan * renormalise_multiplier
-
-    weights_times_values_as_np = normalised_weights * np_values
-    weighted_value = np.nansum(weights_times_values_as_np)
-
-    return weighted_value

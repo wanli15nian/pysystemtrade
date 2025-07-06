@@ -1,8 +1,10 @@
 import numpy as np
 import pandas as pd
 
-from refactory.cost_forecast import calc_annual_cost, instrument_forecast_turnover
-from refactory.data_util import get_point_size, get_daily_price
+from refactory.cost_forecast import annual_forecast_turnover, \
+    get_capped_forecast, calc_turnover_weights, calculate_weighted_turnover, calc_annual_cost, \
+    get_cost_per_trade
+from refactory.data_util import get_point_size, get_daily_price, get_rolls_per_year
 from refactory.forecast import calc_forecasts
 from refactory.target_volatility import calc_target_position
 from refactory.utils import calc_mixed_volatility, get_stdev_estimator_for_instrument_weight, get_mean_estimator, \
@@ -18,19 +20,6 @@ def generate_fit_end_list(start_date, end_date):
     end_list = start_dates_per_period[1:-1]
     print('generate_fit_end_list')
     return end_list
-
-
-def calc_cost(pos_target, price, point_size, trading_cost):
-    # Actually output in price space to match gross returns
-    # These will be annualised figure, make it a small loss every day
-    # FIXME: 完全没有看明白这个calc_cost的计算逻辑
-    annualised_price_vol_points = calc_mixed_volatility(price.diff(), slow_vol_years=10)
-    sr_cost_as_annualised_figure = (-trading_cost * pos_target * annualised_price_vol_points * 16).bfill()
-    period_intervals_in_seconds = sr_cost_as_annualised_figure.index.to_series().diff().dt.total_seconds()
-    costs_in_points = sr_cost_as_annualised_figure * period_intervals_in_seconds / (365.25 * 24 * 60 * 60)
-    costs = costs_in_points * point_size  # 后续有个fx 的序列，但目前不加
-    print('calc_cost')
-    return costs
 
 
 def calc_forecast_weights(instruments, pnl_df, fit_end, span_multiple=50000,
@@ -156,16 +145,25 @@ def calc_gross_daily_pnl_dict_for_all_instr(all_instrument_data, all_instruments
         position = forecast.mul(pos_target, axis=0) / 10
         position = position.shift(1)
         gross_pnl = calc_gross_pnl(position, price, point_size)
-        gross_pnl = gross_pnl.replace(0, np.nan)
         gross_daily_pnl_dict[instrument] = gross_pnl
     print('calc_gross_returns_dict_for_all_instr')
     return gross_daily_pnl_dict
 
 
-def calc_subsystem_position(instruments, instrument, all_instrument_data, trading_rule_list):
-    price_dict = {i: get_daily_price(i) for i in instruments}
-    forecast_dict = {k: calc_forecasts(v) for k, v in price_dict.items()}
+def calc_cost(pos_target, price, point_size, trading_cost):
+    # Actually output in price space to match gross returns
+    # These will be annualised figure, make it a small loss every day
+    # FIXME: 完全没有看明白这个calc_cost的计算逻辑
+    annualised_price_vol_points = calc_mixed_volatility(price.diff(), slow_vol_years=10)
+    sr_cost_as_annualised_figure = (-trading_cost * pos_target * annualised_price_vol_points * 16).bfill()
+    period_intervals_in_seconds = sr_cost_as_annualised_figure.index.to_series().diff().dt.total_seconds()
+    costs_in_points = sr_cost_as_annualised_figure * period_intervals_in_seconds / (365.25 * 24 * 60 * 60)
+    costs = costs_in_points * point_size  # 后续有个fx 的序列，但目前不加
+    print('calc_cost')
+    return costs
 
+
+def calc_subsystem_position(instruments, instrument, all_instrument_data, trading_rule_list):
     price = get_daily_price(instrument)
     point_size = get_point_size(instrument)
 
@@ -175,36 +173,39 @@ def calc_subsystem_position(instruments, instrument, all_instrument_data, tradin
     position = forecast.mul(pos_target, axis=0) / 10
     position = position.shift(1)
     gross_pnl = calc_gross_pnl(position, price, point_size)
-    gross_pnl = gross_pnl.replace(0, np.nan)
 
     dict_of_instr_cost_sr_with_pooling = {}
     for rule in trading_rule_list:
 
-        annual_cost = calc_annual_cost(forecast_dict, instruments, instrument, rule)
+        # 单个rule，所有品种一起算turnover
+        price_dict = {i: get_daily_price(i) for i in instruments}
+        forecast_dict = {k: calc_forecasts(v) for k, v in price_dict.items()}
+        # TODO:传入rule的forecast的multiindex
+        weights = calc_turnover_weights(forecast_dict)
+        turnovers = [annual_forecast_turnover(get_capped_forecast(instrument_code, rule))
+                     for instrument_code in instruments]
+        turnover1 = calculate_weighted_turnover(weights, turnovers)
 
-        gross_daily_pnl_series = gross_pnl[rule]
+        # 单个rule，单个品种，算cost
+        rolls_per_year = get_rolls_per_year(instrument)
+        cost_per_trade = get_cost_per_trade(instrument)
+        annual_cost = calc_annual_cost(turnover1, cost_per_trade, rolls_per_year)
 
-        forecast_rule = forecast[rule]
-        pos_target = pos_target.reindex(forecast_rule.index, method="ffill")
+        pos_target = pos_target.reindex(forecast.index, method="ffill")
         ##PROBLEM: cost curve calc remains to be checked
         cost_curve = calc_cost(pos_target=pos_target, price=price,
                                point_size=point_size, trading_cost=annual_cost)
-        '''
-        cost_SR_annual 算出交易成本与gross returns 波动的比例
-        越高，说明成本越难以接受
-        当annual_cost_SR等于1的时候，就算gross returns 总是赚的，也会被交易成本给消耗掉
-        '''
-
+        # cost_SR_annual算出交易成本与gross returns 波动的比例,越高说明成本越难以接受
         cost_curve.iloc[:11] = np.nan  # QUESTION: 为什么前11个数都是Nan
         if instrument == 'US10':
             cost_curve.iloc[:13] = np.nan  # QUESTION: 为什么到了US10是前13个数字
         cost_curve_mean = cost_curve.mean()
 
-        gross_daily_pnl_series = gross_daily_pnl_series.replace(0, np.nan)
+        gross_daily_pnl_series = gross_pnl[rule]
         gross_daily_pnl_std = gross_daily_pnl_series.std()
         cost_SR_annual = 16 * cost_curve_mean / gross_daily_pnl_std
 
-        turnover = instrument_forecast_turnover(instrument, rule)
+        turnover = annual_forecast_turnover(get_capped_forecast(instrument, rule))
         instr_cost_per_turnover = cost_SR_annual / turnover
 
         average_turnover = average_turnover_across_instruments(all_instrument_data, instruments, rule)
@@ -323,6 +324,7 @@ def calc_gross_pnl(position, price, point_size):
     # 计算过程中，我们本质上是把每个rule当成了单独的portfolio来算的，所以才有了用position_target直接乘上去
     # 得出的daily_pnl_gross不能是直接相加吧，如果是的话就不合理了
     # 举例，两个forecast 给出了很弱的信号，所以实际持仓都是目标持仓的60%, 如果直接相加的，反而会导致最终持仓到了目标持仓的120%
+    daily_pnl = daily_pnl.replace(0, np.nan)
     return daily_pnl
 
 
