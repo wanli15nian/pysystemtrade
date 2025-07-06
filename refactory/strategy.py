@@ -4,12 +4,12 @@ from copy import copy
 
 from refactory.apply_buffer_to_position import calc_buffered_pos_given_raw_pos
 from refactory.cost import calc_costs
-from refactory.cost_forecast import calc_turnover_weights1, annual_forecast_turnover, get_capped_forecast, \
-    calculate_weighted_turnover, calc_turnover_weights
+from refactory.cost_forecast import annual_forecast_turnover, calculate_weighted_turnover, calc_turnover_weights
+from refactory.cost_sr import calc_cost_SR
 from refactory.data_source import get_instrument_info
 from refactory.data_util import get_daily_price, get_raw_cost_data
 from refactory.forecast import calc_forecasts
-from refactory.functions import calc_cost_SR_by_rule, calc_net_pnl_instrument, \
+from refactory.functions import calc_net_pnl_instrument, \
     combine_forecast
 from refactory.gross_pnl import calc_gross, calc_gross_pnl
 from refactory.prepare_all_instr_data import prepare_all_instr_data
@@ -18,7 +18,7 @@ from refactory.turnover import turnover_x_y, calc_average_position
 from refactory.utils import optimisation, single_resampled_set_of_returns, calc_volatility_scalar
 
 instruments = ["CORN", "SOFR", "SP500_micro", 'US10']
-trading_rule_list = ['ewmac32', 'ewmac8']
+rules = ['ewmac32', 'ewmac8']
 
 info_ = get_instrument_info().loc[instruments]
 
@@ -36,12 +36,12 @@ gross_ = pd.concat((calc_gross(forecast_.loc[i], target_.loc[i], price_.loc[i], 
 
 turnover_ = forecast_.groupby(level='instrument').apply(
     lambda x: x.reset_index(level='instrument', drop=True).apply(annual_forecast_turnover))
-average_turnover = turnover_.apply(np.nanmean)
+average_turnover_ = turnover_.apply(np.nanmean)
 
 turnover_weight = calc_turnover_weights(forecast_)
 weighted_turnover_ = turnover_.apply(lambda x: calculate_weighted_turnover(turnover_weight, x))
 
-all_instrument_data = prepare_all_instr_data(instruments, trading_rule_list)
+all_instrument_data = prepare_all_instr_data(instruments, rules)
 
 net_dict = {}
 gross_dict = {}
@@ -66,31 +66,8 @@ for instrument in instruments:
 
     price_dict = {i1: get_daily_price(i1) for i1 in instruments}
     forecast_dict = {k: calc_forecasts(v) for k, v in price_dict.items()}
-    cost_SR_dict = {}
 
-    for rule in trading_rule_list:
-        # 单个rule，所有品种一起算average_turnover
-        turnovers1 = {i1: all_instrument_data[i1]['turnover_dict'] for i1 in all_instrument_data}
-        all_turnovers = [turnovers1[i1][rule] for i1 in instruments]
-        average_turnover = np.nanmean(all_turnovers)
-
-        # 单个rule，所有品种一起算turnover
-        # 传入rule的forecast的multiindex
-        # price_dict = {i: get_daily_price(i) for i in instruments}
-        # forecast_dict = {k: calc_forecasts(v) for k, v in price_dict.items()}
-        weights1 = calc_turnover_weights1(forecast_dict)
-        turnovers = [annual_forecast_turnover(get_capped_forecast(instrument_code, rule))
-                     for instrument_code in instruments]
-        weighted_turnover = calculate_weighted_turnover(weights1, turnovers)
-
-        # 单个rule，单个品种，算cost
-        gross_pnl_rule = pnl[rule]
-        forecast_rule = forecast[rule]
-
-        pooled_cost = calc_cost_SR_by_rule(price, average_turnover, weighted_turnover, forecast_rule, gross_pnl_rule,
-                                           pos_target, info)
-
-        cost_SR_dict[rule] = pooled_cost
+    cost_SR_dict = calc_cost_SR(rules, average_turnover_, weighted_turnover_, pnl, forecast, price, pos_target, info)
 
     net_pnl_all = {}
     for ins in instruments:

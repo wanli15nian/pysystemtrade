@@ -91,11 +91,3 @@ def get_capped_forecast(instrument, rule_name):
         return ewmac8
     else:
         raise 'Rule not defined '
-
-
-def calc_turnover_weights1(forecast_all):
-    # 用历史数据的多少来决定每个instrument的权重
-    forecast_length = [len(v) for k, v in forecast_all.items()]
-    total_length = float(sum(forecast_length))
-    weights = [l / total_length for l in forecast_length]
-    return weights
