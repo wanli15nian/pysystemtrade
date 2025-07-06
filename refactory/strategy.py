@@ -90,7 +90,7 @@ for instrument in instruments:
     daily_price = get_daily_price(instrument)
     average_position_for_turnover = calc_average_position(daily_price, point_size)
     subsystem_turnover = turnover_x_y(subsystem_position_raw, average_position_for_turnover)
-    turnover_dict[instrument] = subsystem_turnover
+    turnover_dict[instrument] = subsystem_turnover #TODO: Check the meaning of turnover
     print('calc_subsystem_turnover')
 
 gross_pnl_df = pd.DataFrame(gross_dict)
@@ -110,44 +110,44 @@ subsystem_positions.columns = instruments
 # costs = process_list_of_data(data=cost_df)
 
 
-'''
-df_of_gross_pandl.replace(0.0, np.nan) 后就是需要的gross curve
-df_of_costs resample方式不同的"relevant curve", sum 都是一样的
-'''
-
 # SR 的Index 问题还是没有处理好，源代码为resample("B"), 现为很奇怪的resample
-SR_dict = {}
-for instrument in instruments:
-    cost_curve = cost_df[instrument]
-    gross_pandl = gross_pnl_df[instrument]
-    daily_returns = cost_curve.mean()
-    daily_std = gross_pandl.std()
-    annual_SR = 16 * daily_returns / daily_std
-    SR_dict[instrument] = annual_SR
+def calc_sr_dict(instruments, cost_df, gross_pnl_df):
+    SR_dict = {}
+    for instrument in instruments:
+        daily_returns = cost_df[instrument].mean()
+        daily_gross_return_std = gross_pnl_df[instrument].std()
+        annual_SR = 16 * daily_returns / daily_gross_return_std
+        SR_dict[instrument] = annual_SR
+    return SR_dict
+sr_dict = calc_sr_dict(instruments, cost_df, gross_pnl_df)
 
-net_return_as_dict = {}
-for instrument in instruments:
-    daily_gross_returns_for_asset = gross_pnl_df[instrument]
-    daily_gross_return_std = daily_gross_returns_for_asset.std()
-    daily_asset_sr_cost = SR_dict[instrument] / 16
-    daily_returns_cost = daily_gross_return_std * daily_asset_sr_cost
-    daily_returns_cost_as_list = [daily_returns_cost] * len(daily_gross_returns_for_asset.index)
-    daily_returns_cost_as_ts = pd.Series(daily_returns_cost_as_list, daily_gross_returns_for_asset.index)
-    net_returns = daily_gross_returns_for_asset + daily_returns_cost_as_ts
-    net_return_as_dict[instrument] = net_returns
+def calc_net_returns_dict(instruments, gross_pnl_df, SR_dict):
+    net_return_as_dict = {}
+    for instrument in instruments:
+        daily_gross_returns_for_instr = gross_pnl_df[instrument]
+        daily_gross_return_std = daily_gross_returns_for_instr.std()
+        daily_asset_sr_cost = SR_dict[instrument] / 16
+        daily_returns_cost = daily_gross_return_std * daily_asset_sr_cost
+        daily_returns_cost_as_list = [daily_returns_cost] * len(daily_gross_returns_for_instr.index)
+        daily_returns_cost_as_ts = pd.Series(daily_returns_cost_as_list, daily_gross_returns_for_instr.index)
+        net_returns = daily_gross_returns_for_instr + daily_returns_cost_as_ts
+        net_return_as_dict[instrument] = net_returns
 
-net_return_as_df = pd.DataFrame(net_return_as_dict)
-net_return_dict = {'asset': net_return_as_df}
-net_return = single_resampled_set_of_returns(net_return_dict, 'W')
+    return net_return_as_dict
 
-start = net_return.index[0]
-end = net_return.index[-1]
+net_returns_dict = calc_net_returns_dict(instruments, gross_pnl_df, sr_dict)
+
+net_return_df_unresampled = pd.DataFrame(net_returns_dict)
+net_return_dict = {'asset': net_return_df_unresampled}
+net_return_df = single_resampled_set_of_returns(net_return_dict, 'W')
+
+start = net_return_df.index[0]
+end = net_return_df.index[-1]
 
 # sample method is INSAMPLE
 fit_dates = f'Fit from {start} to {end}, use from {start} to {end}'
-# print(calculate_instrument_weights(net_return))
 
-corr = net_return.ewm(span=500000, min_periods=10, ignore_na=True).corr(pairwise=True)
+corr = net_return_df.ewm(span=500000, min_periods=10, ignore_na=True).corr(pairwise=True)
 
 size_of_matrix = len(corr.columns)
 corr_matrix_values = (
@@ -156,17 +156,17 @@ corr_matrix_values = (
     .values)
 corr_matrix_values[corr_matrix_values < 0.0] = 0.0
 
-exponential_mean = net_return.ewm(span=50000, min_periods=5).mean()
-matching_index_size = net_return.index[net_return.index < end].size
+exponential_mean = net_return_df.ewm(span=50000, min_periods=5).mean()
+matching_index_size = net_return_df.index[net_return_df.index < end].size
 last_index = matching_index_size - 1
 mean = exponential_mean.iloc[last_index]
 mean = mean * 365.25 / 7.0  # Number of weeks in a year
 
-exponential_std = net_return.ewm(span=50000, min_periods=5).std()
+exponential_std = net_return_df.ewm(span=50000, min_periods=5).std()
 std = exponential_std.iloc[last_index]
 std = std * (365.25 / 7.0) ** 0.5
 
-data_length = len(net_return.index)
+data_length = len(net_return_df.index)
 frequency = 'W'
 
 # Shrinkage
