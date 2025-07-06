@@ -187,19 +187,16 @@ def calc_shrunk_means(annualised_return_mean, annualised_return_std, shrinkage_s
 
 shrunk_means = calc_shrunk_means(annualised_return_mean, annualised_return_std)
 
-
-avg_std = np.nanmean(annualised_return_std)
-norm_factor = [asset_stdev / avg_std for asset_stdev in annualised_return_std]
-with np.errstate(invalid='ignore'):
-    norm_stdev = [annualised_return_std.iloc[i] / norm_factor[i] for (i, notUsed) in enumerate(annualised_return_std)]
+norm_std = [annualised_return_std.mean()]*4
 
 target_sr = 0.5
-mean_list = [target_sr * asset_stdev for asset_stdev in norm_stdev]
+mean_list = [target_sr * asset_stdev for asset_stdev in norm_std]
 
 equalised_mean = {(asset_name, mean) for (asset_name, mean) in zip(instruments, mean_list)}
-equalised_std = {(asset_name, std) for (asset_name, std) in zip(instruments, norm_stdev)}
-weights = optimisation(len(instruments), corr=shrunk_corr.values, norm_mean=mean_list, norm_stdev=norm_stdev)
+equalised_std = {(asset_name, std) for (asset_name, std) in zip(instruments, norm_std)}
+weights = optimisation(len(instruments), corr=shrunk_corr.values, norm_mean=mean_list, norm_stdev=norm_std)
 weights_dict = {asset_name: weight for (asset_name, weight) in zip(instruments, weights)}
+
 ## 在这里跳过clean weights 步骤
 weight_index = [start]  ## 这里应该是list of starting dates
 weights = pd.DataFrame(weights_dict, index=weight_index)
