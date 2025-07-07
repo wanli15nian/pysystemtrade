@@ -129,10 +129,10 @@ def calc_avg_corr_matrix(instruments, avg_corr):
 net_return_raw = pd.DataFrame({inst: gross_pnl_df[inst] + cost_df[inst].mean() for inst in instruments})
 net_return_df = single_resampled_set_of_returns({'asset': net_return_raw}, 'W')
 
-# start = net_return_df.index[0]
+start = net_return_df.index[0]
 end = net_return_df.index[-1]
-matching_index_size = net_return_df.index[net_return_df.index < end].size
-last_index = matching_index_size - 1
+last_index = net_return_df.index[net_return_df.index < end].size - 1
+
 data_length = len(net_return_df.index)
 frequency = 'W'
 
