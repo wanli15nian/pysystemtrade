@@ -4,26 +4,24 @@ import pandas as pd
 from refactory.utils import get_stdev_estim_for_instr_weight, get_mean_estimator, \
     get_corr_estim_for_instr_weight, optimisation, single_resampled_set_of_returns
 
-
+'''
+从结束日期开始倒推，然后reverse()
+'''
 def generate_fit_end_list(start_date, end_date):
-    '''
-    从结束日期开始倒推，然后reverse()
-    '''
     start_dates_per_period = pd.date_range(end_date, start_date, freq='-365D').to_list()
     start_dates_per_period.reverse()
     end_list = start_dates_per_period[1:-1]
     return end_list
 
 
-def calc_forecast_weights(instr_num, pnl_df, fit_end, span_multiple=50000,
+def calc_forecast_weights(instr_num, rule_num, pnl_df, fit_end, span_multiple=50000,
                           min_periods_corr_multiple=10, min_periods_multiple=5):
-    number_of_rules = len(pnl_df.columns)
     span = instr_num * span_multiple
 
     corr = get_corr_estim_for_instr_weight(pnl_df, min_periods_corr_multiple, instr_num, fit_end, span)
     norm_stdev, norm_mean = get_stdev_estim_for_instr_weight(pnl_df, min_periods_multiple, instr_num, fit_end, span)
 
-    weight = optimisation(number_of_rules, corr, norm_mean, norm_stdev)
+    weight = optimisation(rule_num, corr, norm_mean, norm_stdev)
     return weight
 
 
@@ -45,22 +43,22 @@ def reindex_and_stack_list_of_df(list_of_df):
     return stacked_data
 
 
-def calculate_instrument_weights(pnl_df):
-    daily_pnl = pnl_df.resample("1B").sum()
-    daily_pnl[daily_pnl == 0.0] = np.nan
-
-    number = len(daily_pnl.columns)
-    weekly_ret = daily_pnl.resample('W').sum()  # SP500_micro 的一些数值不对，其他的都能对的上。怀疑是不是一些nan被填充了
-    fit_end = weekly_ret.index[-1]
-    span = 500000
-    min_periods = 10
-
-    norm_stdev, _, = get_stdev_estim_for_instr_weight(weekly_ret, fit_end, span, min_periods)
-    norm_mean = [0.5 * asset_stdev for asset_stdev in norm_stdev]
-    corr = get_corr_estim_for_instr_weight(weekly_ret, fit_end, span, min_periods)
-
-    weight = optimisation(number, corr, norm_mean, norm_stdev)
-    return weight
+# def calculate_instrument_weights(pnl_df):
+#     daily_pnl = pnl_df.resample("1B").sum()
+#     daily_pnl[daily_pnl == 0.0] = np.nan
+#
+#     number = len(daily_pnl.columns)
+#     weekly_ret = daily_pnl.resample('W').sum()  # SP500_micro 的一些数值不对，其他的都能对的上。怀疑是不是一些nan被填充了
+#     fit_end = weekly_ret.index[-1]
+#     span = 500000
+#     min_periods = 10
+#
+#     norm_stdev, _, = get_stdev_estim_for_instr_weight(weekly_ret, fit_end, span, min_periods)
+#     norm_mean = [0.5 * asset_stdev for asset_stdev in norm_stdev]
+#     corr = get_corr_estim_for_instr_weight(weekly_ret, fit_end, span, min_periods)
+#
+#     weight = optimisation(number, corr, norm_mean, norm_stdev)
+#     return weight
 
 
 def calc_div_mult_single_period(corr, weights, dm_max=2.5):
@@ -125,22 +123,22 @@ def combine_forecast(forecast, forecast_, net_, price):
     grouped = forecast_.groupby(level='instrument')
     forecast_df_list = [group.reset_index(level='instrument', drop=True) for instrument, group in grouped]
 
+    universal_index = price.index
     instruments_num = len(net_pnl_all)
+    column_num = len(forecast.columns)
     net_pnl_stacked = single_resampled_set_of_returns(net_pnl_all, frequency='W')
+
     start_date = net_pnl_stacked.index[0]
     end_date = net_pnl_stacked.index[-1]
     end_list = generate_fit_end_list(start_date, end_date)
-    weight_df = pd.DataFrame(
-        [calc_forecast_weights(instruments_num, net_pnl_stacked, end) for end in end_list],
+    weight_df_raw = pd.DataFrame([calc_forecast_weights(instruments_num, column_num, net_pnl_stacked, end) for end in end_list],
         index=end_list, columns=net_pnl_stacked.columns)
 
     # To add the initial weight
-    universal_index = price.index
-    column_num = len(weight_df.columns)
-    initial_weight = pd.DataFrame({col: 1 / column_num for col in weight_df.columns}, index=[start_date])
-    weight_df = pd.concat([initial_weight, weight_df], axis=0)
+    initial_weight = pd.DataFrame({col: 1 / column_num for col in weight_df_raw.columns}, index=[start_date])
+    weight_df_ = pd.concat([initial_weight, weight_df_raw], axis=0)
     # 把按年的Index ffill成按天的Index
-    weight_df = weight_df.reindex(universal_index, method='ffill').fillna(1 / column_num)
+    weight_df = weight_df_.reindex(universal_index, method='ffill').fillna(1 / column_num)
     daily_forecast_weights_unsmoothed = weight_df.resample('1B').mean()
     forecast_weights = daily_forecast_weights_unsmoothed.ewm(span=125).mean()
 
