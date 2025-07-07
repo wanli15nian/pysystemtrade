@@ -8,9 +8,8 @@ def calc_mixed_volatility(data, days=35, min_periods=10, slow_vol_years=20,
                           vol_multiplier=1.0):
     # 长期和短期波动进行权重处理
     short_vol = data.ewm(adjust=True, span=days, min_periods=min_periods).std()
-    long_vol = short_vol.ewm(adjust=True, span=slow_vol_years*256).mean()
+    long_vol = short_vol.ewm(adjust=True, span=slow_vol_years * 256).mean()
     vol = perc_of_long_vol * long_vol + (1 - perc_of_long_vol) * short_vol
-
     vol[vol < vol_min] = vol_min
     vol = vol * vol_multiplier
     return vol
