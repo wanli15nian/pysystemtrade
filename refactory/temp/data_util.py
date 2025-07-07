@@ -35,7 +35,6 @@
 
 
 # def get_block_value(instrument_code):
-#     # FIXME:错的，应该取价格
 #     price = get_raw_carry_price(instrument_code)
 #     point_size = get_point_size(instrument_code)
 #     block_value = price.ffill() * 0.01 * point_size

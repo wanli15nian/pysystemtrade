@@ -15,7 +15,7 @@ from refactory.target_volatility import calc_target_position
 from refactory.utils import calc_volatility_scalar
 
 instruments = ["CORN", "SOFR", "SP500_micro", 'US10']
-# FIXME 不应该用rules列表
+# TODO 不应该用rules列表
 rules = ['ewmac32', 'ewmac8']
 
 

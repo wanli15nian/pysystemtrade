@@ -70,7 +70,6 @@ def calc_div_mult_single_period(corr, weights, dm_max=2.5):
     计算Portfolio variance in correlation space
     且设Limit
     '''
-    # TODO: 查背后原理
     corrmatrix = np.array([[corr[1], corr[0]], [corr[0], corr[1]]])
     try:
         variance = weights.dot(corrmatrix).dot(weights)
@@ -181,7 +180,7 @@ def combine_forecast(forecast, forecast_, net_, price):
     div_mult_unsmoothed_daily = div_mult.reindex(forecast_weights_for_rules.index, method="ffill")
     div_mult_unsmoothed_daily[div_mult_unsmoothed_daily.isna()] = 1.0
     div_mult = div_mult_unsmoothed_daily.ewm(span=125).mean()
-    # FIXME: combined forecast_rule 有问题
+    # TODO: combined forecast_rule 有问题
     combined_forecast_without_cap = (forecast_weights_for_rules * forecast).sum(axis=1) * div_mult.ffill()
     combined_forecast = combined_forecast_without_cap.clip(20, -20)  # QUESTION: 小数点后8位开始对不上，暂时不管
     return combined_forecast
@@ -189,7 +188,7 @@ def combine_forecast(forecast, forecast_, net_, price):
 
 def calc_net_pnl(gross_pnl, cost_SR_dict):
     net_returns_single_instrument = {}
-    # FIXME: dict_of_instr_cost_with_pooling is specific to the target instrument, how can it be applied widely
+    # TODO: dict_of_instr_cost_with_pooling is specific to the target instrument, how can it be applied widely
     for column_name in gross_pnl.columns:
         cost_SR = cost_SR_dict[column_name]
         gross_pnl_rule = gross_pnl[column_name]

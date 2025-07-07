@@ -26,7 +26,6 @@
 # def final_forecast(name, raw_forecast, price, upper_cap=20):
 #     raw_forecast[raw_forecast == 0] = np.nan
 #
-#     # TODO:为什么有的用价格波动率，有的用收益率波动率？
 #     vol = get_volatily(price)
 #     adjust_forecast = raw_forecast / vol
 #
@@ -51,7 +50,6 @@
 #     return scaling_factor
 #
 #
-# # FIXME 为何做了两次risk target？
 # def get_position_target(price, point_size, capital=1000000, risk_target=0.16):
 #     ret_volatility = calculate_mixed_volatility(price.diff(), slow_vol_years=10)
 #     daily_risk_target = risk_target / (256 ** 0.5)
@@ -142,7 +140,6 @@
 # def calculate_volatility_scalar(instrument_code, capital=1000000, annual_percentage_volatility_target=0.16):
 #     block_value = get_block_value(instrument_code)
 #     block_value.ffill(inplace=True)
-#     # FIXME: 取错数据了
 #     price = get_raw_carry_data(instrument_code)
 #     price.ffill(inplace=True)
 #     price0 = get_daily_price(instrument_code)
@@ -252,7 +249,6 @@
 #     forecast_weights_full = get_forecast_weights(instruments)
 #     forecast_weights = forecast_weights_full.reindex(forecast_df.index, method='ffill').fillna(
 #         1 / len(forecast_weights_full.columns))
-#     # TODO: 平滑为什么不放在全量weight里面做？
 #     forecast_weights = forecast_weights.ewm(span=125).mean()
 #
 #     fdm = calculate_forecast_diversify_multiplier(forecast_df, forecast_weights)

@@ -24,7 +24,7 @@ def floor_vol(vol, floor_min_quant=0.05, floor_min_periods=100, floor_days=500):
 
 def rescale_forecast(forecast, target_scaling=10, upper_cap=20, window=250000, min_period=500):
     average = forecast.abs().rolling(window=window, min_periods=min_period).mean()
-    scalar = (target_scaling / average).bfill()  # FIXME:向过去填充是否有使用未来数据的问题，应该是向前填充？
+    scalar = (target_scaling / average).bfill()  # TODO:向过去填充是否有使用未来数据的问题，应该是向前填充？
     rescaled = scalar * forecast
     capped = rescaled.clip(lower=(-upper_cap), upper=upper_cap)
     return capped
