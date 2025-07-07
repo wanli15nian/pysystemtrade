@@ -132,33 +132,23 @@ def calc_volatility_scalar(price, point_size, capital, annual_perc_vol_target):
         return self.get_daily_prices(instrument_code)
     '''
     carry_price = price
-    # Calculate block value by multiplying carry price by 0.01 and point size
     block_value = carry_price.ffill() * 0.01 * point_size
     block_value.ffill(inplace=True)
     # FIXME: When to use carry_price and when to use price, the logic of computation here is unknown
-    # Resample carry price to 1 business day
     resampled_carry_price = carry_price.resample('1B').last()
-    # Calculate annualised price volatility in points
     annualised_price_vol_points = calc_mixed_volatility(price.diff(), slow_vol_years=10)
     annualised_price_vol_points.ffill(inplace=True)
     # Align resampled carry price and annualised price volatility in points
     (resampled_carry_price, annualised_price_vol_points) = resampled_carry_price.align(annualised_price_vol_points,
                                                                                        join='right')
-    # Calculate percentage volatility
     percentage_vol = 100.0 * (annualised_price_vol_points / resampled_carry_price.ffill().abs())
-    # Align block value and percentage volatility
     (block_value, percentage_vol) = block_value.align(percentage_vol, join="inner")
-    # Calculate currency volatility
     currency_vol = block_value * percentage_vol
     # It is to multiply by fx_rate, which is taken to be 1 here
     value_vol = currency_vol.ffill() * 1
-    # Calculate percentage volatility target
     perc_vol_target = annual_perc_vol_target / 16
-    # Calculate cash volatility target
     cash_vol_target = capital * perc_vol_target
-    # Calculate volatility scalar
     vol_scalar = cash_vol_target / value_vol
-    # Reindex volatility scalar to price index
     vol_scalar = vol_scalar.reindex(price.index, method="ffill")
     return vol_scalar
 

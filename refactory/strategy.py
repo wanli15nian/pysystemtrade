@@ -19,6 +19,7 @@ instruments = ["CORN", "SOFR", "SP500_micro", 'US10']
 rules = ['ewmac32', 'ewmac8']
 
 info_ = get_instrument_info().loc[instruments]
+size_ = info_['point_size']
 
 price_ = pd.concat((get_daily_price(i)
                     for i in instruments), keys=instruments, names=['instrument', 'datetime'])
@@ -52,9 +53,7 @@ turnover_dict = {}
 subsystem_positions = []
 
 for instrument in instruments:
-    info = info_.loc[instrument]
-    rolls_per_year = int(info['rolls_per_year'])  # TODO: 用【】取会自动转为浮点型，临时方案是强制给转成整型
-    point_size = info['point_size']
+    point_size = size_[instrument]
     # spread_cost = info['spread_cost']
     # per_trade = info['per_trade']
     # per_block = info['per_block']
@@ -67,18 +66,16 @@ for instrument in instruments:
     net_pnl_all = {ins: group.reset_index(level='instrument', drop=True) for ins, group in grouped}
 
     combined_forecast = combine_forecast(forecast, forecast_, net_pnl_all, price)
-
     vol_scalar = calc_volatility_scalar(price, point_size, 500000, 0.25)
-    vol_scalar = vol_scalar.reindex(price.index, method="ffill")
     subsystem_position_raw = vol_scalar * combined_forecast / 10.0
-    print('calc_subsystem_position')
 
     subsystem_positions.append(subsystem_position_raw)
     position_buffered = calc_buffered_pos_given_raw_pos(subsystem_position_raw, vol_scalar, 0.10)
     position = position_buffered.shift(1)
-
     gross_pnl = calc_gross_pnl(position, price, point_size)
 
+    info = info_.loc[instrument]
+    rolls_per_year = int(info['rolls_per_year'])  # TODO: 用【】取会自动转为浮点型，临时方案是强制给转成整型
     raw_costs = get_raw_cost_data(instrument)
     normalised_costs = calc_costs(position, price, rolls_per_year, raw_costs, point_size)
     net_pnl = gross_pnl.add(normalised_costs, fill_value=0).resample('B').sum()
@@ -96,10 +93,12 @@ cost_df = pd.DataFrame(costs_dict)
 subsystem_positions = pd.concat(subsystem_positions, axis=1).ffill()
 subsystem_positions.columns = instruments
 
+gross_pnl_sum = gross_pnl_df.sum(axis=1)
+cost_sum = cost_df.sum(axis=1)
+net_PNL = gross_pnl_sum.add(cost_sum, fill_value=0).resample('B').sum()
+print(net_PNL)
 
-# gross_pnl_sum = gross_pnl_df.sum(axis=1)
-# cost_sum = cost_df.sum(axis=1)
-# net_PNL = gross_pnl_sum.add(cost_sum, fill_value=0).resample('B').sum()
+
 # def process_list_of_data(data):  # Rename the columns
 #     resampled_data = data.resample('1B').sum()
 #     resampled_data[resampled_data == 0.0] = np.nan
@@ -119,17 +118,14 @@ def calc_net_returns_dict(instruments, cost_df, gross_pnl_df):
     return net_return_dict
 
 
-net_returns_dict = calc_net_returns_dict(instruments, cost_df, gross_pnl_df)
-
-
 def resample_net_returns(net_returns_dict):
     net_return_df_unresampled = pd.DataFrame(net_returns_dict)
     net_return_df = single_resampled_set_of_returns({'asset': net_return_df_unresampled}, 'W')
     return net_return_df
 
 
+net_returns_dict = calc_net_returns_dict(instruments, cost_df, gross_pnl_df)
 net_return_df = resample_net_returns(net_returns_dict)
-
 # sample method is INSAMPLE
 start = net_return_df.index[0]
 end = net_return_df.index[-1]
@@ -214,15 +210,13 @@ mean_list = [target_sr * asset_stdev for asset_stdev in norm_std]
 weights = optimisation(len(instruments), corr=shrunk_corr.values, norm_mean=mean_list, norm_stdev=norm_std)
 weights_df = pd.DataFrame({asset_name: weight for (asset_name, weight) in zip(instruments, weights)}, index=[start])
 
-pdm_ffill = subsystem_positions.ffill()
 ## Set leading all nan to zero so weights not set to zero
-p_or_f_notnan = ~pdm_ffill.isna()
-pdm_ffill[p_or_f_notnan.sum(axis=1) == 0] = 0
+subsystem_positions[(~subsystem_positions.isna()).sum(axis=1) == 0] = 0
 
 
 def calc_smoothed_instr_weights(weights_df, smooth_weighting=125):
-    instrument_weights = weights_df.reindex(pdm_ffill.index, method="ffill")
-    instrument_weights[np.isnan(pdm_ffill)] = 0.0
+    instrument_weights = weights_df.reindex(subsystem_positions.index, method="ffill")
+    instrument_weights[np.isnan(subsystem_positions)] = 0.0
     daily_unsmoothed_instr_weights = instrument_weights.resample('1B').mean()
     smoothed_instr_weights = daily_unsmoothed_instr_weights.ewm(span=smooth_weighting).mean()
     return smoothed_instr_weights
@@ -230,15 +224,22 @@ def calc_smoothed_instr_weights(weights_df, smooth_weighting=125):
 
 smoothed_instr_weights = calc_smoothed_instr_weights(weights_df)
 
-sum_weights = smoothed_instr_weights.sum(axis=1)
-zero_rows = sum_weights == 0.0
-sum_weights[zero_rows] = 0.0001  ## avoid Inf
-weight_multiplier = 1.0 / sum_weights
-weight_multiplier_array = np.array([weight_multiplier] * len(smoothed_instr_weights.columns))
-weight_values = smoothed_instr_weights.values
 
-normalised_weights_np = weight_multiplier_array.transpose() * weight_values
-normalised_weights = pd.DataFrame(normalised_weights_np, columns=smoothed_instr_weights.columns,
-                                  index=smoothed_instr_weights.index)
+def normalise_weights():
+    sum_weights = smoothed_instr_weights.sum(axis=1)
+    zero_rows = sum_weights == 0.0
+    sum_weights[zero_rows] = 0.0001  ## avoid Inf
+    weight_multiplier = 1.0 / sum_weights
+    weight_multiplier_array = np.array([weight_multiplier] * len(smoothed_instr_weights.columns))
+    normalised_weights_np = weight_multiplier_array.transpose() * smoothed_instr_weights.values
+    normalised_weights = pd.DataFrame(normalised_weights_np, columns=smoothed_instr_weights.columns,
+                                      index=smoothed_instr_weights.index)
+
+    return normalised_weights
+
+
+normalised_weights = normalise_weights()
+
+print(normalised_weights)
 
 print('END')
