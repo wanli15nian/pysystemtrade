@@ -1,8 +1,8 @@
 import numpy as np
 import pandas as pd
 
-from refactory.utils import get_stdev_estimator_for_instrument_weight, get_mean_estimator, \
-    get_corr_estimator_for_instrument_weight, optimisation, single_resampled_set_of_returns
+from refactory.utils import get_stdev_estim_for_instr_weight, get_mean_estimator, \
+    get_corr_estim_for_instr_weight, optimisation, single_resampled_set_of_returns
 
 
 def generate_fit_end_list(start_date, end_date):
@@ -15,16 +15,19 @@ def generate_fit_end_list(start_date, end_date):
     return end_list
 
 
-def calc_forecast_weights(instruments_num, pnl_df, fit_end, span_multiple=50000,
+def calc_forecast_weights(instr_num, pnl_df, fit_end, span_multiple=50000,
                           min_periods_corr_multiple=10, min_periods_multiple=5):
     number_of_rules = len(pnl_df.columns)
-    span = instruments_num * span_multiple
-    min_periods_corr = instruments_num * min_periods_corr_multiple
-    min_periods = instruments_num * min_periods_multiple
-    norm_stdev, norm_factor, stdev_list = get_stdev_estimator_for_instrument_weight(pnl_df, fit_end, span, min_periods)
-    mean_list = get_mean_estimator(pnl_df, fit_end, span, min_periods)
-    norm_mean = [a / b for a, b in zip(mean_list, norm_factor)]
-    corr = get_corr_estimator_for_instrument_weight(pnl_df, fit_end, span, min_periods_corr)  # Corr CLEARED
+    span = instr_num * span_multiple
+
+    corr = get_corr_estim_for_instr_weight(pnl_df, min_periods_corr_multiple, instr_num, fit_end, span)
+
+
+    norm_stdev, norm_mean = get_stdev_estim_for_instr_weight(pnl_df, min_periods_multiple, instr_num, fit_end, span)
+
+    # mean_list = get_mean_estimator(pnl_df, fit_end, span, instr_num*min_periods_multiple)
+    # norm_mean = [a / b for a, b in zip(mean_list, norm_factor)]
+
     weight = optimisation(number_of_rules, corr, norm_mean, norm_stdev)
     return weight
 
@@ -57,9 +60,9 @@ def calculate_instrument_weights(pnl_df):
     span = 500000
     min_periods = 10
 
-    norm_stdev, _, _ = get_stdev_estimator_for_instrument_weight(weekly_ret, fit_end, span, min_periods)
+    norm_stdev, _, = get_stdev_estim_for_instr_weight(weekly_ret, fit_end, span, min_periods)
     norm_mean = [0.5 * asset_stdev for asset_stdev in norm_stdev]
-    corr = get_corr_estimator_for_instrument_weight(weekly_ret, fit_end, span, min_periods)
+    corr = get_corr_estim_for_instr_weight(weekly_ret, fit_end, span, min_periods)
 
     weight = optimisation(number, corr, norm_mean, norm_stdev)
     return weight
