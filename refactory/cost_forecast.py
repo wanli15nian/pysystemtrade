@@ -1,8 +1,34 @@
 import numpy as np
 import pandas as pd
-from copy import copy
 
 from refactory.utils import calc_mixed_volatility
+
+
+def annual_forecast_turnover(forecast_raw, forecast_scalling=10.0):
+    # TODO 为什么要先降到日频，日内不调仓吗？
+    # 其实turnover应该是和position相关的，只是系统假设position和forecast成绝对正比
+    forecast = forecast_raw.resample("1B").last()
+    proportion = forecast / forecast_scalling
+    turnover_daily = float(proportion.diff().abs().mean())
+    turnover_annual = turnover_daily * 256
+    return turnover_annual
+
+
+def calc_turnover_weights(forecast_all):
+    # 用历史数据的多少来决定每个instrument的权重
+    forecast_length = forecast_all.groupby('instrument').apply(len).to_list()
+    total_length = float(sum(forecast_length))
+    weights = [l / total_length for l in forecast_length]
+    return weights
+
+
+def calculate_weighted_turnover(weights, turnovers, total=1.0):
+    w = np.array(weights)
+    # w[np.isnan(w * t)] = 0.0
+    w[np.isnan(w)] = 0.0
+    nw = w * total / np.nansum(w)
+    t = np.array(turnovers)
+    return np.nansum(nw * t)
 
 
 def calc_annual_cost(turnover, cost_per_trade, rolls_per_year):
@@ -11,27 +37,6 @@ def calc_annual_cost(turnover, cost_per_trade, rolls_per_year):
     holding_cost = holding_turnovers * cost_per_trade
     annual_cost = transaction_cost + holding_cost
     return annual_cost
-
-
-def calculate_weighted_turnover(weights, list_of_values, sum_of_weights_should_be=1.0):
-    ## easier to work in np space
-    np_weights = np.array(weights)
-    np_values = np.array(list_of_values)
-
-    # get safe weights
-    weights_times_values_as_np = np_weights * np_values
-    empty_weights = np.isnan(weights_times_values_as_np)
-    np_weights[empty_weights] = 0.0
-    weights_without_nan = copy(np_weights)
-
-    sum_of_values = np.nansum(weights_without_nan)
-    renormalise_multiplier = sum_of_weights_should_be / sum_of_values
-    normalised_weights = weights_without_nan * renormalise_multiplier
-
-    weights_times_values_as_np = normalised_weights * np_values
-    weighted_value = np.nansum(weights_times_values_as_np)
-
-    return weighted_value
 
 
 def get_cost_per_trade(price, per_block, per_trade, percentage, price_slippage, point_size, notional_blocks_traded):
@@ -48,20 +53,3 @@ def get_cost_per_trade(price, per_block, per_trade, percentage, price_slippage, 
     ann_std = vol_daily_average * 16 * point_size
     cost_per_trade = cost / ann_std
     return cost_per_trade
-
-
-def annual_forecast_turnover(forecast_raw, forecast_scaling=10.0):
-    forecast_resampled = forecast_raw.resample("1B").last()
-    forecast_normalised = forecast_resampled / forecast_scaling
-    turnover_daily = float(forecast_normalised.diff().abs().mean())
-    turnover_annual = turnover_daily * 256
-    return turnover_annual
-
-
-def calc_turnover_weights(forecast_all):
-    # 用历史数据的多少来决定每个instrument的权重
-    # forecast_length = [len(v) for k, v in forecast_all.items()]
-    forecast_length = forecast_all.groupby('instrument').apply(len).to_list()
-    total_length = float(sum(forecast_length))
-    weights = [l / total_length for l in forecast_length]
-    return weights
