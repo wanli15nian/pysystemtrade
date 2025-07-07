@@ -73,8 +73,8 @@ for instrument in instruments:
     vol_scalar = calc_volatility_scalar(price, point_size, 500000, 0.25)
     subsystem_position_raw = vol_scalar * combined_forecast / 10.0
 
-    # Fixme:为什么不用buffer后的position？
-    subsystem_positions_dict[instrument] = subsystem_position_raw
+    # FIXME 确认一下是取最后的position
+    # subsystem_positions_dict[instrument] = subsystem_position_raw
 
     position_buffered = calc_buffered_pos_given_raw_pos(subsystem_position_raw, vol_scalar, 0.10)
     position = position_buffered.shift(1)
@@ -83,6 +83,7 @@ for instrument in instruments:
 
     gross_dict[instrument] = gross_pnl
     costs_dict[instrument] = normalised_costs
+    subsystem_positions_dict[instrument] = position
     print('calc_pnl_across_subsytem_for_indiv_instr')
 
 subsystem_positions = pd.DataFrame(subsystem_positions_dict).ffill()

@@ -48,7 +48,7 @@ def calc_cost_SR_by_rule(price, average_turnover, weighted_turnover, forecast_ru
 def calc_cost(pos_target, price, point_size, trading_cost):
     # Actually output in price space to match gross returns
     # These will be annualised figure, make it a small loss every day
-    # FIXME: 完全没有看明白这个calc_cost的计算逻辑
+    # TODO: 完全没有看明白这个calc_cost的计算逻辑
     annualised_price_vol_points = calc_mixed_volatility(price.diff(), slow_vol_years=10)
     sr_cost_as_annualised_figure = (-trading_cost * pos_target * annualised_price_vol_points * 16).bfill()
     period_intervals_in_seconds = sr_cost_as_annualised_figure.index.to_series().diff().dt.total_seconds()

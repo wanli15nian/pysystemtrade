@@ -44,13 +44,13 @@ def calc_avg_corr_matrix(corr_matrix_df, shrinkage_corr=0.5):
     return shrunk_corr
 
 
-def calc_shrunk_means(annualised_return_mean, annualised_return_std, shrinkage_sr=0.9, target_sr=0.5):
-    sr_estimates = (annualised_return_mean / annualised_return_std).to_list()
-    post_sr_list = [(shrinkage_sr * target_sr) + (1 - shrinkage_sr) * estimatedSR for estimatedSR in sr_estimates]
-    shrunk_means_values = (post_sr_list * annualised_return_std).to_list()
-    instruments = annualised_return_mean.index.to_list()
-    shrunk_means = [(asset_name, mean_value) for (asset_name, mean_value) in zip(instruments, shrunk_means_values)]
-    return shrunk_means
+# def calc_shrunk_means(annualised_return_mean, annualised_return_std, shrinkage_sr=0.9, target_sr=0.5):
+#     sr_estimates = (annualised_return_mean / annualised_return_std).to_list()
+#     post_sr_list = [(shrinkage_sr * target_sr) + (1 - shrinkage_sr) * estimatedSR for estimatedSR in sr_estimates]
+#     shrunk_means_values = (post_sr_list * annualised_return_std).to_list()
+#     instruments = annualised_return_mean.index.to_list()
+#     shrunk_means = [(asset_name, mean_value) for (asset_name, mean_value) in zip(instruments, shrunk_means_values)]
+#     return shrunk_means
 
 
 def calc_smoothed_instr_weights(weights_df, subsystem_positions, smooth_weighting=125):
@@ -79,8 +79,7 @@ def calc_portfolio_weights(net_return_raw, positions):
     corr_matrix_df = calc_corr_matrix(net_return_df)
     shrunk_corr = calc_avg_corr_matrix(corr_matrix_df)
     annualised_return_mean, annualised_return_std = calc_net_mean_std(net_return_df)
-    # FIXME:这个数算出来后面为什么不用？
-    shrunk_means = calc_shrunk_means(annualised_return_mean, annualised_return_std)
+    # shrunk_means = calc_shrunk_means(annualised_return_mean, annualised_return_std)
 
     target_sr = 0.5
     norm_std = [annualised_return_std.mean()] * 4

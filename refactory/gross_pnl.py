@@ -14,7 +14,7 @@ def calc_gross_pnl(position, price, point_size):
     pnl = pnl_in_points * point_size
     daily_pnl = pnl.resample("B").sum()
     daily_pnl = daily_pnl.squeeze()
-    # FIXME: 鉴于forecast是个两列的df, daily_pnl_gross也是个两列的df
+    # TODO: 鉴于forecast是个两列的df, daily_pnl_gross也是个两列的df
     # 这就有问题了，应该如何理解这两列的实际持仓呢
     # 计算过程中，我们本质上是把每个rule当成了单独的portfolio来算的，所以才有了用position_target直接乘上去
     # 得出的daily_pnl_gross不能是直接相加吧，如果是的话就不合理了

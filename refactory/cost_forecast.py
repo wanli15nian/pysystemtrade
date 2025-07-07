@@ -36,7 +36,7 @@ def calculate_weighted_turnover(weights, list_of_values, sum_of_weights_should_b
 
 def get_cost_per_trade(price, per_block, per_trade, percentage, price_slippage, point_size, notional_blocks_traded):
     # 单次交易成本，包括slippage和commission
-    # FIXME: 在这里作者使用了pd.DateOffset来进行年份计算，而在rolling window中是用365天，原因存疑
+    # TODO: 在这里作者使用了pd.DateOffset来进行年份计算，而在rolling window中是用365天，原因存疑
     average_price = float(price[price.index[-1] - pd.DateOffset(years=1):].mean())
     commission_percentage = notional_blocks_traded * average_price * point_size * percentage
     commission_per_block = notional_blocks_traded * per_block
@@ -52,7 +52,7 @@ def get_cost_per_trade(price, per_block, per_trade, percentage, price_slippage, 
 
 def annual_forecast_turnover(forecast_raw):
     forecast = forecast_raw.resample("1B").last()
-    # TODO:改为直接除以forecast_scalling
+    # FIXME:改为直接除以forecast_scalling
     forecast_scalling = 10.0
     forecast_scalling_daily = pd.Series(np.full(forecast.shape[0], forecast_scalling), forecast.index)
     forecast_normalised = forecast / forecast_scalling_daily.ffill()
