@@ -130,13 +130,14 @@ net_return_raw = pd.DataFrame({inst: gross_pnl_df[inst] + cost_df[inst].mean() f
 net_return_df = single_resampled_set_of_returns({'asset': net_return_raw}, 'W')
 
 start = net_return_df.index[0]
-end = net_return_df.index[-1]
-last_index = net_return_df.index[net_return_df.index < end].size - 1
 
-data_length = len(net_return_df.index)
-frequency = 'W'
+# data_length = len(net_return_df.index)
+# frequency = 'W'
 
 corr_matrix_df = calc_corr_matrix(net_return_df)
+
+end = net_return_df.index[-1]
+last_index = net_return_df.index[net_return_df.index < end].size - 1
 
 exponential_mean = net_return_df.ewm(span=50000, min_periods=5).mean()
 mean = exponential_mean.iloc[last_index] * 365.25 / 7.0
