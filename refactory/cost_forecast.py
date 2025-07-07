@@ -22,13 +22,12 @@ def calc_turnover_weights(forecast_all):
     return weights
 
 
-def calculate_weighted_turnover(weights, turnovers, total=1.0):
-    w = np.array(weights)
-    # w[np.isnan(w * t)] = 0.0
-    w[np.isnan(w)] = 0.0
-    nw = w * total / np.nansum(w)
+def calc_weighted_turnover(weights, turnovers, total=1.0):
     t = np.array(turnovers)
-    return np.nansum(nw * t)
+    w = np.array(weights)
+    w[np.isnan(w * t)] = 0.0  # 应该是考虑到万一有的turnover没有的情况，对应也就不给weight
+    w1 = w * total / np.nansum(w)
+    return np.nansum(w1 * t)
 
 
 def calc_annual_cost(turnover, cost_per_trade, rolls_per_year):
