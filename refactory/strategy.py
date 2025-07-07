@@ -98,14 +98,6 @@ cost_sum = cost_df.sum(axis=1)
 net_PNL = gross_pnl_sum.add(cost_sum, fill_value=0).resample('B').sum()
 print(net_PNL)
 
-# def process_list_of_data(data):  # Rename the columns
-#     resampled_data = data.resample('1B').sum()
-#     resampled_data[resampled_data == 0.0] = np.nan
-#     return resampled_data
-# gross_pnl = process_list_of_data(data=gross_pnl_df)
-# costs = process_list_of_data(data=cost_df)
-
-
 net_return_raw = pd.DataFrame({inst: gross_pnl_df[inst] + cost_df[inst].mean() for inst in instruments})
 normalised_weights = calc_portfolio_weights(net_return_raw, subsystem_positions)
 print(normalised_weights)
