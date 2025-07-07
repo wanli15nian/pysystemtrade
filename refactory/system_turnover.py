@@ -49,7 +49,7 @@ def calc_average_position(daily_price, block_move_value, notional_trading_capita
     return average_position_for_turnover
 
 
-def calc_system_turnover(subsystem_position_raw, daily_price, point_size):
+def calc_subsystem_turnover(subsystem_position_raw, daily_price, point_size):
     average_position_for_turnover = calc_average_position(daily_price, point_size)
     subsystem_turnover = turnover_x_y(subsystem_position_raw, average_position_for_turnover)
     return subsystem_turnover

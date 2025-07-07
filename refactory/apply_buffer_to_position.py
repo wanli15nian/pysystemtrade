@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 
-def calc_buffered_pos_given_raw_pos(position_raw, vol_scalar, buffer_size=0.10):
+def calc_buffered_position(position_raw, vol_scalar, buffer_size=0.10):
     '''
     vol_scalar 的另一种理解是Avg pos of the subsystem level
     这么理解的话就是说position 可以在avg pos的10% 区间内浮动
