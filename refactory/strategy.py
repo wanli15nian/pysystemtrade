@@ -8,10 +8,10 @@ from refactory.cost_sr import calc_cost_SR
 from refactory.data_source import get_instrument_info, get_daily_price
 from refactory.forecast import ewmac, rescale_forecast, floor_vol, price_vol
 from refactory.functions import combine_forecast, calc_net_pnl
-from refactory.rule_pnl import calc_gross, calc_rule_gross_pnl
+from refactory.gross import calc_gross, calc_gross_pnl
 from refactory.portfolio_weights import calc_portfolio_weights
 from refactory.system_turnover import calc_system_turnover
-from refactory.rule_pnl import calc_position_target
+from refactory.gross import calc_position_target
 from refactory.utils import calc_volatility_scalar
 
 instruments = ["CORN", "SOFR", "SP500_micro", 'US10']
@@ -79,7 +79,7 @@ for instrument in instruments:
 
     position_buffered = calc_buffered_pos_given_raw_pos(subsystem_position_raw, vol_scalar, 0.10)
     position = position_buffered.shift(1)
-    gross_pnl = calc_rule_gross_pnl(position, price, point_size)
+    gross_pnl = calc_gross_pnl(position, price, point_size)
     normalised_costs = calc_cost(position, price, info)
 
     gross_dict[instrument] = gross_pnl

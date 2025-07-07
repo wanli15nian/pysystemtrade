@@ -17,7 +17,7 @@ def calc_position_target(price, point_size, capital=1000000, annual_risk_target=
 def calc_gross(forecast, pos_target, price, point_size):
     # 其实应该在外面分开调用，目前没有单独查看position的需要，为外面简单起见，合并在一起被调用
     position = calc_rule_position(forecast, pos_target)
-    return calc_rule_gross_pnl(position, price, point_size)
+    return calc_gross_pnl(position, price, point_size)
 
 
 def calc_rule_position(forecast, pos_target):
@@ -26,7 +26,7 @@ def calc_rule_position(forecast, pos_target):
     return position
 
 
-def calc_rule_gross_pnl(position, price, point_size):
+def calc_gross_pnl(position, price, point_size):
     pnl_in_points = position.mul(price.ffill().mean(), axis=0)
     pnl_in_points[pnl_in_points.isna()] = 0.0
     pnl = pnl_in_points * point_size
