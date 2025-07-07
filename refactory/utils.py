@@ -39,18 +39,15 @@ def robust_vol_calc(daily_returns: pd.Series,
     return vol
 
 
-def get_stdev_estimator_for_instrument_weight(data_for_analysis, fit_end, span=50000, min_periods=5):
-    stdev = data_for_analysis.ewm(span=span, min_periods=min_periods).std()
-    last_index = data_for_analysis.index[data_for_analysis.index < fit_end].size - 1
-    stdev = stdev.iloc[last_index]
-    annualised_stdev_estimate = {}
-    for rule_name, std_value in stdev.items():
-        annualised_stdev_estimate[rule_name] = std_value * ((365.25 / 7.0) ** 0.5)
-    stdev_list = [value for value in annualised_stdev_estimate.values()]
-    ave_stdev = np.nanmean(stdev_list)
-    norm_stdev = [ave_stdev] * len(stdev_list)
-    norm_factor = [stdev / ave_stdev for stdev in stdev_list]
-    return norm_stdev, norm_factor, stdev_list
+def get_stdev_estimator_for_instrument_weight(data, fit_end, span=50000, min_periods=5):
+    stdev_smoothed = data.ewm(span=span, min_periods=min_periods).std()
+    last_index = data.index[data.index < fit_end].size - 1
+    stdev = stdev_smoothed.iloc[last_index]
+    stdev_list = stdev * ((365.25 / 7.0) ** 0.5)
+    avg_stdev = np.nanmean(stdev_list)
+    norm_stdev = [avg_stdev] * len(stdev_list)
+    norm_factor = [stdev / avg_stdev for stdev in stdev_list]
+    return norm_stdev, norm_factor
 
 
 def get_mean_estimator(data, fit_end, span=50000, min_periods=10):
