@@ -10,10 +10,10 @@ from refactory.data_util import get_daily_price, get_raw_cost_data
 from refactory.forecast import calc_forecasts
 from refactory.functions import combine_forecast, calc_net_pnl
 from refactory.gross_pnl import calc_gross, calc_gross_pnl
-from refactory.portfolio_weights import calc_corr_matrix, calc_net_mean_std, calc_avg_corr_matrix
+from refactory.portfolio_weights import calc_portfolio_weights
 from refactory.target_volatility import calc_target_position
 from refactory.turnover import calc_system_turnover
-from refactory.utils import optimisation, calc_volatility_scalar, single_resampled_set_of_returns
+from refactory.utils import calc_volatility_scalar
 
 instruments = ["CORN", "SOFR", "SP500_micro", 'US10']
 rules = ['ewmac32', 'ewmac8']
@@ -107,67 +107,7 @@ print(net_PNL)
 
 
 net_return_raw = pd.DataFrame({inst: gross_pnl_df[inst] + cost_df[inst].mean() for inst in instruments})
-net_return_df = single_resampled_set_of_returns({'asset': net_return_raw}, 'W')
-
-
-def calc_shrunk_corr(avg_corr_matrix, shrinkage_corr=0.5):
-    shrunk_corr_without_columns = (
-            shrinkage_corr * avg_corr_matrix.values + (1 - shrinkage_corr) * corr_matrix_df.values)
-    return pd.DataFrame(shrunk_corr_without_columns, columns=instruments, index=instruments)
-
-
-annualised_return_mean, annualised_return_std = calc_net_mean_std(net_return_df)
-corr_matrix_df = calc_corr_matrix(net_return_df)
-
-shrunk_corr = calc_avg_corr_matrix(corr_matrix_df)
-
-
-def calc_shrunk_means(annualised_return_mean, annualised_return_std, shrinkage_sr=0.9, target_sr=0.5):
-    sr_estimates = (annualised_return_mean / annualised_return_std).to_list()
-    post_sr_list = [(shrinkage_sr * target_sr) + (1 - shrinkage_sr) * estimatedSR for estimatedSR in sr_estimates]
-    shrunk_means_values = (post_sr_list * annualised_return_std).to_list()
-    shrunk_means = [(asset_name, mean_value) for (asset_name, mean_value) in zip(instruments, shrunk_means_values)]
-    return shrunk_means
-
-
-target_sr = 0.5
-shrunk_means = calc_shrunk_means(annualised_return_mean, annualised_return_std)
-norm_std = [annualised_return_std.mean()] * 4
-mean_list = [target_sr * asset_stdev for asset_stdev in norm_std]
-weights = optimisation(len(instruments), corr=shrunk_corr.values, norm_mean=mean_list, norm_stdev=norm_std)
-start = net_return_df.index[0]
-weights_df = pd.DataFrame({asset_name: weight for (asset_name, weight) in zip(instruments, weights)}, index=[start])
-
-## Set leading all nan to zero so weights not set to zero
-subsystem_positions[(~subsystem_positions.isna()).sum(axis=1) == 0] = 0
-
-
-def calc_smoothed_instr_weights(weights_df, smooth_weighting=125):
-    instrument_weights = weights_df.reindex(subsystem_positions.index, method="ffill")
-    instrument_weights[np.isnan(subsystem_positions)] = 0.0
-    daily_unsmoothed_instr_weights = instrument_weights.resample('1B').mean()
-    smoothed_instr_weights = daily_unsmoothed_instr_weights.ewm(span=smooth_weighting).mean()
-    return smoothed_instr_weights
-
-
-smoothed_instr_weights = calc_smoothed_instr_weights(weights_df)
-
-
-def normalise_weights():
-    sum_weights = smoothed_instr_weights.sum(axis=1)
-    zero_rows = sum_weights == 0.0
-    sum_weights[zero_rows] = 0.0001  ## avoid Inf
-    weight_multiplier = 1.0 / sum_weights
-    weight_multiplier_array = np.array([weight_multiplier] * len(smoothed_instr_weights.columns))
-    normalised_weights_np = weight_multiplier_array.transpose() * smoothed_instr_weights.values
-    normalised_weights = pd.DataFrame(normalised_weights_np, columns=smoothed_instr_weights.columns,
-                                      index=smoothed_instr_weights.index)
-
-    return normalised_weights
-
-
-normalised_weights = normalise_weights()
-
+normalised_weights = calc_portfolio_weights(net_return_raw, subsystem_positions)
 print(normalised_weights)
 
 print('END')
