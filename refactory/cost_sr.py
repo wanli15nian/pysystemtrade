@@ -43,7 +43,7 @@ def calc_cost_sr(average_turnover, weighted_turnover, forecast, pnl, price, posi
     pnl_vol_daily = pnl.std()
     cost_sr_annual = 16 * mean_cost_daily / pnl_vol_daily
     # 计算平均夏普成本
-    # TODO:这里应该直接传入turnover，不用传forecast，导致语义不清楚
+    # TODO:这里可以直接传入turnover，不用传forecast，导致语义不清楚
     annual_turnover = calc_annual_turnover(forecast)
     cost_sr = cost_sr_annual * (average_turnover / annual_turnover) * 2
     return cost_sr
