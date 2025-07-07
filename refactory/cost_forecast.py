@@ -50,12 +50,9 @@ def get_cost_per_trade(price, per_block, per_trade, percentage, price_slippage, 
     return cost_per_trade
 
 
-def annual_forecast_turnover(forecast_raw):
-    forecast = forecast_raw.resample("1B").last()
-    # FIXME:改为直接除以forecast_scalling
-    forecast_scalling = 10.0
-    forecast_scalling_daily = pd.Series(np.full(forecast.shape[0], forecast_scalling), forecast.index)
-    forecast_normalised = forecast / forecast_scalling_daily.ffill()
+def annual_forecast_turnover(forecast_raw, forecast_scaling=10.0):
+    forecast_resampled = forecast_raw.resample("1B").last()
+    forecast_normalised = forecast_resampled / forecast_scaling
     turnover_daily = float(forecast_normalised.diff().abs().mean())
     turnover_annual = turnover_daily * 256
     return turnover_annual
