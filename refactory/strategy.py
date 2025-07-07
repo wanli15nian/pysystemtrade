@@ -88,7 +88,7 @@ for instrument in instruments:
     costs_dict[instrument] = normalised_costs
     print('calc_pnl_across_subsytem_for_indiv_instr')
 
-    turnover_dict[instrument] = calc_system_turnover(subsystem_position_raw, price, info)
+    turnover_dict[instrument] = calc_system_turnover(subsystem_position_raw, price, point_size)
 
 gross_pnl_df = pd.DataFrame(gross_dict)
 cost_df = pd.DataFrame(costs_dict)
