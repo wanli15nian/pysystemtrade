@@ -47,6 +47,7 @@ gross_ = pd.concat(gross_list, keys=instruments, names=['instrument', 'datetime'
 turnover_func = lambda x: x.reset_index(level='instrument', drop=True).apply(annual_forecast_turnover)
 turnover_ = forecast_.groupby(level='instrument').apply(turnover_func)
 average_turnover_ = turnover_.apply(np.nanmean)
+
 turnover_weight = calc_turnover_weights(forecast_)
 weighted_turnover_ = turnover_.apply(lambda x: calculate_weighted_turnover(turnover_weight, x))
 
