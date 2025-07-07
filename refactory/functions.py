@@ -126,8 +126,9 @@ def calc_div_mult_single_period(corr, weights, dm_max=2.5):
 #     return position_buffered
 
 
-def combine_forecast(forecast, forecast_, net_pnl_all, price):
-    # forecast_df_list = [v for k, v in forecast_.items()]
+def combine_forecast(forecast, forecast_, net_, price):
+    grouped = net_.groupby(level='instrument')
+    net_pnl_all = {ins: group.reset_index(level='instrument', drop=True) for ins, group in grouped}
     grouped = forecast_.groupby(level='instrument')
     forecast_df_list = [group.reset_index(level='instrument', drop=True) for instrument, group in grouped]
 

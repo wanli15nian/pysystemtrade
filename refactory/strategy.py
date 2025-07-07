@@ -45,7 +45,6 @@ cost_sr_ = pd.DataFrame([calc_cost_SR(rules, average_turnover_, weighted_turnove
 net_ = pd.concat([calc_net_pnl(gross_.loc[i], cost_sr_.loc[i])
                   for i in instruments], keys=instruments, names=['instrument', 'datetime'])
 
-net_dict = {}
 gross_dict = {}
 costs_dict = {}
 turnover_dict = {}
@@ -56,24 +55,20 @@ for instrument in instruments:
     price = price_.loc[instrument]
     forecast = forecast_.loc[instrument]
 
-    grouped = net_.groupby(level='instrument')
-    net_pnl_all = {ins: group.reset_index(level='instrument', drop=True) for ins, group in grouped}
-
-    combined_forecast = combine_forecast(forecast, forecast_, net_pnl_all, price)
+    combined_forecast = combine_forecast(forecast, forecast_, net_, price)
     vol_scalar = calc_volatility_scalar(price, point_size, 500000, 0.25)
     subsystem_position_raw = vol_scalar * combined_forecast / 10.0
 
     subsystem_positions.append(subsystem_position_raw)
+
     position_buffered = calc_buffered_pos_given_raw_pos(subsystem_position_raw, vol_scalar, 0.10)
     position = position_buffered.shift(1)
+
     gross_pnl = calc_gross_pnl(position, price, point_size)
 
     info = info_.loc[instrument]
     normalised_costs = calc_cost(position, price, info)
 
-    net_pnl = gross_pnl.add(normalised_costs, fill_value=0).resample('B').sum()
-
-    net_dict[instrument] = net_pnl
     gross_dict[instrument] = gross_pnl
     costs_dict[instrument] = normalised_costs
     print('calc_pnl_across_subsytem_for_indiv_instr')
