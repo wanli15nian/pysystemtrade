@@ -30,6 +30,9 @@ def calc_weighted_turnover(weights, turnovers, total=1.0):
     return np.nansum(w1 * t)
 
 
+# -------------------------------------------------------------------------
+
+
 def calc_annual_cost(turnover, cost_per_trade, rolls_per_year):
     transaction_cost = turnover * cost_per_trade
     holding_turnovers = rolls_per_year * 2.0

@@ -2,21 +2,21 @@ from refactory.cost_forecast import get_cost_per_trade, calc_annual_cost, annual
 from refactory.utils import calc_mixed_volatility
 
 
-def calc_cost_SR(rules, average_turnover_, weighted_turnover_, pnl, forecast, price, pos_target, info):
-    cost_SR_dict = {}
-    for rule in rules:
-        average_turnover = average_turnover_[rule]
-        weighted_turnover = weighted_turnover_[rule]
-        gross_pnl_rule = pnl[rule]
-        forecast_rule = forecast[rule]
-        pooled_cost = calc_cost_SR_by_rule(price, average_turnover, weighted_turnover, forecast_rule, gross_pnl_rule,
-                                           pos_target, info)
-        cost_SR_dict[rule] = pooled_cost
-    # cost_SR_df = pd.DataFrame([cost_SR_dict])
+def calc_cost_SR(average_turnover_, weighted_turnover_, gross, forecast, price, position_target, info):
+    rules = gross.columns.to_list()
+    cost_SR_dict = {rule: calc_cost_SR_by_rule(
+        average_turnover_[rule],
+        weighted_turnover_[rule],
+        forecast[rule],
+        gross[rule],
+        price,
+        position_target,
+        info
+    ) for rule in rules}
     return cost_SR_dict
 
 
-def calc_cost_SR_by_rule(price, average_turnover, weighted_turnover, forecast_rule, gross_rule_pnl, pos_target, info):
+def calc_cost_SR_by_rule(average_turnover, weighted_turnover, forecast_rule, gross_rule_pnl, price, pos_target, info):
     rolls_per_year = int(info['rolls_per_year'])
     point_size = info['point_size']
     spread_cost = info['spread_cost']

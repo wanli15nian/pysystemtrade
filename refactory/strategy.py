@@ -52,8 +52,9 @@ turnover_weight = calc_turnover_weights(forecast_)
 weighted_turnover_ = turnover_.apply(lambda x: calc_weighted_turnover(turnover_weight, x))
 
 # TODO: 为何计算cost时要用target_position?
-cost_sr_list = (calc_cost_SR(rules, average_turnover_, weighted_turnover_, gross_.loc[i],
-                             forecast_.loc[i], price_.loc[i], target_.loc[i], info_.loc[i]) for i in instruments)
+cost_sr_list = (
+calc_cost_SR(average_turnover_, weighted_turnover_, gross_.loc[i], forecast_.loc[i], price_.loc[i], target_.loc[i],
+             info_.loc[i]) for i in instruments)
 cost_sr_ = pd.DataFrame(cost_sr_list, index=instruments, columns=rules)
 
 net_list = [calc_net_pnl(gross_.loc[i], cost_sr_.loc[i]) for i in instruments]
