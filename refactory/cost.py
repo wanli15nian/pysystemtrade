@@ -54,7 +54,6 @@ def calc_cost_instr_currency_for_a_fill(fill, value_per_point, info):
     commission_costs = max([per_trade, per_block, perc_commission])
 
     total_cost = slippage_costs + commission_costs
-    print('calc_cost_instr_currency_for_a_fill')
     return total_cost
 
 
@@ -126,7 +125,6 @@ def pseudo_fills_for_year(year, rolls_per_year, price, adjusted_pos_buffered):
         price=fill.price) for fill in opening_fills_this_year]
 
     fills_this_year = opening_fills_this_year + closing_fills_this_year
-    print('pseudo_fills_for_year')
 
     return fills_this_year
 
@@ -156,7 +154,6 @@ def calc_avg_holding_within_a_year(year, rolls_per_year, adjusted_pos_buffered):
         if np.isnan(avg_holding):
             avg_holding = 0.0
         list_of_average_holdings.append(avg_holding)
-    print('calc_avg_holding_within_a_year')
     return list_of_average_holdings
 
 
@@ -172,5 +169,4 @@ def generate_equal_dates_within_year(year, rolls_per_year, false_start_of_year_a
     delta_for_each_period = datetime.timedelta(days=days_between_periods)
     all_dates = [first_date + (delta_for_each_period * period_count)
                  for period_count in range(rolls_per_year)]
-    print('generate_equal_dates_within_year')
     return all_dates

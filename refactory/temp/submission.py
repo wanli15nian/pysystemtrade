@@ -272,7 +272,6 @@
 #     pnl_df = pd.concat(pnl_list, axis=1)
 #     pnl_df.columns = instruments
 #     weight = calculate_instrument_weights(pnl_df)
-#     print(weight)
 #     return
 #
 #

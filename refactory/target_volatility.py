@@ -12,7 +12,6 @@ def calc_target_position(price, info, capital=1000000, risk_target=0.16):
     daily_risk_target = risk_target / (256 ** 0.5)
     daily_cash_vol_target = daily_risk_target * capital  # 每天的目标vol target
     position_target = daily_cash_vol_target / (ret_volatility * point_size)
-    print('get_pos_target_from_risk_target')
     return position_target
 
 # def calc_daily_gross_pnl_in_points(positions: pd.Series, prices: pd.Series):

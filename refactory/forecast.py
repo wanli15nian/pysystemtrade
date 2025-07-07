@@ -1,5 +1,4 @@
 import numpy as np
-import pandas as pd
 
 
 def ewmac(price, Lfast, Lslow, min_periods=1):
@@ -29,14 +28,3 @@ def rescale_forecast(forecast, target_scaling=10, upper_cap=20, window=250000, m
     rescaled = scalar * forecast
     capped = rescaled.clip(lower=(-upper_cap), upper=upper_cap)
     return capped
-
-
-def calc_forecasts(price):
-    raw_ewmac32 = ewmac(price, 32, 128, 1)
-    ewmac32 = rescale_forecast(raw_ewmac32 / floor_vol(price_vol(price)))
-    # ewmac32.rename('ewmac32', inplace=True)
-    raw_ewmac8 = ewmac(price, 8, 32, 1)
-    ewmac8 = rescale_forecast(raw_ewmac8 / floor_vol(price_vol(price)))
-    # ewmac8.rename('ewmac8', inplace=True)
-    forecast_df = pd.DataFrame({'ewmac32': ewmac32, 'ewmac8': ewmac8})
-    return forecast_df

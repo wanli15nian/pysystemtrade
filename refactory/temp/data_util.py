@@ -99,5 +99,4 @@
 #
 #     all_price_data = multiple_prices[start_date:]
 #     carry_data = all_price_data[['PRICE', 'CARRY', 'PRICE_CONTRACT', 'CARRY_CONTRACT']]
-#     print("get_instrument_raw_carry_data")
 #     return carry_data

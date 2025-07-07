@@ -54,5 +54,4 @@ def calc_cost(pos_target, price, point_size, trading_cost):
     period_intervals_in_seconds = sr_cost_as_annualised_figure.index.to_series().diff().dt.total_seconds()
     costs_in_points = sr_cost_as_annualised_figure * period_intervals_in_seconds / (365.25 * 24 * 60 * 60)
     costs = costs_in_points * point_size  # 后续有个fx 的序列，但目前不加
-    print('calc_cost')
     return costs

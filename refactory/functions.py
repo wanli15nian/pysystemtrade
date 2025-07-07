@@ -12,7 +12,6 @@ def generate_fit_end_list(start_date, end_date):
     start_dates_per_period = pd.date_range(end_date, start_date, freq='-365D').to_list()
     start_dates_per_period.reverse()
     end_list = start_dates_per_period[1:-1]
-    print('generate_fit_end_list')
     return end_list
 
 
@@ -27,7 +26,6 @@ def calc_forecast_weights(instruments_num, pnl_df, fit_end, span_multiple=50000,
     norm_mean = [a / b for a, b in zip(mean_list, norm_factor)]
     corr = get_corr_estimator_for_instrument_weight(pnl_df, fit_end, span, min_periods_corr)  # Corr CLEARED
     weight = optimisation(number_of_rules, corr, norm_mean, norm_stdev)
-    print('calc_forecast_weights')
     return weight
 
 
@@ -46,7 +44,6 @@ def reindex_and_stack_list_of_df(list_of_df):
         data_item.index = data_item.index + pd.Timedelta("%dus" % offset_value)
     stacked_data = pd.concat(data_reindexed, axis=0)
     stacked_data = stacked_data.sort_index()
-    print('combine_instrument_pnl_df')
     return stacked_data
 
 
@@ -65,7 +62,6 @@ def calculate_instrument_weights(pnl_df):
     corr = get_corr_estimator_for_instrument_weight(weekly_ret, fit_end, span, min_periods)
 
     weight = optimisation(number, corr, norm_mean, norm_stdev)
-    print('calc_instrument_weights')
     return weight
 
 
