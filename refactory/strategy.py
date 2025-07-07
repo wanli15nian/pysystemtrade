@@ -41,7 +41,7 @@ target_list = (calc_position_target(price_.loc[i], size_.loc[i], capital=1000000
                for i in instruments)
 target_ = pd.concat(target_list, keys=instruments, names=['instrument', 'datetime'])
 
-gross_list = (calc_gross(forecast_.loc[i], target_.loc[i], price_.loc[i], info_.loc[i]) for i in instruments)
+gross_list = (calc_gross(forecast_.loc[i], target_.loc[i], price_.loc[i], size_.loc[i]) for i in instruments)
 gross_ = pd.concat(gross_list, keys=instruments, names=['instrument', 'datetime'])
 
 turnover_func = lambda x: x.reset_index(level='instrument', drop=True).apply(annual_forecast_turnover)

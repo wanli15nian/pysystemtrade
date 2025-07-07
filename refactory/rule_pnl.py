@@ -15,8 +15,7 @@ def calc_position_target(price, point_size, capital=1000000, annual_risk_target=
     return position_target
 
 
-def calc_gross(forecast, pos_target, price, info):
-    point_size = info['point_size']
+def calc_gross(forecast, pos_target, price, point_size):
     position = forecast.mul(pos_target, axis=0) / 10
     position = position.shift(1)
     return calc_gross_pnl(position, price, point_size)
