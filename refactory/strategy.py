@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-from copy import copy
 
 from refactory.apply_buffer_to_position import calc_buffered_pos_given_raw_pos
 from refactory.cost import calc_costs
@@ -11,7 +10,7 @@ from refactory.data_util import get_daily_price, get_raw_cost_data
 from refactory.forecast import calc_forecasts
 from refactory.functions import combine_forecast, calc_net_pnl
 from refactory.gross_pnl import calc_gross, calc_gross_pnl
-from refactory.portfolio_weights import calc_corr_matrix
+from refactory.portfolio_weights import calc_corr_matrix, calc_net_mean_std, calc_avg_corr_matrix
 from refactory.target_volatility import calc_target_position
 from refactory.turnover import calc_system_turnover
 from refactory.utils import optimisation, calc_volatility_scalar, single_resampled_set_of_returns
@@ -99,7 +98,6 @@ cost_sum = cost_df.sum(axis=1)
 net_PNL = gross_pnl_sum.add(cost_sum, fill_value=0).resample('B').sum()
 print(net_PNL)
 
-
 # def process_list_of_data(data):  # Rename the columns
 #     resampled_data = data.resample('1B').sum()
 #     resampled_data[resampled_data == 0.0] = np.nan
@@ -108,45 +106,8 @@ print(net_PNL)
 # costs = process_list_of_data(data=cost_df)
 
 
-def calc_avg_corr(corr_matrix_df):
-    new_corr_values = copy(corr_matrix_df.values)
-    np.fill_diagonal(new_corr_values, np.nan)
-    return np.nanmean(new_corr_values)
-
-
-def calc_avg_corr_matrix(instruments, avg_corr):
-    n = len(instruments)
-    corr_matrix = np.full((n, n), avg_corr)  # Fill entire matrix with avg_corr
-    np.fill_diagonal(corr_matrix, 1.0)  # Set diagonals to 1.0
-    return pd.DataFrame(corr_matrix, index=instruments, columns=instruments)
-
-
-# net_return_dict = {}
-# for instrument1 in instruments:
-#     net_return_dict[instrument1] = gross_pnl_df[instrument1] + cost_df[instrument1].mean()
-# net_return_df_unresampled = pd.DataFrame(net_return_dict)
-
 net_return_raw = pd.DataFrame({inst: gross_pnl_df[inst] + cost_df[inst].mean() for inst in instruments})
 net_return_df = single_resampled_set_of_returns({'asset': net_return_raw}, 'W')
-
-start = net_return_df.index[0]
-
-# data_length = len(net_return_df.index)
-# frequency = 'W'
-
-corr_matrix_df = calc_corr_matrix(net_return_df)
-
-end = net_return_df.index[-1]
-last_index = net_return_df.index[net_return_df.index < end].size - 1
-
-ewm_return = net_return_df.ewm(span=50000, min_periods=5)
-exponential_mean = ewm_return.mean()
-annualised_return_mean = exponential_mean.iloc[last_index] * 365.25 / 7.0
-exponential_std = ewm_return.std()
-annualised_return_std = exponential_std.iloc[last_index] * (365.25 / 7.0) ** 0.5
-
-avg_corr = calc_avg_corr(corr_matrix_df)
-avg_corr_matrix = calc_avg_corr_matrix(instruments, avg_corr)
 
 
 def calc_shrunk_corr(avg_corr_matrix, shrinkage_corr=0.5):
@@ -155,7 +116,10 @@ def calc_shrunk_corr(avg_corr_matrix, shrinkage_corr=0.5):
     return pd.DataFrame(shrunk_corr_without_columns, columns=instruments, index=instruments)
 
 
-shrunk_corr = calc_shrunk_corr(avg_corr_matrix)
+annualised_return_mean, annualised_return_std = calc_net_mean_std(net_return_df)
+corr_matrix_df = calc_corr_matrix(net_return_df)
+
+shrunk_corr = calc_avg_corr_matrix(corr_matrix_df)
 
 
 def calc_shrunk_means(annualised_return_mean, annualised_return_std, shrinkage_sr=0.9, target_sr=0.5):
@@ -171,6 +135,7 @@ shrunk_means = calc_shrunk_means(annualised_return_mean, annualised_return_std)
 norm_std = [annualised_return_std.mean()] * 4
 mean_list = [target_sr * asset_stdev for asset_stdev in norm_std]
 weights = optimisation(len(instruments), corr=shrunk_corr.values, norm_mean=mean_list, norm_stdev=norm_std)
+start = net_return_df.index[0]
 weights_df = pd.DataFrame({asset_name: weight for (asset_name, weight) in zip(instruments, weights)}, index=[start])
 
 ## Set leading all nan to zero so weights not set to zero
