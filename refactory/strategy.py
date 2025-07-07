@@ -3,8 +3,7 @@ import pandas as pd
 
 from refactory.apply_buffer_to_position import calc_buffered_pos_given_raw_pos
 from refactory.cost import calc_cost
-from refactory.cost_forecast import calc_annual_turnover, calc_weighted_turnover, calc_turnover_weights
-from refactory.cost_sr import calc_cost_SR_rules
+from refactory.cost_sr import calc_cost_sr_rules, calc_annual_turnover, calc_turnover_weights, calc_weighted_turnover
 from refactory.data_source import get_instrument_info, get_daily_price
 from refactory.forecast import ewmac, rescale_forecast, floor_vol, price_vol
 from refactory.functions import combine_forecast, calc_net_pnl
@@ -52,8 +51,8 @@ turnover_weight = calc_turnover_weights(forecast_)
 weighted_turnover_ = turnover_.apply(lambda x: calc_weighted_turnover(turnover_weight, x))
 
 # TODO: 为何计算cost时要用target_position?
-cost_sr_list = (calc_cost_SR_rules(average_turnover_, weighted_turnover_, gross_.loc[i], forecast_.loc[i], price_.loc[i], target_.loc[i],
-                   info_.loc[i]) for i in instruments)
+cost_sr_list = (calc_cost_sr_rules(average_turnover_, weighted_turnover_, gross_.loc[i], forecast_.loc[i], price_.loc[i], target_.loc[i],
+                                   info_.loc[i]) for i in instruments)
 cost_sr_ = pd.DataFrame(cost_sr_list, index=instruments, columns=rules)
 
 net_list = [calc_net_pnl(gross_.loc[i], cost_sr_.loc[i]) for i in instruments]
