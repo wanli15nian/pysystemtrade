@@ -20,9 +20,9 @@ def calc_forecast_weights(instruments_num, pnl_df, fit_end, span_multiple=50000,
     number_of_rules = len(pnl_df.columns)
     span = instruments_num * span_multiple
     min_periods_corr = instruments_num * min_periods_corr_multiple
-    min_periods = instruments_num * min_periods_multiple
-    norm_stdev, norm_factor, stdev_list = get_stdev_estimator_for_instrument_weight(pnl_df, fit_end, span, min_periods)
-    mean_list = get_mean_estimator(pnl_df, fit_end, span, min_periods)
+    min_periods_mean_std = instruments_num * min_periods_multiple
+    norm_stdev, norm_factor = get_stdev_estimator_for_instrument_weight(pnl_df, fit_end, span, min_periods_mean_std)
+    mean_list = get_mean_estimator(pnl_df, fit_end, span, min_periods_mean_std)
     norm_mean = [a / b for a, b in zip(mean_list, norm_factor)]
     corr = get_corr_estimator_for_instrument_weight(pnl_df, fit_end, span, min_periods_corr)  # Corr CLEARED
     weight = optimisation(number_of_rules, corr, norm_mean, norm_stdev)
@@ -57,7 +57,7 @@ def calculate_instrument_weights(pnl_df):
     span = 500000
     min_periods = 10
 
-    norm_stdev, _, _ = get_stdev_estimator_for_instrument_weight(weekly_ret, fit_end, span, min_periods)
+    norm_stdev, _, = get_stdev_estimator_for_instrument_weight(weekly_ret, fit_end, span, min_periods)
     norm_mean = [0.5 * asset_stdev for asset_stdev in norm_stdev]
     corr = get_corr_estimator_for_instrument_weight(weekly_ret, fit_end, span, min_periods)
 
