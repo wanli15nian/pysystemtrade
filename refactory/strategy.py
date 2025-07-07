@@ -8,10 +8,10 @@ from refactory.cost_sr import calc_cost_SR
 from refactory.data_source import get_instrument_info, get_daily_price
 from refactory.forecast import ewmac, rescale_forecast, floor_vol, price_vol
 from refactory.functions import combine_forecast, calc_net_pnl
-from refactory.gross_pnl import calc_gross, calc_gross_pnl
+from refactory.rule_pnl import calc_gross, calc_gross_pnl
 from refactory.portfolio_weights import calc_portfolio_weights
 from refactory.system_turnover import calc_system_turnover
-from refactory.rule_pnl import calc_target_position
+from refactory.rule_pnl import calc_position_target
 from refactory.utils import calc_volatility_scalar
 
 instruments = ["CORN", "SOFR", "SP500_micro", 'US10']
@@ -37,11 +37,11 @@ price_ = pd.concat(price_list, keys=instruments, names=['instrument', 'datetime'
 forecast_list = (calc_forecasts(price_.loc[i]) for i in instruments)
 forecast_ = pd.concat(forecast_list, keys=instruments, names=['instrument', 'datetime'])
 
-target_list = (calc_target_position(price_.loc[i], info_.loc[i], capital=1000000, risk_target=0.16)
+target_list = (calc_position_target(price_.loc[i], size_.loc[i], capital=1000000, annual_risk_target=0.16)
                for i in instruments)
 target_ = pd.concat(target_list, keys=instruments, names=['instrument', 'datetime'])
 
-gross_list = (calc_gross(forecast_.loc[i], target_.loc[i], price_.loc[i], info_.loc[i]) for i in instruments)
+gross_list = (calc_gross(forecast_.loc[i], target_.loc[i], price_.loc[i], size_.loc[i]) for i in instruments)
 gross_ = pd.concat(gross_list, keys=instruments, names=['instrument', 'datetime'])
 
 turnover_func = lambda x: x.reset_index(level='instrument', drop=True).apply(annual_forecast_turnover)
