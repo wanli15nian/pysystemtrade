@@ -139,12 +139,12 @@ corr_matrix_df = calc_corr_matrix(net_return_df)
 end = net_return_df.index[-1]
 last_index = net_return_df.index[net_return_df.index < end].size - 1
 
-exponential_mean = net_return_df.ewm(span=50000, min_periods=5).mean()
-mean = exponential_mean.iloc[last_index] * 365.25 / 7.0
-annualised_return_mean = mean
-exponential_std = net_return_df.ewm(span=50000, min_periods=5).std()
-std = exponential_std.iloc[last_index] * (365.25 / 7.0) ** 0.5
-annualised_return_std = std
+ewm_return = net_return_df.ewm(span=50000, min_periods=5)
+exponential_mean = ewm_return.mean()
+annualised_return_mean = exponential_mean.iloc[last_index] * 365.25 / 7.0
+exponential_std = ewm_return.std()
+annualised_return_std = exponential_std.iloc[last_index] * (365.25 / 7.0) ** 0.5
+
 avg_corr = calc_avg_corr(corr_matrix_df)
 avg_corr_matrix = calc_avg_corr_matrix(instruments, avg_corr)
 
