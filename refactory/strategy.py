@@ -8,7 +8,7 @@ from refactory.cost_sr import calc_cost_SR
 from refactory.data_source import get_instrument_info, get_daily_price
 from refactory.forecast import ewmac, rescale_forecast, floor_vol, price_vol
 from refactory.functions import combine_forecast, calc_net_pnl
-from refactory.gross_pnl import calc_gross, calc_gross_pnl
+from refactory.rule_pnl import calc_gross, calc_gross_pnl
 from refactory.portfolio_weights import calc_portfolio_weights
 from refactory.system_turnover import calc_system_turnover
 from refactory.rule_pnl import calc_target_position
