@@ -133,6 +133,7 @@ def combine_forecast(forecast, forecast_, net_, price):
     weight_df = pd.DataFrame(
         [calc_forecast_weights(instruments_num, net_pnl_stacked, end) for end in end_list],
         index=end_list, columns=net_pnl_stacked.columns)
+
     # To add the initial weight
     universal_index = price.index
     column_num = len(weight_df.columns)
@@ -140,8 +141,10 @@ def combine_forecast(forecast, forecast_, net_, price):
     weight_df = pd.concat([initial_weight, weight_df], axis=0)
     # 把按年的Index ffill成按天的Index
     weight_df = weight_df.reindex(universal_index, method='ffill').fillna(1 / column_num)
-    daily_forecast_weights_resampled_unsmoothed = weight_df.resample('1B').mean()
-    forecast_weights_for_rules = daily_forecast_weights_resampled_unsmoothed.ewm(span=125).mean()
+    daily_forecast_weights_unsmoothed = weight_df.resample('1B').mean()
+    forecast_weights = daily_forecast_weights_unsmoothed.ewm(span=125).mean()
+
+
     # 跳过一个weight normalisation to 1 的函数
     list_of_resampled_forecast = [forecast_df.resample('W').last() for forecast_df in forecast_df_list]
     pooled_forecast_data = reindex_and_stack_list_of_df(list_of_resampled_forecast)
@@ -151,21 +154,21 @@ def combine_forecast(forecast, forecast_, net_, price):
     if pooled_fdm == True:
         ew_lookback = ew_lookback * instruments_num
         min_periods = min_periods * instruments_num
-    raw_pooled_correlations = pooled_forecast_data.ewm(span=ew_lookback, min_periods=min_periods,
+    raw_pooled_corr = pooled_forecast_data.ewm(span=ew_lookback, min_periods=min_periods,
                                                        ignore_na=True).corr(pairwise=True)
     size_of_matrix = len(pooled_forecast_data)
-    pooled_forecast_corr_list_for_fdm = []
+    pooled_forecast_corr_list = []
     for fit_end in end_list:
-        corr_matrix_values = (raw_pooled_correlations[raw_pooled_correlations.index.get_level_values(0) < fit_end]
+        corr_matrix_values = (raw_pooled_corr[raw_pooled_corr.index.get_level_values(0) < fit_end]
                               .tail(size_of_matrix)
                               .values)
         corr_matrix_values = corr_matrix_values[-1]
         corr_matrix_values = [max(0, value) for value in corr_matrix_values]
-        pooled_forecast_corr_list_for_fdm.append(corr_matrix_values)
-    # pooled_forecast_corr_list_for_fdm.insert(0, np.array([0.99, 1]))  # 为了让corr_list的element和end_list对齐，先不加起始默认matrix
+        pooled_forecast_corr_list.append(corr_matrix_values)
+    # pooled_forecast_corr_list.insert(0, np.array([0.99, 1]))  # 为了让corr_list的element和end_list对齐，先不加起始默认matrix
     div_mult_vector = []
-    for corrmatrix, start_of_period in zip(pooled_forecast_corr_list_for_fdm, end_list):
-        weight_slice = forecast_weights_for_rules[:start_of_period]
+    for corrmatrix, start in zip(pooled_forecast_corr_list, end_list):
+        weight_slice = forecast_weights[:start]
         if weight_slice.shape[0] == 0:
             div_mult_vector.append(1.0)
             continue
@@ -175,11 +178,11 @@ def combine_forecast(forecast, forecast_, net_, price):
         div_mult_vector.append(div_multiplier)
     div_mult = pd.Series(div_mult_vector, index=end_list)
     # forecast_weights_for_rules.index 是fitting period的start dates
-    div_mult_unsmoothed_daily = div_mult.reindex(forecast_weights_for_rules.index, method="ffill")
+    div_mult_unsmoothed_daily = div_mult.reindex(forecast_weights.index, method="ffill")
     div_mult_unsmoothed_daily[div_mult_unsmoothed_daily.isna()] = 1.0
     div_mult = div_mult_unsmoothed_daily.ewm(span=125).mean()
     # TODO: combined forecast_rule 有问题
-    combined_forecast_without_cap = (forecast_weights_for_rules * forecast).sum(axis=1) * div_mult.ffill()
+    combined_forecast_without_cap = (forecast_weights * forecast).sum(axis=1) * div_mult.ffill()
     combined_forecast = combined_forecast_without_cap.clip(20, -20)  # QUESTION: 小数点后8位开始对不上，暂时不管
     return combined_forecast
 
