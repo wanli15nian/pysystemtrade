@@ -48,27 +48,25 @@ net_ = pd.concat([calc_net_pnl(gross_.loc[i], cost_sr_.loc[i])
 gross_dict = {}
 costs_dict = {}
 turnover_dict = {}
-subsystem_positions = []
+subsystem_positions_dict = {}
 
 for instrument in instruments:
     point_size = size_[instrument]
     price = price_.loc[instrument]
     forecast = forecast_.loc[instrument]
+    info = info_.loc[instrument]
 
     combined_forecast = combine_forecast(forecast, forecast_, net_, price)
     vol_scalar = calc_volatility_scalar(price, point_size, 500000, 0.25)
     subsystem_position_raw = vol_scalar * combined_forecast / 10.0
 
-    subsystem_positions.append(subsystem_position_raw)
+    subsystem_positions_dict[instrument] = subsystem_position_raw
 
     position_buffered = calc_buffered_pos_given_raw_pos(subsystem_position_raw, vol_scalar, 0.10)
     position = position_buffered.shift(1)
-
     gross_pnl = calc_gross_pnl(position, price, point_size)
-
-    info = info_.loc[instrument]
     normalised_costs = calc_cost(position, price, info)
-
+    
     gross_dict[instrument] = gross_pnl
     costs_dict[instrument] = normalised_costs
     print('calc_pnl_across_subsytem_for_indiv_instr')
@@ -77,14 +75,13 @@ for instrument in instruments:
 
 gross_pnl_df = pd.DataFrame(gross_dict)
 cost_df = pd.DataFrame(costs_dict)
+subsystem_positions = pd.DataFrame(subsystem_positions_dict).ffill()
 
-subsystem_positions = pd.concat(subsystem_positions, axis=1).ffill()
-subsystem_positions.columns = instruments
-
-gross_pnl_sum = gross_pnl_df.sum(axis=1)
-cost_sum = cost_df.sum(axis=1)
-net_PNL = gross_pnl_sum.add(cost_sum, fill_value=0).resample('B').sum()
-print(net_PNL)
+# 无用代码，仅为显示个结果以便核对重构是否成功
+# gross_pnl_sum = gross_pnl_df.sum(axis=1)
+# cost_sum = cost_df.sum(axis=1)
+# net_PNL = gross_pnl_sum.add(cost_sum, fill_value=0).resample('B').sum()
+# print(net_PNL)
 
 net_return_raw = pd.DataFrame({inst: gross_pnl_df[inst] + cost_df[inst].mean() for inst in instruments})
 normalised_weights = calc_portfolio_weights(net_return_raw, subsystem_positions)
