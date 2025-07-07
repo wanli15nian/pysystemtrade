@@ -70,7 +70,7 @@ for instrument in instruments:
     gross_pnl = calc_gross_pnl(position, price, point_size)
 
     info = info_.loc[instrument]
-    normalised_costs = calc_cost(position, price, info, instrument)
+    normalised_costs = calc_cost(position, price, info)
 
     net_pnl = gross_pnl.add(normalised_costs, fill_value=0).resample('B').sum()
 
