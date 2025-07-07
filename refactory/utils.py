@@ -13,8 +13,7 @@ def calc_mixed_volatility(daily_returns, days=35, min_periods=10, slow_vol_years
     vol = proportion_of_slow_vol * long_vol + (1 - proportion_of_slow_vol) * vol
     vol[vol < vol_abs_min] = vol_abs_min
     if backfill:
-        vol_forward_fill = vol.ffill()
-        vol = vol_forward_fill.bfill()
+        vol = vol.ffill().bfill()
     vol = vol * vol_multiplier
     return vol
 
