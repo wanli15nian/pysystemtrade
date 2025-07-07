@@ -5,8 +5,7 @@ from refactory.apply_buffer_to_position import calc_buffered_pos_given_raw_pos
 from refactory.cost import calc_cost
 from refactory.cost_forecast import annual_forecast_turnover, calculate_weighted_turnover, calc_turnover_weights
 from refactory.cost_sr import calc_cost_SR
-from refactory.data_source import get_instrument_info
-from refactory.data_util import get_daily_price
+from refactory.data_source import get_instrument_info, get_daily_price
 from refactory.forecast import calc_forecasts
 from refactory.functions import combine_forecast, calc_net_pnl
 from refactory.gross_pnl import calc_gross, calc_gross_pnl

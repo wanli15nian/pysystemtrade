@@ -99,7 +99,3 @@ if __name__ == '__main__':
     ins = 'CORN'
     corn = info.loc[ins]
     print(corn)
-    import data_util as u
-
-    print(u.get_percentage(ins), u.get_per_block(ins), u.get_per_trade(ins), u.get_point_size(ins),
-          u.get_rolls_per_year(ins), u.get_spread_cost(ins))
