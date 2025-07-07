@@ -37,7 +37,7 @@ price_ = pd.concat(price_list, keys=instruments, names=['instrument', 'datetime'
 forecast_list = (calc_forecasts(price_.loc[i]) for i in instruments)
 forecast_ = pd.concat(forecast_list, keys=instruments, names=['instrument', 'datetime'])
 
-target_list = (calc_position_target(price_.loc[i], size_.loc[i], capital=1000000, risk_target=0.16)
+target_list = (calc_position_target(price_.loc[i], size_.loc[i], capital=1000000, annual_risk_target=0.16)
                for i in instruments)
 target_ = pd.concat(target_list, keys=instruments, names=['instrument', 'datetime'])
 
