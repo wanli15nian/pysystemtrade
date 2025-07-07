@@ -21,12 +21,7 @@ def calc_forecast_weights(instr_num, pnl_df, fit_end, span_multiple=50000,
     span = instr_num * span_multiple
 
     corr = get_corr_estim_for_instr_weight(pnl_df, min_periods_corr_multiple, instr_num, fit_end, span)
-
-
     norm_stdev, norm_mean = get_stdev_estim_for_instr_weight(pnl_df, min_periods_multiple, instr_num, fit_end, span)
-
-    # mean_list = get_mean_estimator(pnl_df, fit_end, span, instr_num*min_periods_multiple)
-    # norm_mean = [a / b for a, b in zip(mean_list, norm_factor)]
 
     weight = optimisation(number_of_rules, corr, norm_mean, norm_stdev)
     return weight
