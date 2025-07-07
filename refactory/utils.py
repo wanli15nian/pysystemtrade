@@ -3,17 +3,15 @@ import pandas as pd
 from scipy.optimize import minimize
 
 
-def calc_mixed_volatility(daily_returns, days=35, min_periods=10, slow_vol_years=20,
-                          proportion_of_slow_vol=0.3, vol_abs_min=0.0000000001,
-                          vol_multiplier=1.0, backfill=False):
+def calc_mixed_volatility(data, days=35, min_periods=10, slow_vol_years=20,
+                          perc_of_long_vol=0.3, vol_min=0.0000000001,
+                          vol_multiplier=1.0):
     # 长期和短期波动进行权重处理
-    vol = daily_returns.ewm(adjust=True, span=days, min_periods=min_periods).std()
-    slow_vol_days = slow_vol_years * 256
-    long_vol = vol.ewm(adjust=True, span=slow_vol_days).mean()
-    vol = proportion_of_slow_vol * long_vol + (1 - proportion_of_slow_vol) * vol
-    vol[vol < vol_abs_min] = vol_abs_min
-    if backfill:
-        vol = vol.ffill().bfill()
+    short_vol = data.ewm(adjust=True, span=days, min_periods=min_periods).std()
+    long_vol = short_vol.ewm(adjust=True, span=slow_vol_years*256).mean()
+    vol = perc_of_long_vol * long_vol + (1 - perc_of_long_vol) * short_vol
+
+    vol[vol < vol_min] = vol_min
     vol = vol * vol_multiplier
     return vol
 
