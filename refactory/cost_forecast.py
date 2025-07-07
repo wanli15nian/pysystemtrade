@@ -37,7 +37,7 @@ def calculate_weighted_turnover(weights, list_of_values, sum_of_weights_should_b
 def get_cost_per_trade(price, per_block, per_trade, percentage, price_slippage, point_size, notional_blocks_traded):
     # 单次交易成本，包括slippage和commission
     # TODO: 在这里作者使用了pd.DateOffset来进行年份计算，而在rolling window中是用365天，原因存疑
-    average_price = float(price[price.index[-1] - pd.DateOffset(years=1):].mean())
+    average_price = float(price[price.index[-1] - pd.DateOffset(years=1):].mean())  #Average price in the last year
     commission_percentage = notional_blocks_traded * average_price * point_size * percentage
     commission_per_block = notional_blocks_traded * per_block
     commission = max([per_trade, commission_per_block, commission_percentage])
