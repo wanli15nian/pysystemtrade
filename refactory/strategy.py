@@ -83,7 +83,7 @@ system_turnover_ = {i: calc_system_turnover(subsystem_positions[i], price_.loc[i
 # print(net_PNL)
 
 net_return_raw = pd.DataFrame({inst: gross_pnl_df[inst] + cost_df[inst].mean() for inst in instruments})
-normalised_weights = calc_portfolio_weights(net_return_raw, subsystem_positions)
-print(normalised_weights)
+portfolio_weights = calc_portfolio_weights(net_return_raw, subsystem_positions)
+print(portfolio_weights)
 
 print('END')
