@@ -10,7 +10,7 @@ from refactory.functions import combine_forecast, calc_net_pnl
 from refactory.gross import calc_gross, calc_gross_pnl
 from refactory.gross import calc_position_target
 from refactory.portfolio_weights import calc_portfolio_weights
-from refactory.system_turnover import calc_system_turnover
+from refactory.system_turnover import calc_subsystem_turnover
 from refactory.utils import calc_volatility_scalar
 
 instruments = ["CORN", "SOFR", "SP500_micro", 'US10']
@@ -51,8 +51,10 @@ turnover_weight = calc_turnover_weights(forecast_)
 weighted_turnover_ = turnover_.apply(lambda x: calc_weighted_turnover(turnover_weight, x))
 
 # TODO: 为何计算cost时要用target_position?
-cost_sr_list = (calc_cost_sr_rules(average_turnover_, weighted_turnover_, gross_.loc[i], forecast_.loc[i], price_.loc[i], target_.loc[i],
-                                   info_.loc[i]) for i in instruments)
+cost_sr_list = (
+    calc_cost_sr_rules(average_turnover_, weighted_turnover_, gross_.loc[i], forecast_.loc[i], price_.loc[i],
+                       target_.loc[i],
+                       info_.loc[i]) for i in instruments)
 cost_sr_ = pd.DataFrame(cost_sr_list, index=instruments, columns=rules)
 
 net_list = [calc_net_pnl(gross_.loc[i], cost_sr_.loc[i]) for i in instruments]
@@ -90,7 +92,8 @@ subsystem_positions = pd.DataFrame(subsystem_positions_dict).ffill()
 gross_pnl_df = pd.DataFrame(gross_dict)
 cost_df = pd.DataFrame(costs_dict)
 
-system_turnover_ = {i: calc_system_turnover(subsystem_positions[i], price_.loc[i], size_.loc[i]) for i in instruments}
+subsystem_turnover_ = {i: calc_subsystem_turnover(subsystem_positions[i], price_.loc[i], size_.loc[i])
+                       for i in instruments}
 
 net_return_raw = pd.DataFrame({inst: gross_pnl_df[inst] + cost_df[inst].mean() for inst in instruments})
 portfolio_weights = calc_portfolio_weights(net_return_raw, subsystem_positions)
