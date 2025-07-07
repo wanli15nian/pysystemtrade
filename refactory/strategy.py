@@ -12,7 +12,7 @@ from refactory.forecast import calc_forecasts
 from refactory.functions import combine_forecast, calc_net_pnl
 from refactory.gross_pnl import calc_gross, calc_gross_pnl
 from refactory.target_volatility import calc_target_position
-from refactory.turnover import turnover_x_y, calc_average_position
+from refactory.turnover import calc_system_turnover
 from refactory.utils import optimisation, single_resampled_set_of_returns, calc_volatility_scalar
 
 instruments = ["CORN", "SOFR", "SP500_micro", 'US10']
@@ -88,11 +88,7 @@ for instrument in instruments:
     costs_dict[instrument] = normalised_costs
     print('calc_pnl_across_subsytem_for_indiv_instr')
 
-    daily_price = get_daily_price(instrument)
-    average_position_for_turnover = calc_average_position(daily_price, point_size)
-    subsystem_turnover = turnover_x_y(subsystem_position_raw, average_position_for_turnover)
-    turnover_dict[instrument] = subsystem_turnover  # TODO: Check the meaning of turnover
-    print('calc_subsystem_turnover')
+    turnover_dict[instrument] = calc_system_turnover(subsystem_position_raw, price, info)
 
 gross_pnl_df = pd.DataFrame(gross_dict)
 cost_df = pd.DataFrame(costs_dict)
