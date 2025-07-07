@@ -1,12 +1,12 @@
 import pandas as pd
 
-from refactory.cost_forecast import annual_forecast_turnover
+from refactory.cost_forecast import calc_annual_turnover
 from refactory.utils import calc_mixed_volatility
 
 
-def calc_cost_SR(average_turnover_, weighted_turnover_, gross, forecast, price, position_target, info):
+def calc_cost_SR_rules(average_turnover_, weighted_turnover_, gross, forecast, price, position_target, info):
     rules = gross.columns.to_list()
-    cost_SR_dict = {rule: calc_cost_SR_by_rule(
+    cost_SR_dict = {rule: calc_cost_sr(
         average_turnover_[rule],
         weighted_turnover_[rule],
         forecast[rule],
@@ -18,52 +18,43 @@ def calc_cost_SR(average_turnover_, weighted_turnover_, gross, forecast, price, 
     return cost_SR_dict
 
 
-def calc_cost_SR_by_rule(average_turnover, weighted_turnover, forecast_rule, gross_rule_pnl, price, pos_target, info):
+def calc_cost_sr(average_turnover, weighted_turnover, forecast, pnl, price, position_target, info):
     rolls_per_year = int(info['rolls_per_year'])
     point_size = info['point_size']
-
-    cost_per_trade = calc_per_trade(price, info)
-    annual_cost = calc_annual_cost(weighted_turnover, cost_per_trade, rolls_per_year)
-    cost_curve = calc_cost(pos_target=pos_target, price=price,
-                           point_size=point_size, trading_cost=annual_cost)
-    # cost_SR_annual算出交易成本与gross returns 波动的比例,越高说明成本越难以接受
-    # cost_curve.iloc[:11] = np.nan  # QUESTION: 为什么前11个数都是Nan
+    # 总成本 = 交易成本 + 移仓换月成本，都是以SR计算的，
+    cost_sr_per_trade = calc_per_trade(price, info)
+    transaction_cost = weighted_turnover * cost_sr_per_trade
+    holding_cost = rolls_per_year * 2.0 * cost_sr_per_trade
+    cost_sr = transaction_cost + holding_cost
+    # 年波动
+    ann_vol = calc_mixed_volatility(price.diff(), slow_vol_years=10) * 16
+    # TODO: 向后填充，有用未来数据的可能
+    # 年成本
+    ann_cost = (-cost_sr * ann_vol * position_target).bfill()
+    # 每条记录的实际成本 = 每条记录的时间间隔（以年为单位）* 年成本 * point size
+    interval_as_year = ann_cost.index.to_series().diff().dt.total_seconds() / (365.25 * 24 * 60 * 60)
+    cost_daily = ann_cost * interval_as_year * point_size
+    # cost_daily.iloc[:11] = np.nan  # QUESTION: 为什么前11个数都是Nan
     # if instrument == 'US10':
-    #     cost_curve.iloc[:13] = np.nan  # QUESTION: 为什么到了US10是前13个数字
-    cost_curve_mean = cost_curve.mean()
-    gross_daily_pnl_std = gross_rule_pnl.std()
-    cost_SR_annual = 16 * cost_curve_mean / gross_daily_pnl_std
-    turnover = annual_forecast_turnover(forecast_rule)
-    instr_cost_per_turnover = cost_SR_annual / turnover
-    cost_multiplier = 2
-    pooled_cost = instr_cost_per_turnover * average_turnover * cost_multiplier
-    return pooled_cost
+    #     cost_daily.iloc[:13] = np.nan  # QUESTION: 为什么到了US10是前13个数字
+    mean_cost_daily = cost_daily.mean()
+    # 年化夏普成本
+    pnl_vol_daily = pnl.std()
+    cost_sr_annual = 16 * mean_cost_daily / pnl_vol_daily
+    # 计算平均夏普成本
+    # TODO:这里应该直接传入turnover，不用传forecast，导致语义不清楚
+    annual_turnover = calc_annual_turnover(forecast)
+    cost_sr = cost_sr_annual * (average_turnover / annual_turnover) * 2
+    return cost_sr
 
 
-def calc_per_trade(price, info):
+def calc_per_trade(price, info, notional_blocks_traded=1):
     point_size = info['point_size']
     spread_cost = info['spread_cost']
     per_trade = info['per_trade']
     per_block = info['per_block']
     percentage = info['percentage']
-    cost_per_trade = calc_cost_per_trade(price, per_block, per_trade, percentage, spread_cost, point_size)
-    return cost_per_trade
-
-
-def calc_cost(pos_target, price, point_size, trading_cost):
-    # Actually output in price space to match gross returns
-    # These will be annualised figure, make it a small loss every day
-    # TODO: 完全没有看明白这个calc_cost的计算逻辑
-    annualised_price_vol_points = calc_mixed_volatility(price.diff(), slow_vol_years=10)
-    sr_cost_as_annualised_figure = (-trading_cost * pos_target * annualised_price_vol_points * 16).bfill()
-    period_intervals_in_seconds = sr_cost_as_annualised_figure.index.to_series().diff().dt.total_seconds()
-    costs_in_points = sr_cost_as_annualised_figure * period_intervals_in_seconds / (365.25 * 24 * 60 * 60)
-    costs = costs_in_points * point_size  # 后续有个fx 的序列，但目前不加
-    return costs
-
-
-def calc_cost_per_trade(price, per_block, per_trade, percentage, price_slippage, point_size, notional_blocks_traded=1):
-    # 例如：A股股票必须是100股的整数倍，这个参数是这个100的意思吗？
+    # A股股票必须是100股的整数倍，这个参数是这个100的意思吗？
     blocks = notional_blocks_traded
     # 过去一年的均价
     average_price = float(price[price.index[-1] - pd.DateOffset(years=1):].mean())
@@ -72,10 +63,11 @@ def calc_cost_per_trade(price, per_block, per_trade, percentage, price_slippage,
     commission_per_block = blocks * per_block
     commission = max([per_trade, commission_per_block, commission_percentage])
     # 交易滑点，这个应该可以加上参数控制滑几个点
-    slippage = blocks * price_slippage * point_size
+    slippage = blocks * spread_cost * point_size
     # 单次交易成本，包括slippage和commission
     cost = commission + slippage
-    # 年化波动率，前面乘了notional_blocks_traded，这里不应该乘吗？
+    # 年化波动率
+    # TODO:前面乘了notional_blocks_traded，这里不乘吗？
     ann_vol = calc_ann_vol(price, point_size)
     # 夏普成本
     cost_sr = cost / ann_vol
@@ -87,10 +79,3 @@ def calc_ann_vol(price, point_size):
     vol_average = float(vol[price.index[-1] - pd.DateOffset(years=1):].mean())
     ann_vol = vol_average * 16 * point_size
     return ann_vol
-
-
-def calc_annual_cost(turnover, cost_per_trade, rolls_per_year):
-    transaction_cost = turnover * cost_per_trade
-    holding_turnovers = rolls_per_year * 2.0
-    holding_cost = holding_turnovers * cost_per_trade
-    return transaction_cost + holding_cost

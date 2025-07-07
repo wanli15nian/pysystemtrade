@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def annual_forecast_turnover(forecast_raw, forecast_scalling=10.0):
+def calc_annual_turnover(forecast_raw, forecast_scalling=10.0):
     # TODO 为什么要先降到日频，日内不调仓吗？
     # 其实turnover应该是和position相关的，只是系统假设position和forecast成绝对正比
     forecast = forecast_raw.resample("1B").last()

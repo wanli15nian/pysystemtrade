@@ -3,8 +3,8 @@ import pandas as pd
 
 from refactory.apply_buffer_to_position import calc_buffered_pos_given_raw_pos
 from refactory.cost import calc_cost
-from refactory.cost_forecast import annual_forecast_turnover, calc_weighted_turnover, calc_turnover_weights
-from refactory.cost_sr import calc_cost_SR
+from refactory.cost_forecast import calc_annual_turnover, calc_weighted_turnover, calc_turnover_weights
+from refactory.cost_sr import calc_cost_SR_rules
 from refactory.data_source import get_instrument_info, get_daily_price
 from refactory.forecast import ewmac, rescale_forecast, floor_vol, price_vol
 from refactory.functions import combine_forecast, calc_net_pnl
@@ -44,7 +44,7 @@ target_ = pd.concat(target_list, keys=instruments, names=['instrument', 'datetim
 gross_list = (calc_gross(forecast_.loc[i], target_.loc[i], price_.loc[i], size_.loc[i]) for i in instruments)
 gross_ = pd.concat(gross_list, keys=instruments, names=['instrument', 'datetime'])
 
-turnover_func = lambda x: x.reset_index(level='instrument', drop=True).apply(annual_forecast_turnover)
+turnover_func = lambda x: x.reset_index(level='instrument', drop=True).apply(calc_annual_turnover)
 turnover_ = forecast_.groupby(level='instrument').apply(turnover_func)
 average_turnover_ = turnover_.apply(np.nanmean)
 
@@ -52,9 +52,8 @@ turnover_weight = calc_turnover_weights(forecast_)
 weighted_turnover_ = turnover_.apply(lambda x: calc_weighted_turnover(turnover_weight, x))
 
 # TODO: 为何计算cost时要用target_position?
-cost_sr_list = (
-calc_cost_SR(average_turnover_, weighted_turnover_, gross_.loc[i], forecast_.loc[i], price_.loc[i], target_.loc[i],
-             info_.loc[i]) for i in instruments)
+cost_sr_list = (calc_cost_SR_rules(average_turnover_, weighted_turnover_, gross_.loc[i], forecast_.loc[i], price_.loc[i], target_.loc[i],
+                   info_.loc[i]) for i in instruments)
 cost_sr_ = pd.DataFrame(cost_sr_list, index=instruments, columns=rules)
 
 net_list = [calc_net_pnl(gross_.loc[i], cost_sr_.loc[i]) for i in instruments]
