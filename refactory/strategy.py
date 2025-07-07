@@ -11,9 +11,10 @@ from refactory.data_util import get_daily_price, get_raw_cost_data
 from refactory.forecast import calc_forecasts
 from refactory.functions import combine_forecast, calc_net_pnl
 from refactory.gross_pnl import calc_gross, calc_gross_pnl
+from refactory.portfolio_weights import calc_corr_matrix
 from refactory.target_volatility import calc_target_position
 from refactory.turnover import calc_system_turnover
-from refactory.utils import optimisation, single_resampled_set_of_returns, calc_volatility_scalar
+from refactory.utils import optimisation, calc_volatility_scalar, single_resampled_set_of_returns
 
 instruments = ["CORN", "SOFR", "SP500_micro", 'US10']
 rules = ['ewmac32', 'ewmac8']
@@ -107,73 +108,10 @@ print(net_PNL)
 # costs = process_list_of_data(data=cost_df)
 
 
-# SR 的Index 问题还是没有处理好，源代码为resample("B"), 现为很奇怪的resample
-def calc_net_returns_dict(instruments, cost_df, gross_pnl_df):
-    net_return_dict = {}
-    for instrument in instruments:
-        index_used = gross_pnl_df[instrument].index
-        daily_returns_cost_as_ts = pd.Series(cost_df[instrument].mean(), index_used)
-        net_returns = gross_pnl_df[instrument] + daily_returns_cost_as_ts
-        net_return_dict[instrument] = net_returns
-    return net_return_dict
-
-
-def resample_net_returns(net_returns_dict):
-    net_return_df_unresampled = pd.DataFrame(net_returns_dict)
-    net_return_df = single_resampled_set_of_returns({'asset': net_return_df_unresampled}, 'W')
-    return net_return_df
-
-
-net_returns_dict = calc_net_returns_dict(instruments, cost_df, gross_pnl_df)
-net_return_df = resample_net_returns(net_returns_dict)
-# sample method is INSAMPLE
-start = net_return_df.index[0]
-end = net_return_df.index[-1]
-matching_index_size = net_return_df.index[net_return_df.index < end].size
-last_index = matching_index_size - 1
-data_length = len(net_return_df.index)
-frequency = 'W'
-
-
-def calc_corr_matrix(net_return_df, span=500000, min_periods=10, ignore_na=True, pairwise=True):
-    corr = net_return_df.ewm(span=span, min_periods=min_periods, ignore_na=ignore_na).corr(pairwise=pairwise)
-    size_of_matrix = len(corr.columns)
-    corr_matrix_values = (corr[corr.index.get_level_values(0) < end].tail(size_of_matrix).values)
-    corr_matrix_values[corr_matrix_values < 0.0] = 0.0
-    corr_matrix_df = pd.DataFrame(corr_matrix_values, columns=corr.columns)
-    return corr_matrix_df
-
-
-corr_matrix_df = calc_corr_matrix(net_return_df)
-
-
-def calc_annualised_return_mean(net_return_df, span=50000, min_periods=5):
-    exponential_mean = net_return_df.ewm(span=span, min_periods=min_periods).mean()
-    mean = exponential_mean.iloc[last_index] * 365.25 / 7.0
-    return mean
-
-
-annualised_return_mean = calc_annualised_return_mean(net_return_df)
-
-
-def calc_annualised_return_std(net_return_df, span=50000, min_periods=5):
-    exponential_std = net_return_df.ewm(span=span, min_periods=min_periods).std()
-    std = exponential_std.iloc[last_index] * (365.25 / 7.0) ** 0.5
-    return std
-
-
-annualised_return_std = calc_annualised_return_std(net_return_df)
-
-
-# Shrinkage
 def calc_avg_corr(corr_matrix_df):
     new_corr_values = copy(corr_matrix_df.values)
     np.fill_diagonal(new_corr_values, np.nan)
-    avg_corr = np.nanmean(new_corr_values)
-    return avg_corr
-
-
-avg_corr = calc_avg_corr(corr_matrix_df)
+    return np.nanmean(new_corr_values)
 
 
 def calc_avg_corr_matrix(instruments, avg_corr):
@@ -183,6 +121,30 @@ def calc_avg_corr_matrix(instruments, avg_corr):
     return pd.DataFrame(corr_matrix, index=instruments, columns=instruments)
 
 
+# net_return_dict = {}
+# for instrument1 in instruments:
+#     net_return_dict[instrument1] = gross_pnl_df[instrument1] + cost_df[instrument1].mean()
+# net_return_df_unresampled = pd.DataFrame(net_return_dict)
+
+net_return_raw = pd.DataFrame({inst: gross_pnl_df[inst] + cost_df[inst].mean() for inst in instruments})
+net_return_df = single_resampled_set_of_returns({'asset': net_return_raw}, 'W')
+
+# start = net_return_df.index[0]
+end = net_return_df.index[-1]
+matching_index_size = net_return_df.index[net_return_df.index < end].size
+last_index = matching_index_size - 1
+data_length = len(net_return_df.index)
+frequency = 'W'
+
+corr_matrix_df = calc_corr_matrix(net_return_df)
+
+exponential_mean = net_return_df.ewm(span=50000, min_periods=5).mean()
+mean = exponential_mean.iloc[last_index] * 365.25 / 7.0
+annualised_return_mean = mean
+exponential_std = net_return_df.ewm(span=50000, min_periods=5).std()
+std = exponential_std.iloc[last_index] * (365.25 / 7.0) ** 0.5
+annualised_return_std = std
+avg_corr = calc_avg_corr(corr_matrix_df)
 avg_corr_matrix = calc_avg_corr_matrix(instruments, avg_corr)
 
 
