@@ -61,13 +61,10 @@ def get_mean_estimator(data, fit_end, span=50000, min_periods=10):
     return mean_list
 
 
-def get_corr_estimator_for_instrument_weight(data, fit_end, span=500000, min_periods=10):
-    raw_corr = data.ewm(span=span, min_periods=min_periods, ignore_na=True).corr(
-        pairwise=True)  # span 和min_periods 都是config 里面的4倍，因为4个instruments
-    columns = data.columns
-    size_of_matrix = len(columns)
-    corr_matrix_values = (raw_corr[raw_corr.index.get_level_values(0) < fit_end].tail(
-        size_of_matrix).values)  # 截取fit_period之前的数据
+def get_corr_estimator_for_instrument_weight(data, min_periods_corr_multiple, instr_num, fit_end, span=500000):
+    min_periods = instr_num * min_periods_corr_multiple
+    raw_corr = data.ewm(span=span, min_periods=min_periods, ignore_na=True).corr(pairwise=True)  # span 和min_periods 都是config 里面的4倍，因为4个instruments
+    corr_matrix_values = (raw_corr[raw_corr.index.get_level_values(0) < fit_end].tail(instr_num).values)  # 截取fit_period之前的数据
     corr_matrix_values = [[max(0, item) for item in sublist] for sublist in corr_matrix_values]
     return corr_matrix_values
 
