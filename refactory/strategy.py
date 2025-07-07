@@ -2,11 +2,11 @@ import numpy as np
 import pandas as pd
 
 from refactory.apply_buffer_to_position import calc_buffered_pos_given_raw_pos
-from refactory.cost import calc_costs
+from refactory.cost import calc_cost
 from refactory.cost_forecast import annual_forecast_turnover, calculate_weighted_turnover, calc_turnover_weights
 from refactory.cost_sr import calc_cost_SR
 from refactory.data_source import get_instrument_info
-from refactory.data_util import get_daily_price, get_raw_cost_data
+from refactory.data_util import get_daily_price
 from refactory.forecast import calc_forecasts
 from refactory.functions import combine_forecast, calc_net_pnl
 from refactory.gross_pnl import calc_gross, calc_gross_pnl
@@ -54,11 +54,6 @@ subsystem_positions = []
 
 for instrument in instruments:
     point_size = size_[instrument]
-    # spread_cost = info['spread_cost']
-    # per_trade = info['per_trade']
-    # per_block = info['per_block']
-    # percentage = info['percentage']
-
     price = price_.loc[instrument]
     forecast = forecast_.loc[instrument]
 
@@ -75,9 +70,8 @@ for instrument in instruments:
     gross_pnl = calc_gross_pnl(position, price, point_size)
 
     info = info_.loc[instrument]
-    rolls_per_year = int(info['rolls_per_year'])  # TODO: 用【】取会自动转为浮点型，临时方案是强制给转成整型
-    raw_costs = get_raw_cost_data(instrument)
-    normalised_costs = calc_costs(position, price, rolls_per_year, raw_costs, point_size)
+    normalised_costs = calc_cost(position, price, info, instrument)
+
     net_pnl = gross_pnl.add(normalised_costs, fill_value=0).resample('B').sum()
 
     net_dict[instrument] = net_pnl
