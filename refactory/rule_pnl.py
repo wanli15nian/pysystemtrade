@@ -1,6 +1,22 @@
 import numpy as np
 import pandas as pd
 
+from refactory.utils import calc_mixed_volatility
+
+
+def calc_target_position(price, info, capital=1000000, risk_target=0.16):
+    '''
+    根据自行设置的risk target 所计算出的单一品种的目标仓位
+    剩余资金的风险暴露应该是0，要不然就是使得整体的风险暴露大于risk target
+    每个contract 能提供的cash vol 为ret_volatility * point_size (每手2500单位，每个单位的vol 为ret_volatility)
+    '''
+    point_size = info['point_size']
+    ret_volatility = calc_mixed_volatility(price.diff(), slow_vol_years=10)  # ret_vol 不是百分比，而是绝对值
+    daily_risk_target = risk_target / (256 ** 0.5)
+    daily_cash_vol_target = daily_risk_target * capital  # 每天的目标vol target
+    position_target = daily_cash_vol_target / (ret_volatility * point_size)
+    return position_target
+
 
 def calc_gross(forecast, pos_target, price, info):
     point_size = info['point_size']
