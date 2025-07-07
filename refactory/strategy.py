@@ -3,15 +3,15 @@ import pandas as pd
 
 from refactory.apply_buffer_to_position import calc_buffered_pos_given_raw_pos
 from refactory.cost import calc_cost
-from refactory.cost_forecast import annual_forecast_turnover, calculate_weighted_turnover, calc_turnover_weights
+from refactory.cost_forecast import annual_forecast_turnover, calc_weighted_turnover, calc_turnover_weights
 from refactory.cost_sr import calc_cost_SR
 from refactory.data_source import get_instrument_info, get_daily_price
 from refactory.forecast import ewmac, rescale_forecast, floor_vol, price_vol
 from refactory.functions import combine_forecast, calc_net_pnl
 from refactory.gross import calc_gross, calc_gross_pnl
+from refactory.gross import calc_position_target
 from refactory.portfolio_weights import calc_portfolio_weights
 from refactory.system_turnover import calc_system_turnover
-from refactory.gross import calc_position_target
 from refactory.utils import calc_volatility_scalar
 
 instruments = ["CORN", "SOFR", "SP500_micro", 'US10']
@@ -49,7 +49,7 @@ turnover_ = forecast_.groupby(level='instrument').apply(turnover_func)
 average_turnover_ = turnover_.apply(np.nanmean)
 
 turnover_weight = calc_turnover_weights(forecast_)
-weighted_turnover_ = turnover_.apply(lambda x: calculate_weighted_turnover(turnover_weight, x))
+weighted_turnover_ = turnover_.apply(lambda x: calc_weighted_turnover(turnover_weight, x))
 
 # TODO: 为何计算cost时要用target_position?
 cost_sr_list = (calc_cost_SR(rules, average_turnover_, weighted_turnover_, gross_.loc[i],
