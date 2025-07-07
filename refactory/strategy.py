@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from refactory.apply_buffer_to_position import calc_buffered_pos_given_raw_pos
+from refactory.apply_buffer_to_position import calc_buffered_position
 from refactory.cost import calc_cost
 from refactory.cost_sr import calc_cost_sr_rules, calc_annual_turnover, calc_turnover_weights, calc_weighted_turnover
 from refactory.data_source import get_instrument_info, get_daily_price
@@ -74,11 +74,7 @@ for instrument in instruments:
     combined_forecast = combine_forecast(forecast, forecast_, net_, price)
     vol_scalar = calc_volatility_scalar(price, point_size, 500000, 0.25)
     subsystem_position_raw = vol_scalar * combined_forecast / 10.0
-
-    # FIXME 确认一下是取最后的position
-    # subsystem_positions_dict[instrument] = subsystem_position_raw
-
-    position_buffered = calc_buffered_pos_given_raw_pos(subsystem_position_raw, vol_scalar, 0.10)
+    position_buffered = calc_buffered_position(subsystem_position_raw, vol_scalar, 0.10)
     position = position_buffered.shift(1)
     gross_pnl = calc_gross_pnl(position, price, point_size)
     normalised_costs = calc_cost(position, price, info)
