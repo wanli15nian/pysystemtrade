@@ -10,6 +10,16 @@ def get_daily_price(instrument_code):
     return daily_price['price']
 
 
+def get_raw_price(instrument_code):
+    df = pd.read_csv('data/multiple_prices_csv/' + instrument_code + '.csv', parse_dates=['DATETIME'],
+                     index_col='DATETIME')
+    df_price = df[['PRICE']]
+    daily_price = df_price.resample('1B').last()
+    daily_price.columns = ['price']
+    daily_price.index.name = 'datetime'
+    return daily_price['price']
+
+
 def get_instrument_info():
     i0 = load_instrument_config()
     i = i0[['Percentage', 'PerBlock', 'PerTrade', 'Pointsize']]
