@@ -1,6 +1,7 @@
+from copy import copy
+
 import numpy as np
 import pandas as pd
-from copy import copy
 
 from refactory.utils import optimisation, stack_df_list
 
@@ -44,7 +45,6 @@ def calc_avg_corr_matrix(corr_matrix_df, shrinkage_corr=0.5):
     return shrunk_corr
 
 
-
 def calc_smoothed_instr_weights(weights_df, subsystem_positions, smooth_weighting=125):
     instrument_weights = weights_df.reindex(subsystem_positions.index, method="ffill")
     instrument_weights[np.isnan(subsystem_positions)] = 0.0
@@ -78,11 +78,11 @@ def calc_portfolio_weights(net_return_raw, positions):
     target_sr = 0.5
     norm_std = [annualised_return_std.mean()] * 4
     mean_list = [target_sr * asset_stdev for asset_stdev in norm_std]
-    instruments1 = shrunk_corr.columns.to_list()
-    weights = optimisation(len(instruments1), corr=shrunk_corr.values, norm_mean=mean_list, norm_stdev=norm_std)
+    weights = optimisation(corr=shrunk_corr.values, norm_mean=mean_list, norm_stdev=norm_std)
 
+    instruments = net_return_df.columns.to_list()
     start = net_return_df.index[0]
-    weights_df = pd.DataFrame({asset_name: weight for (asset_name, weight) in zip(instruments1, weights)},
+    weights_df = pd.DataFrame({asset_name: weight for (asset_name, weight) in zip(instruments, weights)},
                               index=[start])
 
     positions[(~positions.isna()).sum(axis=1) == 0] = 0

@@ -15,7 +15,7 @@ def calc_mixed_volatility(data, days=35, min_periods=10, slow_vol_years=20,
     return vol
 
 
-def optimisation(number, corr, norm_mean, norm_stdev):
+def optimisation(corr, norm_mean, norm_stdev):
     def addem(weights):
         return 1.0 - sum(weights)
 
@@ -25,6 +25,7 @@ def optimisation(number, corr, norm_mean, norm_stdev):
         sr = -estimated_returns / stdev
         return sr
 
+    number = len(corr)
     mus = np.array(norm_mean, ndmin=2).transpose()  # mus 没问题
     sigma = np.diag(norm_stdev).dot(corr).dot(np.diag(norm_stdev))
     start_weights = np.array([1 / number] * number)

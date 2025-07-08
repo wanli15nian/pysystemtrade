@@ -22,7 +22,7 @@ def calc_weights_daily(net_):
     rule_num = len(net_.columns)
     instruments_num = len(net_.index.levels[0])
     weight_yearly_raw = pd.DataFrame(
-        [calc_forecast_weights(instruments_num, rule_num, net_weekly, end) for end in end_list],
+        [calc_forecast_weights(instruments_num, net_weekly, end) for end in end_list],
         index=end_list, columns=net_weekly.columns)
 
     # 加上最开始的日期，用平均权重
@@ -90,36 +90,21 @@ def combine_forecast(forecast, forecast_, net_):
     return combined_forecast
 
 
-def calc_forecast_weights(instr_num, rule_num, pnl_df, fit_end, span_multiple=50000,
-                          min_periods_corr_multiple=10, min_periods_multiple=5):
+def calc_forecast_weights(instr_num, pnl, fit_end, span_multiple=50000, min_periods_corr_multiple=10,
+                          min_periods_multiple=5):
     span = instr_num * span_multiple
 
-    corr = get_corr_estim_for_instr_weight(pnl_df, min_periods_corr_multiple, instr_num, fit_end, span)
-    norm_stdev, norm_mean = get_stdev_estim_for_instr_weight(pnl_df, min_periods_multiple, instr_num, fit_end, span)
-
-    weight = optimisation(rule_num, corr, norm_mean, norm_stdev)
-    return weight
-
-
-def calc_weights_yearly(net_):
-    resampled = [group.reset_index(level='instrument', drop=True).resample('W').sum()
-                 for _, group in net_.groupby(level='instrument')]
-    net = stack_df_list(resampled)
-    end_list = generate_yearly_end_list(net.index)
-    start_date = net.index[0]
-    instruments_num = len(net_.index.levels[0])
-    column_num = len(net_.columns)
-    weight_df_raw = pd.DataFrame(
-        [calc_forecast_weights(instruments_num, column_num, net, end) for end in end_list],
-        index=end_list, columns=net.columns)
-    # To add the initial weight
-    initial_weight = pd.DataFrame({col: 1 / column_num for col in weight_df_raw.columns}, index=[start_date])
-    weights_yearly = pd.concat([initial_weight, weight_df_raw], axis=0)
-    return weights_yearly, end_list
-
-
-def get_corr_estim_for_instr_weight(data, min_periods_corr_multiple, instr_num, fit_end, span=500000):
     min_periods = instr_num * min_periods_corr_multiple
+    corr = calc_corr_matrix(pnl, min_periods, fit_end, span)
+
+    periods = instr_num * min_periods_multiple
+    norm_std, norm_mean = calc_mean_std(pnl, periods, fit_end, span)
+
+    weights = optimisation(corr, norm_mean, norm_std)
+    return weights
+
+
+def calc_corr_matrix(data, min_periods, fit_end, span=500000):
     raw_corr = data.ewm(span=span, min_periods=min_periods, ignore_na=True).corr(
         pairwise=True)  # span 和min_periods 都是config 里面的4倍，因为4个instruments
     corr_matrix_values = (
@@ -128,8 +113,7 @@ def get_corr_estim_for_instr_weight(data, min_periods_corr_multiple, instr_num, 
     return corr_matrix_values
 
 
-def get_stdev_estim_for_instr_weight(data, min_periods_multiple, instr_num, fit_end, span=50000):
-    min_periods = instr_num * min_periods_multiple
+def calc_mean_std(data, min_periods, fit_end, span=50000):
     last_index = data.index[data.index < fit_end].size - 1
     # 计算标准差和均值
     std_daily = data.ewm(span=span, min_periods=min_periods).std().iloc[last_index]
