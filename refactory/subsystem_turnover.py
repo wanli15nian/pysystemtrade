@@ -4,27 +4,26 @@ import pandas as pd
 from refactory.utils import calc_mixed_volatility
 
 
-def calc_subsystem_turnover(subsystem_position_raw, daily_price, point_size):
-    average_position_for_turnover = calc_average_position(daily_price, point_size)
+def calc_subsystem_turnover(subsystem_position_raw, raw_price, point_size):
+    average_position_for_turnover = calc_average_position(raw_price, point_size)
     subsystem_turnover = turnover_x_y(subsystem_position_raw, average_position_for_turnover)
     return subsystem_turnover
 
 
-def calc_average_position(daily_price, block_move_value, notional_trading_capital=500000, risk_target=0.25,
+def calc_average_position(raw_price, block_move_value, notional_trading_capital=500000, risk_target=0.25,
                           vol_mult=1.0):
-    # FIXME 核对一下为什么要用carry数据，应该是只用daily price就行了
     # carry_data = get_instrument_raw_carry_data(instrument).PRICE
     # daily_prices = carry_data.resample('1B').last()
     # denom_price = get_instrument_raw_carry_data(instrument).PRICE
     # denom_price = denom_price.resample('1B').last()
-    daily_prices = daily_price
-    denom_price = daily_price
+    daily_prices = raw_price
+    denom_price = raw_price
 
     annual_cash_vol_target = (notional_trading_capital * risk_target)
     daily_cash_vol_target = annual_cash_vol_target / 16
 
     block_value = block_move_value * daily_prices.ffill() * 0.01
-    price_returns = daily_price.diff()
+    price_returns = raw_price.diff()
     raw_vol = calc_mixed_volatility(price_returns, slow_vol_years=10)
     return_vol = vol_mult * raw_vol
     (denom_price, return_vol) = denom_price.align(return_vol, join="right")

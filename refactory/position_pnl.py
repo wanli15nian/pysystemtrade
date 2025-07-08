@@ -102,7 +102,6 @@ def calc_volatility_scalar(price, point_size, capital, annual_perc_vol_target):
     carry_price = price
     block_value = carry_price.ffill() * 0.01 * point_size
     block_value.ffill(inplace=True)
-    # FIXME: When to use carry_price and when to use price, the logic of computation here is unknown
     resampled_carry_price = carry_price.resample('1B').last()
     annualised_price_vol_points = calc_mixed_volatility(price.diff(), slow_vol_years=10)
     annualised_price_vol_points.ffill(inplace=True)
