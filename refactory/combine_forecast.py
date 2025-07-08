@@ -4,19 +4,15 @@ import pandas as pd
 from refactory.utils import optimisation, stack_df_list
 
 
-def combine_forecast(forecast, forecast_, net_):
+def calc_weights_and_multiplier(forecast_, net_):
+    # TODO: 这个函数返回两个值不够简单，end_list的耦合需要解开
     weights_daily, end_list = calc_weights_daily(net_)
     corr_weekly = calc_corr_weekly(forecast_)
-    # corr_yearly = pd.DataFrame({'end': end_list, 'corr': [get_corr_end(corr_weekly, end) for end in end_list]})
-    # corr_yearly.set_index('end', inplace=True, drop=False)
-    # multiplier_yearly = corr_yearly.apply(lambda x: calc_div_multiplier(weights_daily, x['corr'], x['end']), axis=1)
     multiplier_yearly = pd.Series(
         [calc_div_multiplier(weights_daily, get_corr_end(corr_weekly, end), end) for end in end_list],
         index=end_list)
     multiplier_daily = multiplier_yearly.reindex(weights_daily.index, method="ffill").fillna(1.0).ewm(span=125).mean()
-
-    combined_forecast = ((weights_daily * forecast).sum(axis=1) * multiplier_daily).clip(20, -20)
-    return combined_forecast
+    return weights_daily, multiplier_daily
 
 
 def calc_weights_daily(net_):
