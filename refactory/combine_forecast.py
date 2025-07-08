@@ -5,14 +5,16 @@ from refactory.utils import optimisation, stack_df_list
 
 
 def combine_forecast(forecast, forecast_, net_, price):
-    grouped = net_.groupby(level='instrument')
-    net_pnl_all = {ins: group.reset_index(level='instrument', drop=True) for ins, group in grouped}
+    # grouped = net_.groupby(level='instrument')
+    # net_pnl_all = {ins: group.reset_index(level='instrument', drop=True) for ins, group in grouped}
+    # resampled = [pnl.resample('W').sum() for pnl in net_pnl_all.values()]
 
-    instruments_num = len(net_pnl_all)
-    column_num = len(forecast.columns)
-    resampled = [pnl.resample('W').sum() for pnl in net_pnl_all.values()]
+    resampled = [group.reset_index(level='instrument', drop=True).resample('W').sum()
+                 for _, group in net_.groupby(level='instrument')]
     net_pnl_stacked = stack_df_list(resampled)
 
+    instruments_num = len(forecast_.index.levels[0])
+    column_num = len(forecast.columns)
     start_date = net_pnl_stacked.index[0]
     end_date = net_pnl_stacked.index[-1]
     end_list = generate_fit_end_list(start_date, end_date)
@@ -27,9 +29,6 @@ def combine_forecast(forecast, forecast_, net_, price):
     weight_df = weight_df_.reindex(price.index, method='ffill').fillna(1 / column_num)
     daily_forecast_weights_unsmoothed = weight_df.resample('1B').mean()
     forecast_weights = daily_forecast_weights_unsmoothed.ewm(span=125).mean()
-
-
-
 
     grouped = forecast_.groupby(level='instrument')
     forecast_df_list = [group.reset_index(level='instrument', drop=True) for instrument, group in grouped]
