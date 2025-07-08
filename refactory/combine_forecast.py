@@ -6,51 +6,17 @@ from refactory.utils import optimisation, stack_df_list
 
 def combine_forecast(forecast, forecast_, net_):
     weights_daily, end_list = calc_weights_daily(net_)
+    corr_weekly = calc_corr_weekly(forecast_)
+    # corr_yearly = pd.DataFrame({'end': end_list, 'corr': [get_corr_end(corr_weekly, end) for end in end_list]})
+    # corr_yearly.set_index('end', inplace=True, drop=False)
+    # multiplier_yearly = corr_yearly.apply(lambda x: calc_div_multiplier(weights_daily, x['corr'], x['end']), axis=1)
+    multiplier_yearly = pd.Series(
+        [calc_div_multiplier(weights_daily, get_corr_end(corr_weekly, end), end) for end in end_list],
+        index=end_list)
+    multiplier_daily = multiplier_yearly.reindex(weights_daily.index, method="ffill").fillna(1.0).ewm(span=125).mean()
 
-    weekly_list = [group.droplevel('instrument').resample('W').last()
-                   for _, group in forecast_.groupby(level='instrument')]
-    forecast_weekly = stack_df_list(weekly_list)
-
-    lookback = 250
-    periods = 20
-    instruments_num = len(forecast_.index.levels[0])
-    corr_weekly = forecast_weekly.ewm(span=lookback * instruments_num, min_periods=periods * instruments_num,
-                                      ignore_na=True).corr(pairwise=True)
-
-    corr_list = []
-    for end in end_list:
-        corr_end = get_corr_end(corr_weekly, end)
-        corr_list.append(corr_end)
-
-    div_mult_vector = []
-    for corr, end in zip(corr_list, end_list):
-
-        weight_slice = weights_daily[:end]
-        if weight_slice.shape[0] == 0:
-            div_mult_vector.append(1.0)
-            continue
-        last_weight_for_period = np.array(weight_slice.iloc[-1])
-        div_multiplier = calc_div_mult_single_period(corr, last_weight_for_period)
-
-        div_mult_vector.append(div_multiplier)
-    div_mult = pd.Series(div_mult_vector, index=end_list).ffill()
-
-    # forecast_weights_for_rules.index 是fitting period的start dates
-    div_mult_unsmoothed_daily = div_mult.reindex(weights_daily.index, method="ffill")
-    div_mult_unsmoothed_daily[div_mult_unsmoothed_daily.isna()] = 1.0
-    div_mult = div_mult_unsmoothed_daily.ewm(span=125).mean()
-
-    # TODO: combined forecast_rule 有问题
-    combined_forecast = ((weights_daily * forecast).sum(axis=1) * div_mult).clip(20, -20)
+    combined_forecast = ((weights_daily * forecast).sum(axis=1) * multiplier_daily).clip(20, -20)
     return combined_forecast
-
-
-def get_corr_end(corr_weekly, end):
-    corr_end = (corr_weekly[corr_weekly.index.get_level_values(0) < end]
-                .tail(len(corr_weekly.index.levels[0]))
-                .values)[-1]
-    corr_end = [max(0, value) for value in corr_end]
-    return corr_end
 
 
 def calc_weights_daily(net_):
@@ -126,23 +92,27 @@ def calc_mean_std(data, min_periods, fit_end, span=50000):
     return norm_std, norm_mean
 
 
-# def calc_div_mult_single_period(corr, weights, dm_max=2.5):
-#     '''
-#     计算Portfolio variance in correlation space
-#     且设Limit
-#     '''
-#     corr_matrix = np.array([[corr[1], corr[0]], [corr[0], corr[1]]])
-#     try:
-#         variance = weights.dot(corr_matrix).dot(weights)
-#         risk = variance ** 0.5
-#     except:
-#         risk = np.nan
-#     if np.isnan(risk):
-#         return 1.0
-#     if risk < 0.0000001:
-#         return 1.0
-#     dm = np.min([1.0 / risk, dm_max])
-#     return dm
+def calc_corr_weekly(forecast_, lookback=250, periods=20):
+    weekly_list = [group.droplevel('instrument').resample('W').last()
+                   for _, group in forecast_.groupby(level='instrument')]
+    forecast_weekly = stack_df_list(weekly_list)
+    instruments_num = len(forecast_.index.levels[0])
+    corr_weekly = forecast_weekly.ewm(span=lookback * instruments_num, min_periods=periods * instruments_num,
+                                      ignore_na=True).corr(pairwise=True)
+    return corr_weekly
+
+
+def calc_div_multiplier(weights_daily, corr, end):
+    # 获取weights_daily数组中从0到end的切片
+    weight_slice = weights_daily[:end]
+    # 如果切片的长度为0，则返回1.0
+    if weight_slice.shape[0] == 0:
+        return 1.0
+    # 获取切片中最后一个元素的数组
+    last_weight_for_period = np.array(weight_slice.iloc[-1])
+    # 调用calc_div_mult_single_period函数，传入corr和last_weight_for_period，返回结果
+    return calc_div_mult_single_period(corr, last_weight_for_period)
+
 
 def calc_div_mult_single_period(corr, weights, dm_max=2.5):
     # 计算Portfolio variance in correlation space, 且设Limit
@@ -154,3 +124,11 @@ def calc_div_mult_single_period(corr, weights, dm_max=2.5):
     if np.isnan(risk) or risk < 1e-7:
         return 1.0
     return min(1.0 / risk, dm_max)
+
+
+def get_corr_end(corr_weekly, end):
+    corr_end = (corr_weekly[corr_weekly.index.get_level_values(0) < end]
+                .tail(len(corr_weekly.index.levels[0]))
+                .values)[-1]
+    corr_end = [max(0, value) for value in corr_end]
+    return corr_end
