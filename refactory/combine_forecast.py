@@ -23,6 +23,7 @@ def calc_forecast_weights(instr_num, rule_num, pnl_df, fit_end, span_multiple=50
 
 
 def combine_forecast(forecast, forecast_, net_, price):
+    universal_index = net_.index.levels[1]
 
     resampled = [group.reset_index(level='instrument', drop=True).resample('W').sum()
                  for _, group in net_.groupby(level='instrument')]
@@ -39,13 +40,12 @@ def combine_forecast(forecast, forecast_, net_, price):
 
     # To add the initial weight
     initial_weight = pd.DataFrame({col: 1 / column_num for col in weight_df_raw.columns}, index=[start_date])
-    weight_df_ = pd.concat([initial_weight, weight_df_raw], axis=0)
-
+    weight_df_yearly = pd.concat([initial_weight, weight_df_raw], axis=0)
 
     # 把按年的Index ffill成按天的Index
     # TODO:原先是reindex为price的，改成了net的,简单测试没问题
-    # weight_df = weight_df_.reindex(price.index, method='ffill').fillna(1 / column_num)
-    weight_df = weight_df_.reindex(net_.index.levels[1], method='ffill').fillna(1 / column_num)
+    # weight_df = weight_df_yearly.reindex(price.index, method='ffill').fillna(1 / column_num)
+    weight_df = weight_df_yearly.reindex(universal_index, method='ffill').fillna(1 / column_num)
     forecast_weights = weight_df.resample('1B').mean().ewm(span=125).mean()
 
     grouped = forecast_.groupby(level='instrument')
