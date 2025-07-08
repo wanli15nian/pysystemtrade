@@ -32,8 +32,8 @@ def combine_forecast(forecast, forecast_, net_, price):
     end_list = generate_yearly_end_list(net.index)
     start_date = net.index[0]
 
-    instruments_num = len(forecast_.index.levels[0])
-    column_num = len(forecast_.columns)
+    instruments_num = len(net_.index.levels[0])
+    column_num = len(net_.columns)
     weight_df_raw = pd.DataFrame(
         [calc_forecast_weights(instruments_num, column_num, net, end) for end in end_list],
         index=end_list, columns=net.columns)
@@ -48,6 +48,7 @@ def combine_forecast(forecast, forecast_, net_, price):
     weight_df = weight_df_yearly.reindex(universal_index, method='ffill').fillna(1 / column_num)
     forecast_weights = weight_df.resample('1B').mean().ewm(span=125).mean()
 
+    # end_list和weights的index只差最开始的一个日期
     grouped = forecast_.groupby(level='instrument')
     forecast_df_list = [group.reset_index(level='instrument', drop=True) for instrument, group in grouped]
 
