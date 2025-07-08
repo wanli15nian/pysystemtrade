@@ -23,9 +23,9 @@ def calc_cost_sr(average_turnover, weighted_turnover, forecast, pnl, price, posi
     rolls_per_year = int(info['rolls_per_year'])
     point_size = info['point_size']
     # 总成本 = 交易成本 + 移仓换月成本，都是以SR计算的，
-    cost_sr_per_trade = calc_per_trade(price, info)
-    transaction_cost = weighted_turnover * cost_sr_per_trade
-    holding_cost = rolls_per_year * 2.0 * cost_sr_per_trade
+    cost_sr_per = calc_cost_sr_per(price, info)
+    transaction_cost = weighted_turnover * cost_sr_per
+    holding_cost = rolls_per_year * 2.0 * cost_sr_per
     cost_sr = transaction_cost + holding_cost
     # 年波动
     ann_vol = calc_mixed_volatility(price.diff(), slow_vol_years=10) * 16
@@ -49,7 +49,16 @@ def calc_cost_sr(average_turnover, weighted_turnover, forecast, pnl, price, posi
     return cost_sr
 
 
-def calc_per_trade(price, info, notional_blocks_traded=1):
+def calc_cost_sr_per(price, info, notional_blocks_traded=1):
+    cost = calc_cost_per(price, info, notional_blocks_traded)
+    point_size = info['point_size']
+    ann_vol = calc_ann_vol(price, point_size)
+    # TODO:前面乘了notional_blocks_traded，这里不乘吗？
+    cost_sr = cost / ann_vol
+    return cost_sr
+
+
+def calc_cost_per(price, info, notional_blocks_traded):
     point_size = info['point_size']
     spread_cost = info['spread_cost']
     per_trade = info['per_trade']
@@ -63,16 +72,11 @@ def calc_per_trade(price, info, notional_blocks_traded=1):
     commission_percentage = blocks * average_price * point_size * percentage
     commission_per_block = blocks * per_block
     commission = max([per_trade, commission_per_block, commission_percentage])
-    # 交易滑点，这个应该可以加上参数控制滑几个点
+    # 交易滑点，现在只考虑一个点，以后可以加上参数控制滑几个点
     slippage = blocks * spread_cost * point_size
-    # 单次交易成本，包括slippage和commission
+    # 交易成本，包括slippage和commission
     cost = commission + slippage
-    # 年化波动率
-    # TODO:前面乘了notional_blocks_traded，这里不乘吗？
-    ann_vol = calc_ann_vol(price, point_size)
-    # 夏普成本
-    cost_sr = cost / ann_vol
-    return cost_sr
+    return cost
 
 
 def calc_ann_vol(price, point_size):
