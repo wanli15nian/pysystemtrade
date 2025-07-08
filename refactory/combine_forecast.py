@@ -17,24 +17,21 @@ def combine_forecast(forecast, forecast_, net_):
     corr_weekly = forecast_weekly.ewm(span=lookback * instruments_num, min_periods=periods * instruments_num,
                                       ignore_na=True).corr(pairwise=True)
 
-    corr = []
+    corr_list = []
     for end in end_list:
-        corr_matrix_values = (corr_weekly[corr_weekly.index.get_level_values(0) < end]
-                              .tail(len(corr_weekly.index.levels[0]))
-                              .values)[-1]
-        corr_matrix_values = [max(0, value) for value in corr_matrix_values]
-        corr.append(corr_matrix_values)
+        corr_end = get_corr_end(corr_weekly, end)
+        corr_list.append(corr_end)
 
-    # corr.insert(0, np.array([0.99, 1]))  # 为了让corr_list的element和end_list对齐，先不加起始默认matrix
     div_mult_vector = []
-    for corrmatrix, start in zip(corr, end_list):
-        weight_slice = weights_daily[:start]
+    for corr, end in zip(corr_list, end_list):
+
+        weight_slice = weights_daily[:end]
         if weight_slice.shape[0] == 0:
             div_mult_vector.append(1.0)
             continue
-
         last_weight_for_period = np.array(weight_slice.iloc[-1])
-        div_multiplier = calc_div_mult_single_period(corrmatrix, last_weight_for_period)
+        div_multiplier = calc_div_mult_single_period(corr, last_weight_for_period)
+
         div_mult_vector.append(div_multiplier)
     div_mult = pd.Series(div_mult_vector, index=end_list).ffill()
 
@@ -46,6 +43,14 @@ def combine_forecast(forecast, forecast_, net_):
     # TODO: combined forecast_rule 有问题
     combined_forecast = ((weights_daily * forecast).sum(axis=1) * div_mult).clip(20, -20)
     return combined_forecast
+
+
+def get_corr_end(corr_weekly, end):
+    corr_end = (corr_weekly[corr_weekly.index.get_level_values(0) < end]
+                .tail(len(corr_weekly.index.levels[0]))
+                .values)[-1]
+    corr_end = [max(0, value) for value in corr_end]
+    return corr_end
 
 
 def calc_weights_daily(net_):
@@ -121,20 +126,31 @@ def calc_mean_std(data, min_periods, fit_end, span=50000):
     return norm_std, norm_mean
 
 
+# def calc_div_mult_single_period(corr, weights, dm_max=2.5):
+#     '''
+#     计算Portfolio variance in correlation space
+#     且设Limit
+#     '''
+#     corr_matrix = np.array([[corr[1], corr[0]], [corr[0], corr[1]]])
+#     try:
+#         variance = weights.dot(corr_matrix).dot(weights)
+#         risk = variance ** 0.5
+#     except:
+#         risk = np.nan
+#     if np.isnan(risk):
+#         return 1.0
+#     if risk < 0.0000001:
+#         return 1.0
+#     dm = np.min([1.0 / risk, dm_max])
+#     return dm
+
 def calc_div_mult_single_period(corr, weights, dm_max=2.5):
-    '''
-    计算Portfolio variance in correlation space
-    且设Limit
-    '''
-    corrmatrix = np.array([[corr[1], corr[0]], [corr[0], corr[1]]])
+    # 计算Portfolio variance in correlation space, 且设Limit
+    corr_matrix = np.array([[corr[1], corr[0]], [corr[0], corr[1]]])
     try:
-        variance = weights.dot(corrmatrix).dot(weights)
-        risk = variance ** 0.5
+        risk = np.sqrt(weights.dot(corr_matrix).dot(weights))
     except:
-        risk = np.nan
-    if np.isnan(risk):
         return 1.0
-    if risk < 0.0000001:
+    if np.isnan(risk) or risk < 1e-7:
         return 1.0
-    dm = np.min([1.0 / risk, dm_max])
-    return dm
+    return min(1.0 / risk, dm_max)
