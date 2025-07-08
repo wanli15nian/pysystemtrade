@@ -41,7 +41,6 @@ target_ = pd.concat(target_list, keys=instruments, names=['instrument', 'datetim
 
 
 def calc_gross(forecast, pos_target, price, point_size):
-    # 其实应该在外面分开调用，目前没有单独查看position的需要，为外面简单起见，合并在一起被调用
     position = calc_position(forecast, pos_target)
     return calc_gross_pnl(position, price, point_size)
 
