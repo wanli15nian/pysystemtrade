@@ -4,31 +4,49 @@ import pandas as pd
 from refactory.utils import optimisation, stack_df_list
 
 
+def generate_yearly_end_list(index):
+    # 从结束日期开始倒推，然后reverse()
+    yearly = pd.date_range(index[-1], index[0], freq='-365D').to_list()
+    yearly.reverse()
+    return yearly[1:-1]
+
+
+def calc_forecast_weights(instr_num, rule_num, pnl_df, fit_end, span_multiple=50000,
+                          min_periods_corr_multiple=10, min_periods_multiple=5):
+    span = instr_num * span_multiple
+
+    corr = get_corr_estim_for_instr_weight(pnl_df, min_periods_corr_multiple, instr_num, fit_end, span)
+    norm_stdev, norm_mean = get_stdev_estim_for_instr_weight(pnl_df, min_periods_multiple, instr_num, fit_end, span)
+
+    weight = optimisation(rule_num, corr, norm_mean, norm_stdev)
+    return weight
+
+
 def combine_forecast(forecast, forecast_, net_, price):
-    # grouped = net_.groupby(level='instrument')
-    # net_pnl_all = {ins: group.reset_index(level='instrument', drop=True) for ins, group in grouped}
-    # resampled = [pnl.resample('W').sum() for pnl in net_pnl_all.values()]
 
     resampled = [group.reset_index(level='instrument', drop=True).resample('W').sum()
                  for _, group in net_.groupby(level='instrument')]
-    net_pnl_stacked = stack_df_list(resampled)
+    net = stack_df_list(resampled)
+
+    end_list = generate_yearly_end_list(net.index)
+    start_date = net.index[0]
 
     instruments_num = len(forecast_.index.levels[0])
-    column_num = len(forecast.columns)
-    start_date = net_pnl_stacked.index[0]
-    end_date = net_pnl_stacked.index[-1]
-    end_list = generate_fit_end_list(start_date, end_date)
+    column_num = len(forecast_.columns)
     weight_df_raw = pd.DataFrame(
-        [calc_forecast_weights(instruments_num, column_num, net_pnl_stacked, end) for end in end_list],
-        index=end_list, columns=net_pnl_stacked.columns)
+        [calc_forecast_weights(instruments_num, column_num, net, end) for end in end_list],
+        index=end_list, columns=net.columns)
 
     # To add the initial weight
     initial_weight = pd.DataFrame({col: 1 / column_num for col in weight_df_raw.columns}, index=[start_date])
     weight_df_ = pd.concat([initial_weight, weight_df_raw], axis=0)
+
+
     # 把按年的Index ffill成按天的Index
-    weight_df = weight_df_.reindex(price.index, method='ffill').fillna(1 / column_num)
-    daily_forecast_weights_unsmoothed = weight_df.resample('1B').mean()
-    forecast_weights = daily_forecast_weights_unsmoothed.ewm(span=125).mean()
+    # TODO:原先是reindex为price的，改成了net的,简单测试没问题
+    # weight_df = weight_df_.reindex(price.index, method='ffill').fillna(1 / column_num)
+    weight_df = weight_df_.reindex(net_.index.levels[1], method='ffill').fillna(1 / column_num)
+    forecast_weights = weight_df.resample('1B').mean().ewm(span=125).mean()
 
     grouped = forecast_.groupby(level='instrument')
     forecast_df_list = [group.reset_index(level='instrument', drop=True) for instrument, group in grouped]
@@ -73,29 +91,6 @@ def combine_forecast(forecast, forecast_, net_, price):
     combined_forecast_without_cap = (forecast_weights * forecast).sum(axis=1) * div_mult.ffill()
     combined_forecast = combined_forecast_without_cap.clip(20, -20)  # QUESTION: 小数点后8位开始对不上，暂时不管
     return combined_forecast
-
-
-'''
-从结束日期开始倒推，然后reverse()
-'''
-
-
-def generate_fit_end_list(start_date, end_date):
-    start_dates_per_period = pd.date_range(end_date, start_date, freq='-365D').to_list()
-    start_dates_per_period.reverse()
-    end_list = start_dates_per_period[1:-1]
-    return end_list
-
-
-def calc_forecast_weights(instr_num, rule_num, pnl_df, fit_end, span_multiple=50000,
-                          min_periods_corr_multiple=10, min_periods_multiple=5):
-    span = instr_num * span_multiple
-
-    corr = get_corr_estim_for_instr_weight(pnl_df, min_periods_corr_multiple, instr_num, fit_end, span)
-    norm_stdev, norm_mean = get_stdev_estim_for_instr_weight(pnl_df, min_periods_multiple, instr_num, fit_end, span)
-
-    weight = optimisation(rule_num, corr, norm_mean, norm_stdev)
-    return weight
 
 
 def get_corr_estim_for_instr_weight(data, min_periods_corr_multiple, instr_num, fit_end, span=500000):
