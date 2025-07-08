@@ -14,15 +14,14 @@ def combine_forecast(forecast, forecast_, net_):
     lookback = 250
     periods = 20
     instruments_num = len(forecast_.index.levels[0])
-    raw_corr = forecast_weekly.ewm(span=lookback * instruments_num, min_periods=periods * instruments_num,
-                                   ignore_na=True).corr(pairwise=True)
+    corr = forecast_weekly.ewm(span=lookback * instruments_num, min_periods=periods * instruments_num,
+                               ignore_na=True).corr(pairwise=True)
 
     pooled_forecast_corr_list = []
-    for fit_end in end_list:
-        corr_matrix_values = (raw_corr[raw_corr.index.get_level_values(0) < fit_end]
-                              .tail(len(raw_corr.index.levels[0]))
-                              .values)
-        corr_matrix_values = corr_matrix_values[-1]
+    for end in end_list:
+        corr_matrix_values = (corr[corr.index.get_level_values(0) < end]
+                              .tail(len(corr.index.levels[0]))
+                              .values)[-1]
         corr_matrix_values = [max(0, value) for value in corr_matrix_values]
         pooled_forecast_corr_list.append(corr_matrix_values)
 
@@ -42,9 +41,10 @@ def combine_forecast(forecast, forecast_, net_):
     div_mult_unsmoothed_daily = div_mult.reindex(weights_daily.index, method="ffill")
     div_mult_unsmoothed_daily[div_mult_unsmoothed_daily.isna()] = 1.0
     div_mult = div_mult_unsmoothed_daily.ewm(span=125).mean()
+
     # TODO: combined forecast_rule 有问题
     combined_forecast_without_cap = (weights_daily * forecast).sum(axis=1) * div_mult.ffill()
-    combined_forecast = combined_forecast_without_cap.clip(20, -20)  # QUESTION: 小数点后8位开始对不上，暂时不管
+    combined_forecast = combined_forecast_without_cap.clip(20, -20)
     return combined_forecast
 
 
