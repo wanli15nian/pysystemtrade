@@ -12,7 +12,6 @@ def calc_net_pnl(gross_pnl, cost_SR):
     return net_pnl_rule
 
 
-
 def combine_forecast(forecast, forecast_, net_, price):
     grouped = net_.groupby(level='instrument')
     net_pnl_all = {ins: group.reset_index(level='instrument', drop=True) for ins, group in grouped}
@@ -80,6 +79,7 @@ def combine_forecast(forecast, forecast_, net_, price):
     combined_forecast = combined_forecast_without_cap.clip(20, -20)  # QUESTION: 小数点后8位开始对不上，暂时不管
     return combined_forecast
 
+
 '''
 从结束日期开始倒推，然后reverse()
 '''
@@ -138,7 +138,6 @@ def calc_div_mult_single_period(corr, weights, dm_max=2.5):
         return 1.0
     dm = np.min([1.0 / risk, dm_max])
     return dm
-
 
 # def calculate_instrument_weights(pnl_df):
 #     daily_pnl = pnl_df.resample("1B").sum()

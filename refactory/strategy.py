@@ -51,7 +51,7 @@ turnover_weight = calc_turnover_weights(forecast_)
 weighted_turnover_ = turnover_.apply(lambda x: calc_weighted_turnover(turnover_weight, x))
 
 
-def calc_cost_sr_rules(turnover, average_turnover_, weighted_turnover_, gross, forecast, price, position_target, info):
+def calc_cost_sr_rules(turnover, average_turnover_, weighted_turnover_, gross, price, position_target, info):
     rules = gross.columns.to_list()
     cost_SR_dict = {rule: calc_cost_sr(turnover[rule], average_turnover_[rule], weighted_turnover_[rule], gross[rule],
                                        price, position_target, info) for rule in rules}
@@ -59,9 +59,9 @@ def calc_cost_sr_rules(turnover, average_turnover_, weighted_turnover_, gross, f
 
 
 cost_sr_list = (
-calc_cost_sr_rules(turnover_.loc[i], average_turnover_, weighted_turnover_, gross_.loc[i], forecast_.loc[i]
-                   , price_.loc[i], target_.loc[i], info_.loc[i])
-for i in instruments)
+    calc_cost_sr_rules(turnover_.loc[i], average_turnover_, weighted_turnover_, gross_.loc[i], price_.loc[i],
+                       target_.loc[i], info_.loc[i])
+    for i in instruments)
 cost_sr_ = pd.DataFrame(cost_sr_list, index=instruments, columns=gross_.columns)
 
 
@@ -81,16 +81,16 @@ subsystem_positions_dict = {}
 gross_dict = {}
 costs_dict = {}
 for instrument in instruments:
-    point_size = size_[instrument]
     price = price_.loc[instrument]
     forecast = forecast_.loc[instrument]
     info = info_.loc[instrument]
+    point_size = size_[instrument]
 
     combined_forecast = combine_forecast(forecast, forecast_, net_, price)
     vol_scalar = calc_volatility_scalar(price, point_size, 500000, 0.25)
     subsystem_position_raw = vol_scalar * combined_forecast / 10.0
-    position_buffered = calc_buffered_position(subsystem_position_raw, vol_scalar, 0.10)
-    position = position_buffered.shift(1)
+    subsystem_position_buffered = calc_buffered_position(subsystem_position_raw, vol_scalar, 0.10)
+    position = subsystem_position_buffered.shift(1)
     gross_pnl = calc_gross_pnl(position, price, point_size)
     normalised_costs = calc_cost(position, price, info)
 
