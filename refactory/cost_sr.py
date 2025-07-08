@@ -4,34 +4,32 @@ import pandas as pd
 from refactory.utils import calc_mixed_volatility
 
 
-def calc_cost_sr(average_turnover, weighted_turnover, forecast, pnl, price, position_target, info):
-    rolls_per_year = int(info['rolls_per_year'])
+def calc_cost_sr(turnover_annual, average_turnover, weighted_turnover, pnl, price, position_target, info):
+    # 计算年成本
+    cost_sr_annual = get_cost_sr_annual(weighted_turnover, price, info)
+    vol_annual = calc_mixed_volatility(price.diff(), slow_vol_years=10) * 16
+    cost_annual = (-cost_sr_annual * vol_annual * position_target).bfill()  # TODO: 向后填充有用未来数据的可能
+    # 计算日均成本
     point_size = info['point_size']
+    interval_as_year = cost_annual.index.to_series().diff().dt.total_seconds() / (365.25 * 24 * 60 * 60)
+    cost_daily = cost_annual * interval_as_year * point_size
+    cost_daily_mean = cost_daily.mean()
+    # 计算年夏普成本
+    pnl_vol_daily = pnl.std()
+    cost_sr_annual = 16 * (cost_daily_mean / pnl_vol_daily)
+    # 计算平均年夏普成本
+    cost_sr = cost_sr_annual * (average_turnover / turnover_annual) * 2
+    return cost_sr
+
+
+def get_cost_sr_annual(weighted_turnover, price, info):
     # 总成本 = 交易成本 + 移仓换月成本，都是以SR计算的，
     cost_sr_per = calc_cost_sr_per(price, info)
-    transaction_cost = weighted_turnover * cost_sr_per
+    rolls_per_year = int(info['rolls_per_year'])
     holding_cost = rolls_per_year * 2.0 * cost_sr_per
-    cost_sr = transaction_cost + holding_cost
-    # 年波动
-    ann_vol = calc_mixed_volatility(price.diff(), slow_vol_years=10) * 16
-    # TODO: 向后填充，有用未来数据的可能
-    # 年成本
-    ann_cost = (-cost_sr * ann_vol * position_target).bfill()
-    # 每条记录的实际成本 = 每条记录的时间间隔（以年为单位）* 年成本 * point size
-    interval_as_year = ann_cost.index.to_series().diff().dt.total_seconds() / (365.25 * 24 * 60 * 60)
-    cost_daily = ann_cost * interval_as_year * point_size
-    # cost_daily.iloc[:11] = np.nan  # QUESTION: 为什么前11个数都是Nan
-    # if instrument == 'US10':
-    #     cost_daily.iloc[:13] = np.nan  # QUESTION: 为什么到了US10是前13个数字
-    mean_cost_daily = cost_daily.mean()
-    # 年化夏普成本
-    pnl_vol_daily = pnl.std()
-    cost_sr_annual = 16 * mean_cost_daily / pnl_vol_daily
-    # 计算平均夏普成本
-    # TODO:这里可以直接传入turnover，不用传forecast，导致语义不清楚
-    annual_turnover = calc_annual_turnover(forecast)
-    cost_sr = cost_sr_annual * (average_turnover / annual_turnover) * 2
-    return cost_sr
+    transaction_cost = weighted_turnover * cost_sr_per
+    cost_sr_annual = transaction_cost + holding_cost
+    return cost_sr_annual
 
 
 def calc_cost_sr_per(price, info, notional_blocks_traded=1):
