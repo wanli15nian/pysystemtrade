@@ -4,43 +4,6 @@ import pandas as pd
 from refactory.utils import optimisation, stack_df_list
 
 
-def generate_yearly_end_list(index):
-    # 从结束日期开始倒推，然后reverse()
-    yearly = pd.date_range(index[-1], index[0], freq='-365D').to_list()
-    yearly.reverse()
-    return yearly[1:-1]
-
-
-def calc_weights_daily(net_):
-    # 转换成周数据
-    weekly_list = [group.reset_index(level='instrument', drop=True).resample('W').sum()
-                   for _, group in net_.groupby(level='instrument')]
-    net_weekly = stack_df_list(weekly_list)
-    end_list = generate_yearly_end_list(net_weekly.index)
-
-    # 计算年权重
-    rule_num = len(net_.columns)
-    instruments_num = len(net_.index.levels[0])
-    weight_yearly_raw = pd.DataFrame(
-        [calc_forecast_weights(instruments_num, net_weekly, end) for end in end_list],
-        index=end_list, columns=net_weekly.columns)
-
-    # 加上最开始的日期，用平均权重
-    initial_date = net_weekly.index[0]
-    rules = weight_yearly_raw.columns
-    initial_weight = pd.DataFrame({rule: 1 / len(rules) for rule in rules}, index=[initial_date])
-    weights_yearly = pd.concat([initial_weight, weight_yearly_raw], axis=0)
-    # end_list = weights_yearly.index[1:].to_list()     #end_list和weights的index只差最开始的一个日期
-
-    # 把按年的Index ffill成按天的Index
-    universal_index = net_.index.levels[1]
-    weight_df = weights_yearly.reindex(universal_index, method='ffill').fillna(1 / len(weights_yearly.columns))
-    weights_daily = weight_df.resample('1B').mean().ewm(span=125).mean()
-    # weight_df = weights_yearly.reindex(price.index, method='ffill').fillna(1 / rule_num) # 原先是reindex为price的，改成了net的,简单测试没问题
-
-    return weights_daily, end_list
-
-
 def combine_forecast(forecast, forecast_, net_):
     weights_daily, end_list = calc_weights_daily(net_)
 
@@ -87,6 +50,43 @@ def combine_forecast(forecast, forecast_, net_):
     combined_forecast_without_cap = (weights_daily * forecast).sum(axis=1) * div_mult.ffill()
     combined_forecast = combined_forecast_without_cap.clip(20, -20)  # QUESTION: 小数点后8位开始对不上，暂时不管
     return combined_forecast
+
+
+def calc_weights_daily(net_):
+    # 转换成周数据
+    weekly_list = [group.reset_index(level='instrument', drop=True).resample('W').sum()
+                   for _, group in net_.groupby(level='instrument')]
+    net_weekly = stack_df_list(weekly_list)
+    end_list = generate_yearly_end_list(net_weekly.index)
+
+    # 计算年权重
+    rule_num = len(net_.columns)
+    instruments_num = len(net_.index.levels[0])
+    weight_yearly_raw = pd.DataFrame(
+        [calc_forecast_weights(instruments_num, net_weekly, end) for end in end_list],
+        index=end_list, columns=net_weekly.columns)
+
+    # 加上最开始的日期，用平均权重
+    initial_date = net_weekly.index[0]
+    rules = weight_yearly_raw.columns
+    initial_weight = pd.DataFrame({rule: 1 / len(rules) for rule in rules}, index=[initial_date])
+    weights_yearly = pd.concat([initial_weight, weight_yearly_raw], axis=0)
+    # end_list = weights_yearly.index[1:].to_list()     #end_list和weights的index只差最开始的一个日期
+
+    # 把按年的Index ffill成按天的Index
+    universal_index = net_.index.levels[1]
+    weight_df = weights_yearly.reindex(universal_index, method='ffill').fillna(1 / len(weights_yearly.columns))
+    weights_daily = weight_df.resample('1B').mean().ewm(span=125).mean()
+    # weight_df = weights_yearly.reindex(price.index, method='ffill').fillna(1 / rule_num) # 原先是reindex为price的，改成了net的,简单测试没问题
+
+    return weights_daily, end_list
+
+
+def generate_yearly_end_list(index):
+    # 从结束日期开始倒推，然后reverse()
+    yearly = pd.date_range(index[-1], index[0], freq='-365D').to_list()
+    yearly.reverse()
+    return yearly[1:-1]
 
 
 def calc_forecast_weights(instr_num, pnl, fit_end, span_multiple=50000, min_periods_corr_multiple=10,
