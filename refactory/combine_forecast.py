@@ -132,26 +132,18 @@ def get_stdev_estim_for_instr_weight(data, min_periods_multiple, instr_num, fit_
     min_periods = instr_num * min_periods_multiple
     last_index = data.index[data.index < fit_end].size - 1
 
-    norm_stdev, norm_factor = get_stdev_list(data, last_index, min_periods, span)
-    norm_mean = get_mean_estimator(data, last_index, norm_factor, span, min_periods)
-    return norm_stdev, norm_mean
-
-
-def get_stdev_list(data, last_index, min_periods, span):
     stdev_smoothed = data.ewm(span=span, min_periods=min_periods).std()
     stdev = stdev_smoothed.iloc[last_index]
     stdev_list = stdev * ((365.25 / 7.0) ** 0.5)
     avg_stdev = np.nanmean(stdev_list)
-    norm_stdev = [avg_stdev] * len(stdev_list)
-    norm_factor = [stdev / avg_stdev for stdev in stdev_list]
-    return norm_stdev, norm_factor
-
-
-def get_mean_estimator(data, last_index, norm_factor, span=50000, min_periods=10):
+    stdev = [avg_stdev] * len(stdev_list)
+    factor = [stdev / avg_stdev for stdev in stdev_list]
+    norm_stdev, norm_factor = stdev, factor
     mean_smoothed = data.ewm(span=span, min_periods=min_periods).mean()  # 逻辑还是config 的4倍
     mean = mean_smoothed.iloc[last_index]
-    norm_mean = mean * 365.25 / 7.0
-    return [a / b for a, b in zip(norm_mean, norm_factor)]
+    mean = mean * 365.25 / 7.0
+    norm_mean = [a / b for a, b in zip(mean, norm_factor)]
+    return norm_stdev, norm_mean
 
 
 def calc_div_mult_single_period(corr, weights, dm_max=2.5):
