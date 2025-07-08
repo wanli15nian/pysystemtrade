@@ -94,10 +94,11 @@ for instrument in instruments:
     info = info_.loc[instrument]
     point_size = size_[instrument]
 
-    combined_forecast = combine_forecast(forecast, forecast_, net_, price)
+    combined_forecast = combine_forecast(forecast, forecast_, net_)
     raw_price = get_raw_price(instrument)
     vol_scalar = calc_volatility_scalar(raw_price, point_size, 500000, 0.25)
-    #TODO 这里是不是缺一个target position？
+
+    # TODO 这里是不是缺一个target position？
     subsystem_position_raw = vol_scalar * combined_forecast / 10.0
     subsystem_position_buffered = calc_buffered_position(subsystem_position_raw, vol_scalar, 0.10)
     position = subsystem_position_buffered.shift(1)
