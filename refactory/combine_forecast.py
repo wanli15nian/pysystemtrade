@@ -60,7 +60,6 @@ def calc_weights_daily(net_):
     end_list = generate_yearly_end_list(net_weekly.index)
 
     # 计算年权重
-    rule_num = len(net_.columns)
     instruments_num = len(net_.index.levels[0])
     weight_yearly_raw = pd.DataFrame(
         [calc_forecast_weights(instruments_num, net_weekly, end) for end in end_list],
