@@ -91,7 +91,7 @@ for instrument in instruments:
     info = info_.loc[instrument]
     point_size = size_[instrument]
 
-    combined_forecast = combine_forecast(forecast, forecast_, net_, price)
+    combined_forecast = combine_forecast(forecast, forecast_, net_)
     vol_scalar = calc_volatility_scalar(price, point_size, 500000, 0.25)
     #TODO 这里是不是缺一个target position？
     subsystem_position_raw = vol_scalar * combined_forecast / 10.0

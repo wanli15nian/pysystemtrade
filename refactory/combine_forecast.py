@@ -22,33 +22,9 @@ def calc_forecast_weights(instr_num, rule_num, pnl_df, fit_end, span_multiple=50
     return weight
 
 
-def combine_forecast(forecast, forecast_, net_, price):
-    universal_index = net_.index.levels[1]
+def combine_forecast(forecast, forecast_, net_):
+    weights_daily, end_list = calc_weights_daily(net_)
 
-    resampled = [group.reset_index(level='instrument', drop=True).resample('W').sum()
-                 for _, group in net_.groupby(level='instrument')]
-    net = stack_df_list(resampled)
-
-    end_list = generate_yearly_end_list(net.index)
-    start_date = net.index[0]
-
-    instruments_num = len(net_.index.levels[0])
-    column_num = len(net_.columns)
-    weight_df_raw = pd.DataFrame(
-        [calc_forecast_weights(instruments_num, column_num, net, end) for end in end_list],
-        index=end_list, columns=net.columns)
-
-    # To add the initial weight
-    initial_weight = pd.DataFrame({col: 1 / column_num for col in weight_df_raw.columns}, index=[start_date])
-    weight_df_yearly = pd.concat([initial_weight, weight_df_raw], axis=0)
-
-    # 把按年的Index ffill成按天的Index
-    # TODO:原先是reindex为price的，改成了net的,简单测试没问题
-    # weight_df = weight_df_yearly.reindex(price.index, method='ffill').fillna(1 / column_num)
-    weight_df = weight_df_yearly.reindex(universal_index, method='ffill').fillna(1 / column_num)
-    forecast_weights = weight_df.resample('1B').mean().ewm(span=125).mean()
-
-    # end_list和weights的index只差最开始的一个日期
     grouped = forecast_.groupby(level='instrument')
     forecast_df_list = [group.reset_index(level='instrument', drop=True) for instrument, group in grouped]
 
@@ -58,6 +34,8 @@ def combine_forecast(forecast, forecast_, net_, price):
     pooled_fdm = True
     ew_lookback = 250
     min_periods = 20
+
+    instruments_num = len(forecast_.index.levels[0])
     if pooled_fdm == True:
         ew_lookback = ew_lookback * instruments_num
         min_periods = min_periods * instruments_num
@@ -75,7 +53,7 @@ def combine_forecast(forecast, forecast_, net_, price):
     # pooled_forecast_corr_list.insert(0, np.array([0.99, 1]))  # 为了让corr_list的element和end_list对齐，先不加起始默认matrix
     div_mult_vector = []
     for corrmatrix, start in zip(pooled_forecast_corr_list, end_list):
-        weight_slice = forecast_weights[:start]
+        weight_slice = weights_daily[:start]
         if weight_slice.shape[0] == 0:
             div_mult_vector.append(1.0)
             continue
@@ -85,13 +63,56 @@ def combine_forecast(forecast, forecast_, net_, price):
         div_mult_vector.append(div_multiplier)
     div_mult = pd.Series(div_mult_vector, index=end_list)
     # forecast_weights_for_rules.index 是fitting period的start dates
-    div_mult_unsmoothed_daily = div_mult.reindex(forecast_weights.index, method="ffill")
+    div_mult_unsmoothed_daily = div_mult.reindex(weights_daily.index, method="ffill")
     div_mult_unsmoothed_daily[div_mult_unsmoothed_daily.isna()] = 1.0
     div_mult = div_mult_unsmoothed_daily.ewm(span=125).mean()
     # TODO: combined forecast_rule 有问题
-    combined_forecast_without_cap = (forecast_weights * forecast).sum(axis=1) * div_mult.ffill()
+    combined_forecast_without_cap = (weights_daily * forecast).sum(axis=1) * div_mult.ffill()
     combined_forecast = combined_forecast_without_cap.clip(20, -20)  # QUESTION: 小数点后8位开始对不上，暂时不管
     return combined_forecast
+
+
+def calc_weights_daily(net_):
+    resampled = [group.reset_index(level='instrument', drop=True).resample('W').sum()
+                 for _, group in net_.groupby(level='instrument')]
+    net = stack_df_list(resampled)
+    end_list = generate_yearly_end_list(net.index)
+    start_date = net.index[0]
+    instruments_num = len(net_.index.levels[0])
+    column_num = len(net_.columns)
+    weight_df_raw = pd.DataFrame(
+        [calc_forecast_weights(instruments_num, column_num, net, end) for end in end_list],
+        index=end_list, columns=net.columns)
+    # To add the initial weight
+    initial_weight = pd.DataFrame({col: 1 / column_num for col in weight_df_raw.columns}, index=[start_date])
+    weights_yearly = pd.concat([initial_weight, weight_df_raw], axis=0)
+
+    # end_list = weights_yearly.index[1:].to_list()     #end_list和weights的index只差最开始的一个日期
+    # TODO:原先是reindex为price的，改成了net的,简单测试没问题
+    # weight_df = weights_yearly.reindex(price.index, method='ffill').fillna(1 / column_num)
+    # 把按年的Index ffill成按天的Index
+    column_num = len(weights_yearly.columns)
+    universal_index = net_.index.levels[1]
+    weight_df = weights_yearly.reindex(universal_index, method='ffill').fillna(1 / column_num)
+    weights_daily = weight_df.resample('1B').mean().ewm(span=125).mean()
+    return weights_daily, end_list
+
+
+def calc_weights_yearly(net_):
+    resampled = [group.reset_index(level='instrument', drop=True).resample('W').sum()
+                 for _, group in net_.groupby(level='instrument')]
+    net = stack_df_list(resampled)
+    end_list = generate_yearly_end_list(net.index)
+    start_date = net.index[0]
+    instruments_num = len(net_.index.levels[0])
+    column_num = len(net_.columns)
+    weight_df_raw = pd.DataFrame(
+        [calc_forecast_weights(instruments_num, column_num, net, end) for end in end_list],
+        index=end_list, columns=net.columns)
+    # To add the initial weight
+    initial_weight = pd.DataFrame({col: 1 / column_num for col in weight_df_raw.columns}, index=[start_date])
+    weights_yearly = pd.concat([initial_weight, weight_df_raw], axis=0)
+    return weights_yearly, end_list
 
 
 def get_corr_estim_for_instr_weight(data, min_periods_corr_multiple, instr_num, fit_end, span=500000):
