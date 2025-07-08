@@ -1,16 +1,15 @@
 import numpy as np
 import pandas as pd
 
-from refactory.apply_buffer_to_position import calc_buffered_position
 from refactory.cost import calc_cost
 from refactory.cost_sr import calc_annual_turnover, calc_turnover_weights, calc_weighted_turnover, calc_cost_sr
 from refactory.data_source import get_instrument_info, get_daily_price
 from refactory.forecast import ewmac, rescale_forecast, floor_vol, price_vol
-from refactory.functions import combine_forecast, calc_net_pnl
-from refactory.gross import calc_gross, calc_gross_pnl
-from refactory.gross import calc_position_target
+from refactory.combine_forecast import combine_forecast
+from refactory.position_pnl import calc_gross_pnl, calc_net_pnl, calc_position, calc_buffered_position
+from refactory.position_pnl import calc_position_target
 from refactory.portfolio_weights import calc_portfolio_weights
-from refactory.system_turnover import calc_subsystem_turnover
+from refactory.subsystem_turnover import calc_subsystem_turnover
 from refactory.utils import calc_volatility_scalar
 
 instruments = ["CORN", "SOFR", "SP500_micro", 'US10']
@@ -39,6 +38,13 @@ forecast_ = pd.concat(forecast_list, keys=instruments, names=['instrument', 'dat
 target_list = (calc_position_target(price_.loc[i], size_.loc[i], capital=1000000, annual_risk_target=0.16)
                for i in instruments)
 target_ = pd.concat(target_list, keys=instruments, names=['instrument', 'datetime'])
+
+
+def calc_gross(forecast, pos_target, price, point_size):
+    # 其实应该在外面分开调用，目前没有单独查看position的需要，为外面简单起见，合并在一起被调用
+    position = calc_position(forecast, pos_target)
+    return calc_gross_pnl(position, price, point_size)
+
 
 gross_list = (calc_gross(forecast_.loc[i], target_.loc[i], price_.loc[i], size_.loc[i]) for i in instruments)
 gross_ = pd.concat(gross_list, keys=instruments, names=['instrument', 'datetime'])

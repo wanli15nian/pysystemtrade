@@ -15,63 +15,41 @@ def calc_mixed_volatility(data, days=35, min_periods=10, slow_vol_years=20,
     return vol
 
 
-def robust_vol_calc(daily_returns: pd.Series,
-                    days: int = 35,
-                    min_periods: int = 10,
-                    vol_abs_min: float = 0.0000000001,
-                    vol_floor: bool = True,
-                    floor_min_quant: float = 0.05,
-                    floor_min_periods: int = 100,
-                    floor_days: int = 500,
-                    backfill: bool = False, ):
-    vol = daily_returns.ewm(adjust=True, span=days, min_periods=min_periods).std()
-    vol[vol < vol_abs_min] = vol_abs_min
+def calc_volatility_scalar(price, point_size, capital, annual_perc_vol_target):
+    '''
+    Get ratio of required volatility vs volatility of instrument in instrument's own currency
 
-    if vol_floor:
-        vol_min = vol.rolling(min_periods=floor_min_periods, window=floor_days).quantile(q=floor_min_quant)
-        vol_min.iloc[0] = 0.0
-        vol_min.ffill(inplace=True)
-        vol = np.maximum(vol, vol_min)
-    if backfill:
-        # use the first vol in the past, sort of cheating
-        vol_forward_fill = vol.ffill()
-        vol = vol_forward_fill.bfill()
-    return vol
-
-
-def get_stdev_estim_for_instr_weight(data, min_periods_multiple, instr_num, fit_end, span=50000):
-    min_periods = instr_num * min_periods_multiple
-    last_index = data.index[data.index < fit_end].size - 1
-
-    norm_stdev, norm_factor = get_stdev_list(data, last_index, min_periods, span)
-    norm_mean = get_mean_estimator(data, last_index, norm_factor, span, min_periods)
-    return norm_stdev, norm_mean
-
-
-def get_stdev_list(data, last_index, min_periods, span):
-    stdev_smoothed = data.ewm(span=span, min_periods=min_periods).std()
-    stdev = stdev_smoothed.iloc[last_index]
-    stdev_list = stdev * ((365.25 / 7.0) ** 0.5)
-    avg_stdev = np.nanmean(stdev_list)
-    norm_stdev = [avg_stdev] * len(stdev_list)
-    norm_factor = [stdev / avg_stdev for stdev in stdev_list]
-    return norm_stdev, norm_factor
-
-
-def get_mean_estimator(data, last_index, norm_factor, span=50000, min_periods=10):
-    mean_smoothed = data.ewm(span=span, min_periods=min_periods).mean()  # 逻辑还是config 的4倍
-    mean = mean_smoothed.iloc[last_index]
-    mean_list = mean * 365.25 / 7.0
-    norm_mean = [a / b for a, b in zip(mean_list, norm_factor)]
-    return norm_mean
-
-
-def get_corr_estim_for_instr_weight(data, min_periods_corr_multiple, instr_num, fit_end, span=500000):
-    min_periods = instr_num * min_periods_corr_multiple
-    raw_corr = data.ewm(span=span, min_periods=min_periods, ignore_na=True).corr(pairwise=True)  # span 和min_periods 都是config 里面的4倍，因为4个instruments
-    corr_matrix_values = (raw_corr[raw_corr.index.get_level_values(0) < fit_end].tail(len(data.columns)).values)  # 截取fit_period之前的数据
-    corr_matrix_values = [[max(0, item) for item in sublist] for sublist in corr_matrix_values]
-    return corr_matrix_values
+    Gets daily prices for use with % volatility
+    This won't always be the same as the normal 'price'
+    try:
+        prices = self.get_instrument_raw_carry_data(instrument_code).PRICE
+    except missingData:
+        self.log.warning(
+            "No carry data found for %s, using adjusted prices to calculate percentage returns"
+            % instrument_code
+        )
+        return self.get_daily_prices(instrument_code)
+    '''
+    carry_price = price
+    block_value = carry_price.ffill() * 0.01 * point_size
+    block_value.ffill(inplace=True)
+    # FIXME: When to use carry_price and when to use price, the logic of computation here is unknown
+    resampled_carry_price = carry_price.resample('1B').last()
+    annualised_price_vol_points = calc_mixed_volatility(price.diff(), slow_vol_years=10)
+    annualised_price_vol_points.ffill(inplace=True)
+    # Align resampled carry price and annualised price volatility in points
+    (resampled_carry_price, annualised_price_vol_points) = resampled_carry_price.align(annualised_price_vol_points,
+                                                                                       join='right')
+    percentage_vol = 100.0 * (annualised_price_vol_points / resampled_carry_price.ffill().abs())
+    (block_value, percentage_vol) = block_value.align(percentage_vol, join="inner")
+    currency_vol = block_value * percentage_vol
+    # It is to multiply by fx_rate, which is taken to be 1 here
+    value_vol = currency_vol.ffill() * 1
+    perc_vol_target = annual_perc_vol_target / 16
+    cash_vol_target = capital * perc_vol_target
+    vol_scalar = cash_vol_target / value_vol
+    vol_scalar = vol_scalar.reindex(price.index, method="ffill")
+    return vol_scalar
 
 
 def optimisation(number, corr, norm_mean, norm_stdev):
@@ -110,46 +88,25 @@ def single_resampled_set_of_returns(data_dict, frequency: str):
     stacked_data = pd.concat(reindexed_data, axis=0).sort_index()
     return stacked_data
 
-
-def calc_volatility_scalar(price, point_size, capital, annual_perc_vol_target):
-    '''
-    Get ratio of required volatility vs volatility of instrument in instrument's own currency
-
-    Gets daily prices for use with % volatility
-    This won't always be the same as the normal 'price'
-    try:
-        prices = self.get_instrument_raw_carry_data(instrument_code).PRICE
-    except missingData:
-        self.log.warning(
-            "No carry data found for %s, using adjusted prices to calculate percentage returns"
-            % instrument_code
-        )
-        return self.get_daily_prices(instrument_code)
-    '''
-    carry_price = price
-    block_value = carry_price.ffill() * 0.01 * point_size
-    block_value.ffill(inplace=True)
-    # FIXME: When to use carry_price and when to use price, the logic of computation here is unknown
-    resampled_carry_price = carry_price.resample('1B').last()
-    annualised_price_vol_points = calc_mixed_volatility(price.diff(), slow_vol_years=10)
-    annualised_price_vol_points.ffill(inplace=True)
-    # Align resampled carry price and annualised price volatility in points
-    (resampled_carry_price, annualised_price_vol_points) = resampled_carry_price.align(annualised_price_vol_points,
-                                                                                       join='right')
-    percentage_vol = 100.0 * (annualised_price_vol_points / resampled_carry_price.ffill().abs())
-    (block_value, percentage_vol) = block_value.align(percentage_vol, join="inner")
-    currency_vol = block_value * percentage_vol
-    # It is to multiply by fx_rate, which is taken to be 1 here
-    value_vol = currency_vol.ffill() * 1
-    perc_vol_target = annual_perc_vol_target / 16
-    cash_vol_target = capital * perc_vol_target
-    vol_scalar = cash_vol_target / value_vol
-    vol_scalar = vol_scalar.reindex(price.index, method="ffill")
-    return vol_scalar
-
-
-# Define a function called multi_to_list that takes in an input
-def multi_to_list(input):
-    grouped = input.groupby(level='instrument')
-    result = [group.reset_index(level='instrument', drop=True) for instrument, group in grouped]
-    return result
+# def robust_vol_calc(daily_returns: pd.Series,
+#                     days: int = 35,
+#                     min_periods: int = 10,
+#                     vol_abs_min: float = 0.0000000001,
+#                     vol_floor: bool = True,
+#                     floor_min_quant: float = 0.05,
+#                     floor_min_periods: int = 100,
+#                     floor_days: int = 500,
+#                     backfill: bool = False, ):
+#     vol = daily_returns.ewm(adjust=True, span=days, min_periods=min_periods).std()
+#     vol[vol < vol_abs_min] = vol_abs_min
+#
+#     if vol_floor:
+#         vol_min = vol.rolling(min_periods=floor_min_periods, window=floor_days).quantile(q=floor_min_quant)
+#         vol_min.iloc[0] = 0.0
+#         vol_min.ffill(inplace=True)
+#         vol = np.maximum(vol, vol_min)
+#     if backfill:
+#         # use the first vol in the past, sort of cheating
+#         vol_forward_fill = vol.ffill()
+#         vol = vol_forward_fill.bfill()
+#     return vol
