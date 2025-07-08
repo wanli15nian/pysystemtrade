@@ -131,19 +131,16 @@ def get_corr_estim_for_instr_weight(data, min_periods_corr_multiple, instr_num, 
 def get_stdev_estim_for_instr_weight(data, min_periods_multiple, instr_num, fit_end, span=50000):
     min_periods = instr_num * min_periods_multiple
     last_index = data.index[data.index < fit_end].size - 1
-
-    stdev_smoothed = data.ewm(span=span, min_periods=min_periods).std()
-    stdev = stdev_smoothed.iloc[last_index]
-    stdev_list = stdev * ((365.25 / 7.0) ** 0.5)
-    avg_stdev = np.nanmean(stdev_list)
-    stdev = [avg_stdev] * len(stdev_list)
-    factor = [stdev / avg_stdev for stdev in stdev_list]
-    norm_stdev, norm_factor = stdev, factor
-    mean_smoothed = data.ewm(span=span, min_periods=min_periods).mean()  # 逻辑还是config 的4倍
-    mean = mean_smoothed.iloc[last_index]
-    mean = mean * 365.25 / 7.0
-    norm_mean = [a / b for a, b in zip(mean, norm_factor)]
-    return norm_stdev, norm_mean
+    # 计算标准差和均值
+    std_daily = data.ewm(span=span, min_periods=min_periods).std().iloc[last_index]
+    mean_daily = data.ewm(span=span, min_periods=min_periods).mean().iloc[last_index]
+    # 年化处理
+    std = std_daily * ((365.25 / 7.0) ** 0.5)
+    mean = mean_daily * (365.25 / 7.0)
+    # 计算归一化标准差和归一化均值
+    norm_std = [(np.nanmean(std))] * len(std)
+    norm_mean = mean / (std / np.nanmean(std))
+    return norm_std, norm_mean
 
 
 def calc_div_mult_single_period(corr, weights, dm_max=2.5):
