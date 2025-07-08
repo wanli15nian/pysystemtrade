@@ -23,7 +23,7 @@ price_list = (get_daily_price(i) for i in instruments)
 price_ = pd.concat(price_list, keys=instruments, names=['instrument', 'datetime'])
 
 raw_price_list = (get_raw_price(i) for i in instruments)
-raw_price_ = pd.concat(raw_price_list, keys=instruments, names=['instrument, datetime'])
+raw_price_ = pd.concat(raw_price_list, keys=instruments, names=['instrument', 'datetime'])
 
 
 def calc_forecasts(price):
