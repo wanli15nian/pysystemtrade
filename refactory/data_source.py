@@ -14,7 +14,6 @@ def get_raw_price(instrument_code):
     df = pd.read_csv('data/multiple_prices_csv/' + instrument_code + '.csv', parse_dates=['DATETIME'],
                      index_col='DATETIME')
     df_price = df[['PRICE']]
-
     daily_price = df_price.resample('1B').last()
     daily_price.columns = ['price']
     daily_price.index.name = 'datetime'
