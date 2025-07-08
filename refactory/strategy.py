@@ -4,7 +4,7 @@ import pandas as pd
 from refactory.combine_forecast import combine_forecast
 from refactory.cost import calc_cost
 from refactory.cost_sr import calc_annual_turnover, calc_turnover_weights, calc_weighted_turnover, calc_cost_sr
-from refactory.data_source import get_instrument_info, get_daily_price
+from refactory.data_source import get_instrument_info, get_daily_price, get_raw_price
 from refactory.forecast import ewmac, rescale_forecast, floor_vol, price_vol
 from refactory.portfolio_weights import calc_portfolio_weights
 from refactory.position_pnl import calc_gross_pnl, calc_net_pnl, calc_position, calc_buffered_position, \
@@ -21,6 +21,9 @@ size_ = info_['point_size']
 
 price_list = (get_daily_price(i) for i in instruments)
 price_ = pd.concat(price_list, keys=instruments, names=['instrument', 'datetime'])
+
+raw_price_list = (get_raw_price(i) for i in instruments)
+raw_price_ = pd.concat(raw_price_list, keys=instruments, names=['instrument, datetime'])
 
 
 def calc_forecasts(price):
