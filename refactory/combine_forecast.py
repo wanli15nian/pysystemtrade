@@ -14,20 +14,20 @@ def combine_forecast(forecast, forecast_, net_):
     lookback = 250
     periods = 20
     instruments_num = len(forecast_.index.levels[0])
-    corr = forecast_weekly.ewm(span=lookback * instruments_num, min_periods=periods * instruments_num,
-                               ignore_na=True).corr(pairwise=True)
+    corr_weekly = forecast_weekly.ewm(span=lookback * instruments_num, min_periods=periods * instruments_num,
+                                      ignore_na=True).corr(pairwise=True)
 
-    pooled_forecast_corr_list = []
+    corr = []
     for end in end_list:
-        corr_matrix_values = (corr[corr.index.get_level_values(0) < end]
-                              .tail(len(corr.index.levels[0]))
+        corr_matrix_values = (corr_weekly[corr_weekly.index.get_level_values(0) < end]
+                              .tail(len(corr_weekly.index.levels[0]))
                               .values)[-1]
         corr_matrix_values = [max(0, value) for value in corr_matrix_values]
-        pooled_forecast_corr_list.append(corr_matrix_values)
+        corr.append(corr_matrix_values)
 
-    # pooled_forecast_corr_list.insert(0, np.array([0.99, 1]))  # 为了让corr_list的element和end_list对齐，先不加起始默认matrix
+    # corr.insert(0, np.array([0.99, 1]))  # 为了让corr_list的element和end_list对齐，先不加起始默认matrix
     div_mult_vector = []
-    for corrmatrix, start in zip(pooled_forecast_corr_list, end_list):
+    for corrmatrix, start in zip(corr, end_list):
         weight_slice = weights_daily[:start]
         if weight_slice.shape[0] == 0:
             div_mult_vector.append(1.0)
@@ -36,15 +36,15 @@ def combine_forecast(forecast, forecast_, net_):
         last_weight_for_period = np.array(weight_slice.iloc[-1])
         div_multiplier = calc_div_mult_single_period(corrmatrix, last_weight_for_period)
         div_mult_vector.append(div_multiplier)
-    div_mult = pd.Series(div_mult_vector, index=end_list)
+    div_mult = pd.Series(div_mult_vector, index=end_list).ffill()
+
     # forecast_weights_for_rules.index 是fitting period的start dates
     div_mult_unsmoothed_daily = div_mult.reindex(weights_daily.index, method="ffill")
     div_mult_unsmoothed_daily[div_mult_unsmoothed_daily.isna()] = 1.0
     div_mult = div_mult_unsmoothed_daily.ewm(span=125).mean()
 
     # TODO: combined forecast_rule 有问题
-    combined_forecast_without_cap = (weights_daily * forecast).sum(axis=1) * div_mult.ffill()
-    combined_forecast = combined_forecast_without_cap.clip(20, -20)
+    combined_forecast = ((weights_daily * forecast).sum(axis=1) * div_mult).clip(20, -20)
     return combined_forecast
 
 
