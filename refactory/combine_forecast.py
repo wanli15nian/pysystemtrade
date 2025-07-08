@@ -11,26 +11,44 @@ def generate_yearly_end_list(index):
     return yearly[1:-1]
 
 
-def calc_forecast_weights(instr_num, rule_num, pnl_df, fit_end, span_multiple=50000,
-                          min_periods_corr_multiple=10, min_periods_multiple=5):
-    span = instr_num * span_multiple
+def calc_weights_daily(net_):
+    # 转换成周数据
+    weekly_list = [group.reset_index(level='instrument', drop=True).resample('W').sum()
+                   for _, group in net_.groupby(level='instrument')]
+    net_weekly = stack_df_list(weekly_list)
+    end_list = generate_yearly_end_list(net_weekly.index)
 
-    corr = get_corr_estim_for_instr_weight(pnl_df, min_periods_corr_multiple, instr_num, fit_end, span)
-    norm_stdev, norm_mean = get_stdev_estim_for_instr_weight(pnl_df, min_periods_multiple, instr_num, fit_end, span)
+    # 计算年权重
+    rule_num = len(net_.columns)
+    instruments_num = len(net_.index.levels[0])
+    weight_yearly_raw = pd.DataFrame(
+        [calc_forecast_weights(instruments_num, rule_num, net_weekly, end) for end in end_list],
+        index=end_list, columns=net_weekly.columns)
 
-    weight = optimisation(rule_num, corr, norm_mean, norm_stdev)
-    return weight
+    # 加上最开始的日期，用平均权重
+    initial_date = net_weekly.index[0]
+    rules = weight_yearly_raw.columns
+    initial_weight = pd.DataFrame({rule: 1 / len(rules) for rule in rules}, index=[initial_date])
+    weights_yearly = pd.concat([initial_weight, weight_yearly_raw], axis=0)
+    # end_list = weights_yearly.index[1:].to_list()     #end_list和weights的index只差最开始的一个日期
+
+    # 把按年的Index ffill成按天的Index
+    universal_index = net_.index.levels[1]
+    weight_df = weights_yearly.reindex(universal_index, method='ffill').fillna(1 / len(weights_yearly.columns))
+    weights_daily = weight_df.resample('1B').mean().ewm(span=125).mean()
+    # weight_df = weights_yearly.reindex(price.index, method='ffill').fillna(1 / rule_num) # 原先是reindex为price的，改成了net的,简单测试没问题
+
+    return weights_daily, end_list
 
 
 def combine_forecast(forecast, forecast_, net_):
     weights_daily, end_list = calc_weights_daily(net_)
 
-    grouped = forecast_.groupby(level='instrument')
-    forecast_df_list = [group.reset_index(level='instrument', drop=True) for instrument, group in grouped]
+    weekly_list = [group.droplevel('instrument').resample('W').last()
+                   for _, group in forecast_.groupby(level='instrument')]
 
-    # 跳过一个weight normalisation to 1 的函数
-    list_of_resampled_forecast = [forecast_df.resample('W').last() for forecast_df in forecast_df_list]
-    pooled_forecast_data = reindex_and_stack_list_of_df(list_of_resampled_forecast)
+    # pooled_forecast_data = reindex_and_stack_list_of_df(weekly_list)
+    pooled_forecast_data = stack_df_list(weekly_list)
     pooled_fdm = True
     ew_lookback = 250
     min_periods = 20
@@ -72,34 +90,15 @@ def combine_forecast(forecast, forecast_, net_):
     return combined_forecast
 
 
-def calc_weights_daily(net_):
-    # 转换成周数据
-    weekly_list = [group.reset_index(level='instrument', drop=True).resample('W').sum()
-                   for _, group in net_.groupby(level='instrument')]
-    net_weekly = stack_df_list(weekly_list)
-    end_list = generate_yearly_end_list(net_weekly.index)
+def calc_forecast_weights(instr_num, rule_num, pnl_df, fit_end, span_multiple=50000,
+                          min_periods_corr_multiple=10, min_periods_multiple=5):
+    span = instr_num * span_multiple
 
-    # 计算年权重
-    rule_num = len(net_.columns)
-    instruments_num = len(net_.index.levels[0])
-    weight_yearly_raw = pd.DataFrame(
-        [calc_forecast_weights(instruments_num, rule_num, net_weekly, end) for end in end_list],
-        index=end_list, columns=net_weekly.columns)
+    corr = get_corr_estim_for_instr_weight(pnl_df, min_periods_corr_multiple, instr_num, fit_end, span)
+    norm_stdev, norm_mean = get_stdev_estim_for_instr_weight(pnl_df, min_periods_multiple, instr_num, fit_end, span)
 
-    # 加上最开始的日期，用平均权重
-    initial_date = net_weekly.index[0]
-    rules = weight_yearly_raw.columns
-    initial_weight = pd.DataFrame({rule: 1 / len(rules) for rule in rules}, index=[initial_date])
-    weights_yearly = pd.concat([initial_weight, weight_yearly_raw], axis=0)
-    # end_list = weights_yearly.index[1:].to_list()     #end_list和weights的index只差最开始的一个日期
-
-    # 把按年的Index ffill成按天的Index
-    universal_index = net_.index.levels[1]
-    weight_df = weights_yearly.reindex(universal_index, method='ffill').fillna(1 / len(weights_yearly.columns))
-    weights_daily = weight_df.resample('1B').mean().ewm(span=125).mean()
-    # weight_df = weights_yearly.reindex(price.index, method='ffill').fillna(1 / rule_num) # 原先是reindex为price的，改成了net的,简单测试没问题
-
-    return weights_daily, end_list
+    weight = optimisation(rule_num, corr, norm_mean, norm_stdev)
+    return weight
 
 
 def calc_weights_yearly(net_):
@@ -151,27 +150,8 @@ def get_stdev_list(data, last_index, min_periods, span):
 def get_mean_estimator(data, last_index, norm_factor, span=50000, min_periods=10):
     mean_smoothed = data.ewm(span=span, min_periods=min_periods).mean()  # 逻辑还是config 的4倍
     mean = mean_smoothed.iloc[last_index]
-    mean_list = mean * 365.25 / 7.0
-    norm_mean = [a / b for a, b in zip(mean_list, norm_factor)]
-    return norm_mean
-
-
-def reindex_and_stack_list_of_df(list_of_df):
-    '''
-    提取所有的list中所有df的index
-    remove duplicates，把所有数据都reindex
-    加毫秒进行区分，然后stack起来
-    '''
-
-    from itertools import chain
-    all_indices_flattened = list(chain.from_iterable(data_item.index for data_item in list_of_df))
-    common_unique_index = sorted(set(all_indices_flattened))
-    data_reindexed = [data_item.reindex(common_unique_index) for data_item in list_of_df]
-    for offset_value, data_item in enumerate(data_reindexed):
-        data_item.index = data_item.index + pd.Timedelta("%dus" % offset_value)
-    stacked_data = pd.concat(data_reindexed, axis=0)
-    stacked_data = stacked_data.sort_index()
-    return stacked_data
+    norm_mean = mean * 365.25 / 7.0
+    return [a / b for a, b in zip(norm_mean, norm_factor)]
 
 
 def calc_div_mult_single_period(corr, weights, dm_max=2.5):
