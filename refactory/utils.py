@@ -35,21 +35,14 @@ def optimisation(number, corr, norm_mean, norm_stdev):
     return weight
 
 
-def single_resampled_set_of_returns(data_dict, frequency: str):
-    data_resampled = [pnl.resample(frequency).sum() for pnl in data_dict.values()]
-
-    all_indices = [data_item.index for data_item in data_resampled]
-    flattened = [item for sublist in all_indices for item in sublist]
-    common_index = list(set(flattened))
-    common_index.sort()
-
-    reindexed_data = [data_item.reindex(common_index) for data_item in data_resampled]
-
-    for offset_value, data_item in enumerate(reindexed_data):
-        data_item.index = data_item.index + pd.Timedelta("%dus" % offset_value)
-
-    stacked_data = pd.concat(reindexed_data, axis=0).sort_index()
-    return stacked_data
+def stack_df_list(df_list):
+    common_index = sorted(set.union(*(set(s.index) for s in df_list)))
+    reindexed = [
+        s.reindex(common_index).shift(freq=pd.Timedelta(f"{i}us"))
+        for i, s in enumerate(df_list)
+    ]
+    result = pd.concat(reindexed).sort_index()
+    return result
 
 # def robust_vol_calc(daily_returns: pd.Series,
 #                     days: int = 35,
@@ -73,3 +66,20 @@ def single_resampled_set_of_returns(data_dict, frequency: str):
 #         vol_forward_fill = vol.ffill()
 #         vol = vol_forward_fill.bfill()
 #     return vol
+#
+#
+# def single_resampled_set_of_returns(data_dict, frequency: str):
+#     data_resampled = [pnl.resample(frequency).sum() for pnl in data_dict.values()]
+#
+#     all_indices = [data_item.index for data_item in data_resampled]
+#     flattened = [item for sublist in all_indices for item in sublist]
+#     common_index = list(set(flattened))
+#     common_index.sort()
+#
+#     reindexed_data = [data_item.reindex(common_index) for data_item in data_resampled]
+#
+#     for offset_value, data_item in enumerate(reindexed_data):
+#         data_item.index = data_item.index + pd.Timedelta("%dus" % offset_value)
+#
+#     stacked_data = pd.concat(reindexed_data, axis=0).sort_index()
+#     return stacked_data

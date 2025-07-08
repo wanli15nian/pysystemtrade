@@ -1,19 +1,17 @@
 import numpy as np
 import pandas as pd
 
-from refactory.utils import optimisation, single_resampled_set_of_returns
+from refactory.utils import optimisation, stack_df_list
 
 
 def combine_forecast(forecast, forecast_, net_, price):
     grouped = net_.groupby(level='instrument')
     net_pnl_all = {ins: group.reset_index(level='instrument', drop=True) for ins, group in grouped}
-    grouped = forecast_.groupby(level='instrument')
-    forecast_df_list = [group.reset_index(level='instrument', drop=True) for instrument, group in grouped]
 
-    universal_index = price.index
     instruments_num = len(net_pnl_all)
     column_num = len(forecast.columns)
-    net_pnl_stacked = single_resampled_set_of_returns(net_pnl_all, frequency='W')
+    resampled = [pnl.resample('W').sum() for pnl in net_pnl_all.values()]
+    net_pnl_stacked = stack_df_list(resampled)
 
     start_date = net_pnl_stacked.index[0]
     end_date = net_pnl_stacked.index[-1]
@@ -26,9 +24,15 @@ def combine_forecast(forecast, forecast_, net_, price):
     initial_weight = pd.DataFrame({col: 1 / column_num for col in weight_df_raw.columns}, index=[start_date])
     weight_df_ = pd.concat([initial_weight, weight_df_raw], axis=0)
     # 把按年的Index ffill成按天的Index
-    weight_df = weight_df_.reindex(universal_index, method='ffill').fillna(1 / column_num)
+    weight_df = weight_df_.reindex(price.index, method='ffill').fillna(1 / column_num)
     daily_forecast_weights_unsmoothed = weight_df.resample('1B').mean()
     forecast_weights = daily_forecast_weights_unsmoothed.ewm(span=125).mean()
+
+
+
+
+    grouped = forecast_.groupby(level='instrument')
+    forecast_df_list = [group.reset_index(level='instrument', drop=True) for instrument, group in grouped]
 
     # 跳过一个weight normalisation to 1 的函数
     list_of_resampled_forecast = [forecast_df.resample('W').last() for forecast_df in forecast_df_list]

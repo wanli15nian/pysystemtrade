@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from copy import copy
 
-from refactory.utils import single_resampled_set_of_returns, optimisation
+from refactory.utils import optimisation, stack_df_list
 
 
 def calc_corr_matrix(net_return_df, span=500000, min_periods=10):
@@ -66,7 +66,9 @@ def normalise_weights(smoothed_instr_weights):
 
 
 def calc_portfolio_weights(net_return_raw, positions):
-    net_return_df = single_resampled_set_of_returns({'asset': net_return_raw}, 'W')
+    data_dict = {'asset': net_return_raw}
+    resampled = [pnl.resample('W').sum() for pnl in data_dict.values()]
+    net_return_df = stack_df_list(resampled)
 
     corr_matrix_df = calc_corr_matrix(net_return_df)
     shrunk_corr = calc_avg_corr_matrix(corr_matrix_df)
