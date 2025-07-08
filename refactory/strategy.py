@@ -1,16 +1,16 @@
 import numpy as np
 import pandas as pd
 
+from refactory.combine_forecast import combine_forecast
 from refactory.cost import calc_cost
 from refactory.cost_sr import calc_annual_turnover, calc_turnover_weights, calc_weighted_turnover, calc_cost_sr
 from refactory.data_source import get_instrument_info, get_daily_price
 from refactory.forecast import ewmac, rescale_forecast, floor_vol, price_vol
-from refactory.combine_forecast import combine_forecast
-from refactory.position_pnl import calc_gross_pnl, calc_net_pnl, calc_position, calc_buffered_position
-from refactory.position_pnl import calc_position_target
 from refactory.portfolio_weights import calc_portfolio_weights
+from refactory.position_pnl import calc_gross_pnl, calc_net_pnl, calc_position, calc_buffered_position, \
+    calc_volatility_scalar
+from refactory.position_pnl import calc_position_target
 from refactory.subsystem_turnover import calc_subsystem_turnover
-from refactory.utils import calc_volatility_scalar
 
 instruments = ["CORN", "SOFR", "SP500_micro", 'US10']
 # TODO 不应该用rules列表
@@ -93,6 +93,7 @@ for instrument in instruments:
 
     combined_forecast = combine_forecast(forecast, forecast_, net_, price)
     vol_scalar = calc_volatility_scalar(price, point_size, 500000, 0.25)
+    # TODO 这里是不是缺一个目标波动率？
     subsystem_position_raw = vol_scalar * combined_forecast / 10.0
     subsystem_position_buffered = calc_buffered_position(subsystem_position_raw, vol_scalar, 0.10)
     position = subsystem_position_buffered.shift(1)

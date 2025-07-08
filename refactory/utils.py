@@ -15,43 +15,6 @@ def calc_mixed_volatility(data, days=35, min_periods=10, slow_vol_years=20,
     return vol
 
 
-def calc_volatility_scalar(price, point_size, capital, annual_perc_vol_target):
-    '''
-    Get ratio of required volatility vs volatility of instrument in instrument's own currency
-
-    Gets daily prices for use with % volatility
-    This won't always be the same as the normal 'price'
-    try:
-        prices = self.get_instrument_raw_carry_data(instrument_code).PRICE
-    except missingData:
-        self.log.warning(
-            "No carry data found for %s, using adjusted prices to calculate percentage returns"
-            % instrument_code
-        )
-        return self.get_daily_prices(instrument_code)
-    '''
-    carry_price = price
-    block_value = carry_price.ffill() * 0.01 * point_size
-    block_value.ffill(inplace=True)
-    # FIXME: When to use carry_price and when to use price, the logic of computation here is unknown
-    resampled_carry_price = carry_price.resample('1B').last()
-    annualised_price_vol_points = calc_mixed_volatility(price.diff(), slow_vol_years=10)
-    annualised_price_vol_points.ffill(inplace=True)
-    # Align resampled carry price and annualised price volatility in points
-    (resampled_carry_price, annualised_price_vol_points) = resampled_carry_price.align(annualised_price_vol_points,
-                                                                                       join='right')
-    percentage_vol = 100.0 * (annualised_price_vol_points / resampled_carry_price.ffill().abs())
-    (block_value, percentage_vol) = block_value.align(percentage_vol, join="inner")
-    currency_vol = block_value * percentage_vol
-    # It is to multiply by fx_rate, which is taken to be 1 here
-    value_vol = currency_vol.ffill() * 1
-    perc_vol_target = annual_perc_vol_target / 16
-    cash_vol_target = capital * perc_vol_target
-    vol_scalar = cash_vol_target / value_vol
-    vol_scalar = vol_scalar.reindex(price.index, method="ffill")
-    return vol_scalar
-
-
 def optimisation(number, corr, norm_mean, norm_stdev):
     def addem(weights):
         return 1.0 - sum(weights)
