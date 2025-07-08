@@ -1,13 +1,19 @@
 import numpy as np
 import pandas as pd
 
-from refactory.utils import get_stdev_estim_for_instr_weight, get_mean_estimator, \
-    get_corr_estim_for_instr_weight, optimisation, single_resampled_set_of_returns
+from refactory.utils import get_stdev_estim_for_instr_weight, get_corr_estim_for_instr_weight, optimisation, \
+    single_resampled_set_of_returns
 
-'''
-从结束日期开始倒推，然后reverse()
-'''
+
+def calc_net_pnl(gross_pnl, cost_SR):
+    daily_cost_sr = cost_SR / 16
+    daily_cost = (daily_cost_sr * gross_pnl.std()).item()
+    net_pnl_rule = gross_pnl + daily_cost
+    return net_pnl_rule
+
+
 def generate_fit_end_list(start_date, end_date):
+    # 从结束日期开始倒推，然后reverse()
     start_dates_per_period = pd.date_range(end_date, start_date, freq='-365D').to_list()
     start_dates_per_period.reverse()
     end_list = start_dates_per_period[1:-1]
@@ -131,7 +137,8 @@ def combine_forecast(forecast, forecast_, net_, price):
     start_date = net_pnl_stacked.index[0]
     end_date = net_pnl_stacked.index[-1]
     end_list = generate_fit_end_list(start_date, end_date)
-    weight_df_raw = pd.DataFrame([calc_forecast_weights(instruments_num, column_num, net_pnl_stacked, end) for end in end_list],
+    weight_df_raw = pd.DataFrame(
+        [calc_forecast_weights(instruments_num, column_num, net_pnl_stacked, end) for end in end_list],
         index=end_list, columns=net_pnl_stacked.columns)
 
     # To add the initial weight
@@ -141,7 +148,6 @@ def combine_forecast(forecast, forecast_, net_, price):
     weight_df = weight_df_.reindex(universal_index, method='ffill').fillna(1 / column_num)
     daily_forecast_weights_unsmoothed = weight_df.resample('1B').mean()
     forecast_weights = daily_forecast_weights_unsmoothed.ewm(span=125).mean()
-
 
     # 跳过一个weight normalisation to 1 的函数
     list_of_resampled_forecast = [forecast_df.resample('W').last() for forecast_df in forecast_df_list]
@@ -153,7 +159,7 @@ def combine_forecast(forecast, forecast_, net_, price):
         ew_lookback = ew_lookback * instruments_num
         min_periods = min_periods * instruments_num
     raw_pooled_corr = pooled_forecast_data.ewm(span=ew_lookback, min_periods=min_periods,
-                                                       ignore_na=True).corr(pairwise=True)
+                                               ignore_na=True).corr(pairwise=True)
     size_of_matrix = len(pooled_forecast_data)
     pooled_forecast_corr_list = []
     for fit_end in end_list:
@@ -183,18 +189,3 @@ def combine_forecast(forecast, forecast_, net_, price):
     combined_forecast_without_cap = (forecast_weights * forecast).sum(axis=1) * div_mult.ffill()
     combined_forecast = combined_forecast_without_cap.clip(20, -20)  # QUESTION: 小数点后8位开始对不上，暂时不管
     return combined_forecast
-
-
-def calc_net_pnl(gross_pnl, cost_SR_dict):
-    net_returns_single_instrument = {}
-    # TODO: dict_of_instr_cost_with_pooling is specific to the target instrument, how can it be applied widely
-    for column_name in gross_pnl.columns:
-        cost_SR = cost_SR_dict[column_name]
-        gross_pnl_rule = gross_pnl[column_name]
-
-        daily_cost_sr = cost_SR / 16
-        daily_cost = (daily_cost_sr * gross_pnl_rule.std()).item()
-        net_pnl_rule = gross_pnl_rule + daily_cost
-
-        net_returns_single_instrument[column_name] = net_pnl_rule
-    return pd.DataFrame(net_returns_single_instrument)

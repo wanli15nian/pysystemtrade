@@ -57,7 +57,10 @@ cost_sr_list = (
                        info_.loc[i]) for i in instruments)
 cost_sr_ = pd.DataFrame(cost_sr_list, index=instruments, columns=rules)
 
-net_list = [calc_net_pnl(gross_.loc[i], cost_sr_.loc[i]) for i in instruments]
+net_list = [pd.DataFrame({
+    rule: calc_net_pnl(gross_.loc[i][rule], cost_sr_.loc[i][rule])
+    for rule in gross_.loc[i].columns
+}) for i in instruments]
 net_ = pd.concat(net_list, keys=instruments, names=['instrument', 'datetime'])
 
 print('calculate pnl for instrument and rule')
