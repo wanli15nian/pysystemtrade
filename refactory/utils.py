@@ -36,6 +36,7 @@ def optimisation(corr, norm_mean, norm_stdev):
     return weight
 
 
+# TODO: 应该直接用multiIndex做算法，不应该用这种拐弯的方法
 def stack_df_list(df_list):
     common_index = sorted(set.union(*(set(s.index) for s in df_list)))
     reindexed = [

@@ -47,7 +47,6 @@ def combine_forecast(forecast, forecast_, net_):
     weekly_list = [group.droplevel('instrument').resample('W').last()
                    for _, group in forecast_.groupby(level='instrument')]
 
-    # pooled_forecast_data = reindex_and_stack_list_of_df(weekly_list)
     pooled_forecast_data = stack_df_list(weekly_list)
     pooled_fdm = True
     ew_lookback = 250
