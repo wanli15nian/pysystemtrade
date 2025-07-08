@@ -4,7 +4,7 @@ import pandas as pd
 from refactory.combine_forecast import combine_forecast
 from refactory.cost import calc_cost
 from refactory.cost_sr import calc_annual_turnover, calc_turnover_weights, calc_weighted_turnover, calc_cost_sr
-from refactory.data_source import get_instrument_info, get_daily_price
+from refactory.data_source import get_instrument_info, get_daily_price, get_raw_price
 from refactory.forecast import ewmac, rescale_forecast, floor_vol, price_vol
 from refactory.portfolio_weights import calc_portfolio_weights
 from refactory.position_pnl import calc_gross_pnl, calc_net_pnl, calc_position, calc_buffered_position, \
@@ -21,6 +21,9 @@ size_ = info_['point_size']
 
 price_list = (get_daily_price(i) for i in instruments)
 price_ = pd.concat(price_list, keys=instruments, names=['instrument', 'datetime'])
+
+raw_price_list = (get_raw_price(i) for i in instruments)
+raw_price_ = pd.concat(raw_price_list, keys=instruments, names=['instrument, datetime'])
 
 
 def calc_forecasts(price):
@@ -91,8 +94,9 @@ for instrument in instruments:
     info = info_.loc[instrument]
     point_size = size_[instrument]
 
-    combined_forecast = combine_forecast(forecast, forecast_, net_)
-    vol_scalar = calc_volatility_scalar(price, point_size, 500000, 0.25)
+    combined_forecast = combine_forecast(forecast, forecast_, net_, price)
+    raw_price = get_raw_price(instrument)
+    vol_scalar = calc_volatility_scalar(raw_price, point_size, 500000, 0.25)
     #TODO 这里是不是缺一个target position？
     subsystem_position_raw = vol_scalar * combined_forecast / 10.0
     subsystem_position_buffered = calc_buffered_position(subsystem_position_raw, vol_scalar, 0.10)
@@ -109,7 +113,7 @@ subsystem_positions = pd.DataFrame(subsystem_positions_dict).ffill()
 gross_pnl_df = pd.DataFrame(gross_dict)
 cost_df = pd.DataFrame(costs_dict)
 
-subsystem_turnover_ = {i: calc_subsystem_turnover(subsystem_positions[i], price_.loc[i], size_.loc[i])
+subsystem_turnover_ = {i: calc_subsystem_turnover(subsystem_positions[i], raw_price_.loc[i], size_.loc[i])
                        for i in instruments}
 
 net_return_raw = pd.DataFrame({inst: gross_pnl_df[inst] + cost_df[inst].mean() for inst in instruments})
