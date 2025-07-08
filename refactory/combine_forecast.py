@@ -1,8 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from refactory.utils import optimisation, \
-    single_resampled_set_of_returns
+from refactory.utils import optimisation, single_resampled_set_of_returns
 
 
 def combine_forecast(forecast, forecast_, net_, price):
