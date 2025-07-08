@@ -73,28 +73,33 @@ def combine_forecast(forecast, forecast_, net_):
 
 
 def calc_weights_daily(net_):
-    resampled = [group.reset_index(level='instrument', drop=True).resample('W').sum()
-                 for _, group in net_.groupby(level='instrument')]
-    net = stack_df_list(resampled)
-    end_list = generate_yearly_end_list(net.index)
-    start_date = net.index[0]
-    instruments_num = len(net_.index.levels[0])
-    column_num = len(net_.columns)
-    weight_df_raw = pd.DataFrame(
-        [calc_forecast_weights(instruments_num, column_num, net, end) for end in end_list],
-        index=end_list, columns=net.columns)
-    # To add the initial weight
-    initial_weight = pd.DataFrame({col: 1 / column_num for col in weight_df_raw.columns}, index=[start_date])
-    weights_yearly = pd.concat([initial_weight, weight_df_raw], axis=0)
+    # 转换成周数据
+    weekly_list = [group.reset_index(level='instrument', drop=True).resample('W').sum()
+                   for _, group in net_.groupby(level='instrument')]
+    net_weekly = stack_df_list(weekly_list)
+    end_list = generate_yearly_end_list(net_weekly.index)
 
+    # 计算年权重
+    rule_num = len(net_.columns)
+    instruments_num = len(net_.index.levels[0])
+    weight_weekly_raw = pd.DataFrame(
+        [calc_forecast_weights(instruments_num, rule_num, net_weekly, end) for end in end_list],
+        index=end_list, columns=net_weekly.columns)
+
+    # 加上最开始的日期，用平均权重
+    initial_date = net_weekly.index[0]
+    rules = weight_weekly_raw.columns
+    initial_weight = pd.DataFrame({rule: 1 / len(rules) for rule in rules}, index=[initial_date])
+    weights_yearly = pd.concat([initial_weight, weight_weekly_raw], axis=0)
     # end_list = weights_yearly.index[1:].to_list()     #end_list和weights的index只差最开始的一个日期
-    # TODO:原先是reindex为price的，改成了net的,简单测试没问题
-    # weight_df = weights_yearly.reindex(price.index, method='ffill').fillna(1 / column_num)
+
     # 把按年的Index ffill成按天的Index
-    column_num = len(weights_yearly.columns)
     universal_index = net_.index.levels[1]
-    weight_df = weights_yearly.reindex(universal_index, method='ffill').fillna(1 / column_num)
+    weight_df = weights_yearly.reindex(universal_index, method='ffill').fillna(1 / len(weights_yearly.columns))
     weights_daily = weight_df.resample('1B').mean().ewm(span=125).mean()
+    # TODO:原先是reindex为price的，改成了net的,简单测试没问题
+    # weight_df = weights_yearly.reindex(price.index, method='ffill').fillna(1 / rule_num)
+
     return weights_daily, end_list
 
 
