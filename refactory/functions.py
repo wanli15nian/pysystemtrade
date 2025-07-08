@@ -12,8 +12,12 @@ def calc_net_pnl(gross_pnl, cost_SR):
     return net_pnl_rule
 
 
+'''
+从结束日期开始倒推，然后reverse()
+'''
+
+
 def generate_fit_end_list(start_date, end_date):
-    # 从结束日期开始倒推，然后reverse()
     start_dates_per_period = pd.date_range(end_date, start_date, freq='-365D').to_list()
     start_dates_per_period.reverse()
     end_list = start_dates_per_period[1:-1]

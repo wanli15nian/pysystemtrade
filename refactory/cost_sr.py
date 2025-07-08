@@ -4,21 +4,6 @@ import pandas as pd
 from refactory.utils import calc_mixed_volatility
 
 
-def calc_cost_sr_rules(average_turnover_, weighted_turnover_, gross, forecast, price, position_target, info):
-    # 可以考虑把这个直接提到最外层
-    rules = gross.columns.to_list()
-    cost_SR_dict = {rule: calc_cost_sr(
-        average_turnover_[rule],
-        weighted_turnover_[rule],
-        forecast[rule],
-        gross[rule],
-        price,
-        position_target,
-        info
-    ) for rule in rules}
-    return cost_SR_dict
-
-
 def calc_cost_sr(average_turnover, weighted_turnover, forecast, pnl, price, position_target, info):
     rolls_per_year = int(info['rolls_per_year'])
     point_size = info['point_size']

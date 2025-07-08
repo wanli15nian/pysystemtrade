@@ -3,7 +3,7 @@ import pandas as pd
 
 from refactory.apply_buffer_to_position import calc_buffered_position
 from refactory.cost import calc_cost
-from refactory.cost_sr import calc_cost_sr_rules, calc_annual_turnover, calc_turnover_weights, calc_weighted_turnover
+from refactory.cost_sr import calc_annual_turnover, calc_turnover_weights, calc_weighted_turnover, calc_cost_sr
 from refactory.data_source import get_instrument_info, get_daily_price
 from refactory.forecast import ewmac, rescale_forecast, floor_vol, price_vol
 from refactory.functions import combine_forecast, calc_net_pnl
@@ -17,6 +17,12 @@ instruments = ["CORN", "SOFR", "SP500_micro", 'US10']
 # TODO 不应该用rules列表
 rules = ['ewmac32', 'ewmac8']
 
+info_ = get_instrument_info().loc[instruments]
+size_ = info_['point_size']
+
+price_list = (get_daily_price(i) for i in instruments)
+price_ = pd.concat(price_list, keys=instruments, names=['instrument', 'datetime'])
+
 
 def calc_forecasts(price):
     raw_ewmac32 = ewmac(price, 32, 128, 1)
@@ -26,12 +32,6 @@ def calc_forecasts(price):
     forecast_df = pd.DataFrame({'ewmac32': ewmac32, 'ewmac8': ewmac8})
     return forecast_df
 
-
-info_ = get_instrument_info().loc[instruments]
-size_ = info_['point_size']
-
-price_list = (get_daily_price(i) for i in instruments)
-price_ = pd.concat(price_list, keys=instruments, names=['instrument', 'datetime'])
 
 forecast_list = (calc_forecasts(price_.loc[i]) for i in instruments)
 forecast_ = pd.concat(forecast_list, keys=instruments, names=['instrument', 'datetime'])
@@ -50,17 +50,35 @@ average_turnover_ = turnover_.apply(np.nanmean)
 turnover_weight = calc_turnover_weights(forecast_)
 weighted_turnover_ = turnover_.apply(lambda x: calc_weighted_turnover(turnover_weight, x))
 
-# TODO: 为何计算cost时要用target_position?
-cost_sr_list = (
-    calc_cost_sr_rules(average_turnover_, weighted_turnover_, gross_.loc[i], forecast_.loc[i], price_.loc[i],
-                       target_.loc[i],
-                       info_.loc[i]) for i in instruments)
-cost_sr_ = pd.DataFrame(cost_sr_list, index=instruments, columns=rules)
 
-net_list = [pd.DataFrame({
-    rule: calc_net_pnl(gross_.loc[i][rule], cost_sr_.loc[i][rule])
-    for rule in gross_.loc[i].columns
-}) for i in instruments]
+def calc_cost_sr_rules(average_turnover_, weighted_turnover_, gross, forecast, price, position_target, info):
+    rules = gross.columns.to_list()
+    cost_SR_dict = {rule: calc_cost_sr(
+        average_turnover_[rule],
+        weighted_turnover_[rule],
+        forecast[rule],
+        gross[rule],
+        price,
+        position_target,
+        info
+    ) for rule in rules}
+    return cost_SR_dict
+
+
+cost_sr_list = (calc_cost_sr_rules(average_turnover_, weighted_turnover_, gross_.loc[i], forecast_.loc[i]
+                                   , price_.loc[i], target_.loc[i], info_.loc[i])
+                for i in instruments)
+cost_sr_ = pd.DataFrame(cost_sr_list, index=instruments, columns=gross_.columns)
+
+
+def calc_net_pnl_rules(gross_pnl, cost_SR_dict):
+    return pd.DataFrame({
+        column_name: calc_net_pnl(gross_pnl[column_name], cost_SR_dict[column_name])
+        for column_name in gross_pnl.columns
+    })
+
+
+net_list = [calc_net_pnl_rules(gross_.loc[i], cost_sr_.loc[i]) for i in instruments]
 net_ = pd.concat(net_list, keys=instruments, names=['instrument', 'datetime'])
 
 print('calculate pnl for instrument and rule')
