@@ -9,27 +9,23 @@ def combine_forecast(forecast, forecast_, net_):
 
     weekly_list = [group.droplevel('instrument').resample('W').last()
                    for _, group in forecast_.groupby(level='instrument')]
+    forecast_weekly = stack_df_list(weekly_list)
 
-    pooled_forecast_data = stack_df_list(weekly_list)
-    pooled_fdm = True
-    ew_lookback = 250
-    min_periods = 20
-
+    lookback = 250
+    periods = 20
     instruments_num = len(forecast_.index.levels[0])
-    if pooled_fdm == True:
-        ew_lookback = ew_lookback * instruments_num
-        min_periods = min_periods * instruments_num
-    raw_pooled_corr = pooled_forecast_data.ewm(span=ew_lookback, min_periods=min_periods,
-                                               ignore_na=True).corr(pairwise=True)
-    size_of_matrix = len(pooled_forecast_data)
+    raw_corr = forecast_weekly.ewm(span=lookback * instruments_num, min_periods=periods * instruments_num,
+                                   ignore_na=True).corr(pairwise=True)
+
     pooled_forecast_corr_list = []
     for fit_end in end_list:
-        corr_matrix_values = (raw_pooled_corr[raw_pooled_corr.index.get_level_values(0) < fit_end]
-                              .tail(size_of_matrix)
+        corr_matrix_values = (raw_corr[raw_corr.index.get_level_values(0) < fit_end]
+                              .tail(len(raw_corr.index.levels[0]))
                               .values)
         corr_matrix_values = corr_matrix_values[-1]
         corr_matrix_values = [max(0, value) for value in corr_matrix_values]
         pooled_forecast_corr_list.append(corr_matrix_values)
+
     # pooled_forecast_corr_list.insert(0, np.array([0.99, 1]))  # 为了让corr_list的element和end_list对齐，先不加起始默认matrix
     div_mult_vector = []
     for corrmatrix, start in zip(pooled_forecast_corr_list, end_list):
