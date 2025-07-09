@@ -1,6 +1,5 @@
 import datetime
 
-import numpy as np
 import pandas as pd
 
 from refactory.position_pnl import calc_fill_cost
@@ -46,7 +45,6 @@ def pseudo_fills_for_year(year, rolls_per_year, price, positions):
     date_list = generate_equal_dates_within_year(year, rolls_per_year)
     last_year_date = generate_equal_dates_within_year(year - 1, rolls_per_year)[-1]
     dl = [last_year_date] + date_list
-
     df = pd.DataFrame({
         'date': date_list,
         'quantity': [positions[dl[i]:dl[i + 1]].abs().mean() for i in range(len(date_list))]
@@ -55,23 +53,12 @@ def pseudo_fills_for_year(year, rolls_per_year, price, positions):
 
     last_date_with_positions = price.index[-1]
     df = df[(df['date'] <= last_date_with_positions) & (df['quantity'].abs() > 0)]
-    df['price'] = df['date'].map(lambda date: get_row_of_series_before_date(price, date))
+    df['price'] = price.asof(df['date'])
+    # df['price'] = df['date'].map(lambda date: get_row_of_series_before_date(price, date))
+
     df_fills = pd.concat([df, df]).sort_values(by='date').reset_index(drop=True)
 
     return df_fills
-
-
-def get_row_of_series_before_date(data_series, relevant_date):
-    if relevant_date == np.nan:
-        data_at_date = data_series.values[-1]
-    else:
-        matching_index_size = data_series.index[data_series.index < relevant_date].size
-        if matching_index_size == 0:
-            index_point = None
-        else:
-            index_point = matching_index_size - 1
-        data_at_date = data_series.values[index_point]
-    return data_at_date
 
 
 def generate_equal_dates_within_year(year, rolls_per_year, align_to_start=True):
@@ -88,3 +75,17 @@ def calc_cost_deflator(price):
     daily_price = price.resample("1B").ffill()
     vol = daily_price.diff().rolling(180, min_periods=3).std()
     return vol / vol.iloc[-1]
+
+#
+#
+# def get_row_of_series_before_date(data_series, relevant_date):
+#     if relevant_date == np.nan:
+#         data_at_date = data_series.values[-1]
+#     else:
+#         matching_index_size = data_series.index[data_series.index < relevant_date].size
+#         if matching_index_size == 0:
+#             index_point = None
+#         else:
+#             index_point = matching_index_size - 1
+#         data_at_date = data_series.values[index_point]
+#     return data_at_date
