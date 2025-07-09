@@ -124,6 +124,6 @@ net_return_raw = pd.DataFrame({inst: gross_pnl_df[inst] + cost_df[inst].mean() f
 print(net_return_raw.sum())
 
 portfolio_weights = calc_portfolio_weights(net_return_raw, subsystem_positions)
-# print(portfolio_weights)
+print(portfolio_weights)
 
 print('END')
