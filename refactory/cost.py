@@ -50,7 +50,6 @@ def calc_all_fills(position, price, rolls_per_year):
                      list_of_years]
     list_of_holding_fills = [item for sublist in fills_by_year for item in sublist]
 
-
     # trades = position.diff()
     # trades_without_na = trades[~trades.isna()]
     # trades_without_zeros = trades_without_na[trades_without_na != 0]
@@ -63,22 +62,20 @@ def calc_all_fills(position, price, rolls_per_year):
     #     for date, qty, price in zip(dates_as_list, trades_as_list, prices_as_list)
     # ]
 
-    trades = position.diff()
-    trades_without_na = trades[~trades.isna()]
-    trades_without_zeros = trades_without_na[trades_without_na != 0]
-    prices_aligned_to_trades = price.reindex(trades_without_zeros.index, method="ffill")
+    trades = position.diff().dropna()  # 计算持仓变化并去除缺失值
+    trades = trades[trades != 0]  # 去除交易量为0的行
+    prices = price.reindex(trades.index, method="ffill")
 
     trading_data = pd.DataFrame({
-        'date': prices_aligned_to_trades.index,
-        'quantity': trades_without_zeros.values,
-        'price': prices_aligned_to_trades.values
+        'date': trades.index,
+        'quantity': trades.values,
+        'price': prices.values
     })
 
     # 将 DataFrame 转换为 Fill 数组
     list_of_trading_fills = [Fill(row['date'], row['quantity'], row['price']) for _, row in trading_data.iterrows()]
-
-
     list_of_all_fills = list_of_trading_fills + list_of_holding_fills
+
     return list_of_all_fills
 
 
