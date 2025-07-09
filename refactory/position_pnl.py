@@ -17,7 +17,6 @@ def calc_position_target(price, point_size, capital=1000000, annual_risk_target=
 
 def calc_position(forecast, pos_target):
     position = forecast.mul(pos_target, axis=0) / 10
-    position = position.shift(1)
     return position
 
 

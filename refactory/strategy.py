@@ -44,7 +44,9 @@ target_ = pd.concat(target_list, keys=instruments, names=['instrument', 'datetim
 
 def calc_gross(forecast, pos_target, price, point_size):
     position = calc_position(forecast, pos_target)
-    return calc_gross_pnl(position, price, point_size)
+    position = position.shift(1)
+    gross_pnl = calc_gross_pnl(position, price, point_size)
+    return gross_pnl
 
 
 gross_list = (calc_gross(forecast_.loc[i], target_.loc[i], price_.loc[i], size_.loc[i]) for i in instruments)
