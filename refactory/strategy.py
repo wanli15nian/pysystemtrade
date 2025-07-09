@@ -12,6 +12,7 @@ from refactory.position_pnl import calc_gross_pnl, calc_net_pnl, calc_position, 
 from refactory.position_pnl import calc_position_target
 from refactory.subsystem_turnover import calc_subsystem_turnover
 
+risk_target = 0.25
 instruments = ["CORN", "SOFR", "SP500_micro", 'US10']
 
 info_ = get_instrument_info().loc[instruments]
@@ -36,7 +37,7 @@ def calc_forecasts(price):
 forecast_list = (calc_forecasts(price_.loc[i]) for i in instruments)
 forecast_ = pd.concat(forecast_list, keys=instruments, names=['instrument', 'datetime'])
 
-target_list = (calc_position_target(price_.loc[i], size_.loc[i], capital=1000000, annual_risk_target=0.16)
+target_list = (calc_position_target(price_.loc[i], size_.loc[i], capital=1000000, annual_risk_target=risk_target)
                for i in instruments)
 target_ = pd.concat(target_list, keys=instruments, names=['instrument', 'datetime'])
 
@@ -98,7 +99,7 @@ for instrument in instruments:
 
     combined_forecast = ((forecast_weights * forecast).sum(axis=1) * diversify_multiplier).clip(20, -20)
     # FIXME: 为何前面的risk_target是0.16，这里却用0.25?,risk_target应该作为一个常数在最前面设置。
-    vol_scalar = calc_volatility_scalar(raw_price, price, point_size, 500000, 0.25)
+    vol_scalar = calc_volatility_scalar(raw_price, price, point_size, 500000, risk_target)
 
     subsystem_position_raw = vol_scalar * combined_forecast / 10.0
     subsystem_position_buffered = calc_buffered_position(subsystem_position_raw, vol_scalar, 0.10)
