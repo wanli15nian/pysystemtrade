@@ -87,17 +87,8 @@ def adjust_by_buffer(last, current, top, bottom, trade_to_edge=True):
 def calc_volatility_scalar(raw_price, price, point_size, capital, annual_perc_vol_target):
     '''
     Get ratio of required volatility vs volatility of instrument in instrument's own currency
-
     Gets daily prices for use with % volatility
     This won't always be the same as the normal 'price'
-    try:
-        prices = self.get_instrument_raw_carry_data(instrument_code).PRICE
-    except missingData:
-        self.log.warning(
-            "No carry data found for %s, using adjusted prices to calculate percentage returns"
-            % instrument_code
-        )
-        return self.get_daily_prices(instrument_code)
     '''
     block_value = raw_price.ffill() * 0.01 * point_size
     block_value.ffill(inplace=True)
