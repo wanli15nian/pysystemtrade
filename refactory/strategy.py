@@ -8,7 +8,7 @@ from refactory.data_source import get_instrument_info, get_daily_price, get_raw_
 from refactory.forecast import ewmac, rescale_forecast, floor_vol, price_vol
 from refactory.portfolio_weights import calc_portfolio_weights
 from refactory.position_pnl import calc_gross_pnl, calc_net_pnl, calc_position, calc_buffered_position, \
-    calc_volatility_scalar1
+    calc_volatility_scalar1, calc_volatility_scalar
 from refactory.position_pnl import calc_position_target
 from refactory.subsystem_turnover import calc_subsystem_turnover
 
@@ -98,7 +98,7 @@ for instrument in instruments:
 
     combined_forecast = ((forecast_weights * forecast).sum(axis=1) * diversify_multiplier).clip(20, -20)
     # FIXME: 为何前面的risk_target是0.16，这里却用0.25?,risk_target应该作为一个常数在最前面设置。
-    vol_scalar = calc_volatility_scalar1(raw_price, price, point_size, 500000, 0.25)
+    vol_scalar = calc_volatility_scalar(raw_price, price, point_size, 500000, 0.25)
 
     subsystem_position_raw = vol_scalar * combined_forecast / 10.0
     subsystem_position_buffered = calc_buffered_position(subsystem_position_raw, vol_scalar, 0.10)

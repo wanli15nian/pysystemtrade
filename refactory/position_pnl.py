@@ -86,40 +86,19 @@ def adjust_by_buffer(last, current, top, bottom, trade_to_edge=True):
 
 
 def calc_volatility_scalar(raw_price, price, block_move_value, capital=500000, risk_target=0.25, vol_mult=1.0):
-    raw_price, price = raw_price.align(price, join="inner")
-    raw_price.ffill(inplace=True)
-    price.ffill(inplace=True)
+    # raw_price, price = raw_price.align(price, join="inner")
+    # raw_price.ffill(inplace=True)
+    # price.ffill(inplace=True)
 
     pnl_vol = vol_mult * calc_mixed_volatility(price.diff(), slow_vol_years=10)
     vol_percent = 100.0 * (pnl_vol / raw_price.abs())
 
     block_value = block_move_value * raw_price * 0.01
+    # TODO 这个到底起了什么作用？去掉结果会有差异
+    block_value, vol_percent = block_value.align(vol_percent, join="inner")
 
     currency_vol = block_value * vol_percent
 
     daily_currency_vol_target = capital * (risk_target / 16)
     volatility_scalar = daily_currency_vol_target / currency_vol
-    return volatility_scalar
-
-
-def calc_volatility_scalar1(raw_price, price, block_move_value, capital, risk_target, vol_mult=1.0):
-    '''
-    Get ratio of required volatility vs volatility of instrument in instrument's own currency
-    Gets daily prices for use with % volatility
-    This won't always be the same as the normal 'price'
-    '''
-
-    # raw_price.ffill(inplace=True)
-
-    pnl_vol = vol_mult * calc_mixed_volatility(price.diff(), slow_vol_years=10)
-    vol_percent = 100.0 * (pnl_vol / raw_price.abs())
-
-    block_value = block_move_value * raw_price * 0.01
-
-    block_value, vol_percent = block_value.align(vol_percent, join="inner")
-    currency_vol = (block_value * vol_percent).ffill()
-
-    daily_currency_vol_target = capital * (risk_target / 16)
-    volatility_scalar = daily_currency_vol_target / currency_vol
-
     return volatility_scalar
