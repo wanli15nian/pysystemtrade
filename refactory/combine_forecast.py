@@ -27,6 +27,15 @@ def get_longest_index(list_of_df):
             longest_index = df.index
     return longest_index
 
+
+def get_multi_index_df(list_of_df, instruments):
+    dfs_named = {instr: df for instr, df in zip(instruments, list_of_df)}
+    combined_df = pd.concat(dfs_named)
+    multi_index_df = (combined_df.rename_axis(['instruments', 'date']).swaplevel().sort_index())
+    return multi_index_df
+
+
+
 def calc_weights_daily(net_):
     # 可以用net_直接算吗？跳过resample weekly会有影响吗？
     # end_list = generate_yearly_end_list(net_.index.levels[1])
@@ -35,6 +44,9 @@ def calc_weights_daily(net_):
     weekly_list = [group.reset_index(level='instrument', drop=True).resample('W').sum()
                    for _, group in net_.groupby(level='instrument')]
     net_weekly = stack_df_list(weekly_list)
+
+
+    temp = get_multi_index_df(weekly_list, net_.index.levels[0])
 
     longest_index = get_longest_index(weekly_list)
     new_end_list = generate_yearly_end_list(longest_index)
