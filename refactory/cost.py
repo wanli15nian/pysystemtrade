@@ -8,10 +8,26 @@ from refactory.position_pnl import calc_trade_cost
 
 
 def calc_cost(position, price, info, include_slippage=True):
-    rolls_per_year = int(info['rolls_per_year'])  # TODO: 用【】取会自动转为浮点型，临时方案是强制给转成整型
+    rolls_per_year = int(info['rolls_per_year'])
     all_fills = calc_all_fills(position, price, rolls_per_year)
     cost_deflator = calc_cost_deflator(price)
-    normalised_costs = calc_normalised_cost(info, all_fills, cost_deflator, include_slippage)
+
+    # all_fill_list = [Fill(row['date'], row['quantity'], row['price']) for _, row in all_fills.iterrows()]
+    # instrument_currency_costs = [-calc_trade_cost(fill.price, fill.qty, info, include_slippage)
+    #                              for fill in all_fill_list]
+    # date_index = [fill.date for fill in all_fill_list]
+    # raw_costs = pd.Series(instrument_currency_costs, date_index)
+
+    all_fills['cost'] = -all_fills.apply(
+        lambda row: calc_trade_cost(row['price'], row['quantity'], info, include_slippage), axis=1)
+    raw_costs = pd.Series(all_fills['cost'].values, index=all_fills['date'])
+
+    raw_costs = raw_costs.sort_index()
+    raw_costs = raw_costs.groupby(raw_costs.index).sum()
+
+    cost_deflator = cost_deflator.reindex(raw_costs.index, method="ffill")
+    normalised_costs = cost_deflator * raw_costs
+
     return normalised_costs
 
 
@@ -21,18 +37,6 @@ class Fill:
     qty: int
     price: float
     price_requires_slippage_adjustment: bool = False
-
-
-def calc_normalised_cost(info, all_fills, cost_deflator, include_slippage):
-    instrument_currency_costs = [-calc_trade_cost(fill.price, fill.qty, info, include_slippage)
-                                 for fill in all_fills]
-    date_index = [fill.date for fill in all_fills]
-    costs_as_pd_series = pd.Series(instrument_currency_costs, date_index)
-    costs_as_pd_series = costs_as_pd_series.sort_index()
-    costs_as_pd_series = costs_as_pd_series.groupby(costs_as_pd_series.index).sum()
-    reindexed_deflator = cost_deflator.reindex(costs_as_pd_series.index, method="ffill")
-    normalised_costs = reindexed_deflator * costs_as_pd_series
-    return normalised_costs
 
 
 @dataclass
@@ -46,37 +50,20 @@ def calc_all_fills(position, price, rolls_per_year):
     list_of_years = list(set([int(idx.year) for idx in position.index]))
     list_of_years.sort()
 
-    fills_by_year = [pseudo_fills_for_year(year, rolls_per_year, price, position) for year in
-                     list_of_years]
-    list_of_holding_fills = [item for sublist in fills_by_year for item in sublist]
-
-    # trades = position.diff()
-    # trades_without_na = trades[~trades.isna()]
-    # trades_without_zeros = trades_without_na[trades_without_na != 0]
-    # prices_aligned_to_trades = price.reindex(trades_without_zeros.index, method="ffill")
-    # trades_as_list = list(trades_without_zeros.values)
-    # prices_as_list = list(prices_aligned_to_trades.values)
-    # dates_as_list = list(prices_aligned_to_trades.index)
-    # list_of_trading_fills = [
-    #     Fill(date, qty, price)
-    #     for date, qty, price in zip(dates_as_list, trades_as_list, prices_as_list)
-    # ]
+    holding_fills = pd.concat([pseudo_fills_for_year(year, rolls_per_year, price, position) for year in
+                               list_of_years])
 
     trades = position.diff().dropna()  # 计算持仓变化并去除缺失值
     trades = trades[trades != 0]  # 去除交易量为0的行
     prices = price.reindex(trades.index, method="ffill")
-
-    trading_data = pd.DataFrame({
+    trading_fills = pd.DataFrame({
         'date': trades.index,
         'quantity': trades.values,
         'price': prices.values
     })
 
-    # 将 DataFrame 转换为 Fill 数组
-    list_of_trading_fills = [Fill(row['date'], row['quantity'], row['price']) for _, row in trading_data.iterrows()]
-    list_of_all_fills = list_of_trading_fills + list_of_holding_fills
-
-    return list_of_all_fills
+    all_fills = pd.concat([trading_fills, holding_fills]).sort_values(by='date').reset_index(drop=True)
+    return all_fills
 
 
 def calc_cost_deflator(price):
@@ -105,11 +92,7 @@ def pseudo_fills_for_year(year, rolls_per_year, price, positions):
     df['price'] = df['date'].map(lambda date: get_row_of_series_before_date(price, date))
     df_fills = pd.concat([df, df]).sort_values(by='date').reset_index(drop=True)
 
-    fills_this_year = [
-        Fill(date=row['date'], qty=row['quantity'], price=row['price'])
-        for _, row in df_fills.iterrows()
-    ]
-    return fills_this_year
+    return df_fills
 
     # average_holdings_series = pd.Series(
     #     [positions[dl[i]:dl[i + 1]].abs().mean() for i in range(len(date_list))],
