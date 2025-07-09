@@ -37,6 +37,28 @@ def calc_net_pnl(gross_pnl, cost_SR):
     return net_pnl_rule
 
 
+def calc_volatility_scalar(raw_price, price, block_move_value, capital=500000, risk_target=0.25, vol_mult=1.0):
+    # raw_price, price = raw_price.align(price, join="inner")
+    # raw_price.ffill(inplace=True)
+    # price.ffill(inplace=True)
+
+    pnl_vol = vol_mult * calc_mixed_volatility(price.diff(), slow_vol_years=10)
+    vol_percent = 100.0 * (pnl_vol / raw_price.abs())
+
+    block_value = block_move_value * raw_price * 0.01
+    # TODO 这个到底起了什么作用？去掉了结果为什么会有差异？
+    block_value, vol_percent = block_value.align(vol_percent, join="inner")
+
+    currency_vol = block_value * vol_percent
+
+    daily_currency_vol_target = capital * (risk_target / 16)
+    volatility_scalar = daily_currency_vol_target / currency_vol
+
+    volatility_scalar.ffill(inplace=True)
+
+    return volatility_scalar
+
+
 def calc_buffered_position(position_raw, vol_scalar, buffer_size=0.10, trade_to_edge=True):
     # vol_scalar 的另一种理解是Avg pos of the subsystem level，就是说position 可以在avg pos的10% 区间内浮动
     buffer = vol_scalar * buffer_size
@@ -60,25 +82,3 @@ def adjust_by_buffer(last, current, top, bottom, trade_to_edge=True):
         return min(max(last, bottom), top)  # 如果在buffer内则不调仓，调仓就调到buffer边缘，尽量减少调仓幅度
     else:
         return last if (bottom <= last <= top) else current  # 如果在buffer内则不调仓
-
-
-def calc_volatility_scalar(raw_price, price, block_move_value, capital=500000, risk_target=0.25, vol_mult=1.0):
-    # raw_price, price = raw_price.align(price, join="inner")
-    # raw_price.ffill(inplace=True)
-    # price.ffill(inplace=True)
-
-    pnl_vol = vol_mult * calc_mixed_volatility(price.diff(), slow_vol_years=10)
-    vol_percent = 100.0 * (pnl_vol / raw_price.abs())
-
-    block_value = block_move_value * raw_price * 0.01
-    # TODO 这个到底起了什么作用？去掉了结果为什么会有差异？
-    block_value, vol_percent = block_value.align(vol_percent, join="inner")
-
-    currency_vol = block_value * vol_percent
-
-    daily_currency_vol_target = capital * (risk_target / 16)
-    volatility_scalar = daily_currency_vol_target / currency_vol
-
-    volatility_scalar.ffill(inplace=True)
-
-    return volatility_scalar

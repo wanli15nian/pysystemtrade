@@ -5,57 +5,12 @@ import numpy as np
 import pandas as pd
 
 
-def calc_cost(position, price, info):
+def calc_cost(position, price, info, include_slippage=True):
     rolls_per_year = int(info['rolls_per_year'])  # TODO: 用【】取会自动转为浮点型，临时方案是强制给转成整型
     all_fills = calc_all_fills(position, price, rolls_per_year)
     cost_deflator = calc_cost_deflator(price)
-    normalised_costs = calc_normalised_cost(info, all_fills, cost_deflator)
+    normalised_costs = calc_normalised_cost(info, all_fills, cost_deflator, include_slippage)
     return normalised_costs
-
-
-def calc_normalised_cost(info, all_fills, cost_deflator):
-    value_per_point = info['point_size']
-    instrument_currency_costs = [-calc_cost_instr_currency_for_a_fill(fill, value_per_point, info) for fill in
-                                 all_fills]
-    date_index = [fill.date for fill in all_fills]
-    costs_as_pd_series = pd.Series(instrument_currency_costs, date_index)
-    costs_as_pd_series = costs_as_pd_series.sort_index()
-    costs_as_pd_series = costs_as_pd_series.groupby(costs_as_pd_series.index).sum()
-    reindexed_deflator = cost_deflator.reindex(costs_as_pd_series.index, method="ffill")
-    normalised_costs = reindexed_deflator * costs_as_pd_series
-    return normalised_costs
-
-
-def calc_cost_instr_currency_for_a_fill(fill, value_per_point, info):
-    # slippage = raw_costs.price_slippage
-    # per_trade = raw_costs.value_of_pertrade_commission
-    # per_block = raw_costs.value_of_block_commission
-    # percentage = raw_costs.percentage_cost
-    slippage = info['spread_cost']
-    per_trade = info['per_trade']
-    per_block = info['per_block']
-    percentage = info['percentage']
-
-    blocks_traded = fill.qty
-    price = fill.price
-    include_slippage = fill.price_requires_slippage_adjustment
-    if include_slippage:
-        slippage_costs = abs(blocks_traded) * value_per_point * slippage
-    else:
-        slippage_costs = 0
-
-    '''
-    三种Commission cost 的计算方式
-    '''
-
-    block_price_multiplier = value_per_point * price
-    per_block = (abs(blocks_traded) * per_block)
-    perc_commission = abs(blocks_traded) * block_price_multiplier * percentage
-
-    commission_costs = max([per_trade, per_block, perc_commission])
-
-    total_cost = slippage_costs + commission_costs
-    return total_cost
 
 
 @dataclass
@@ -87,12 +42,77 @@ def calc_all_fills(position, price, rolls_per_year):
     return list_of_all_fills
 
 
+def calc_normalised_cost(info, all_fills, cost_deflator, include_slippage):
+    point_size = info['point_size']
+    instrument_currency_costs = [-calc_cost_instr_currency_for_a_fill(fill, point_size, info, include_slippage)
+                                 for fill in all_fills]
+    date_index = [fill.date for fill in all_fills]
+    costs_as_pd_series = pd.Series(instrument_currency_costs, date_index)
+    costs_as_pd_series = costs_as_pd_series.sort_index()
+    costs_as_pd_series = costs_as_pd_series.groupby(costs_as_pd_series.index).sum()
+    reindexed_deflator = cost_deflator.reindex(costs_as_pd_series.index, method="ffill")
+    normalised_costs = reindexed_deflator * costs_as_pd_series
+    return normalised_costs
+
+
+def calc_cost_instr_currency_for_a_fill(fill, point_size, info, include_slippage=True):
+    slippage = info['spread_cost']
+    per_trade = info['per_trade']
+    per_block = info['per_block']
+    percentage = info['percentage']
+
+    blocks = fill.qty
+    price = fill.price
+    if include_slippage:
+        slippage_costs = abs(blocks) * point_size * slippage
+    else:
+        slippage_costs = 0
+
+    '''
+    三种Commission cost 的计算方式
+    '''
+
+    block_price_multiplier = point_size * price
+    per_block = (abs(blocks) * per_block)
+    perc_commission = abs(blocks) * block_price_multiplier * percentage
+    commission_costs = max([per_trade, per_block, perc_commission])
+
+    total_cost = slippage_costs + commission_costs
+    return total_cost
+
+
+@dataclass
+class Fill:
+    date: datetime.datetime
+    qty: int
+    price: float
+
+
+def calc_all_fills(position, price, rolls_per_year):
+    list_of_years = list(set([int(idx.year) for idx in position.index]))
+    list_of_years.sort()
+    fills_by_year = [pseudo_fills_for_year(year, rolls_per_year, price, position) for year in
+                     list_of_years]
+    list_of_holding_fills = [item for sublist in fills_by_year for item in sublist]
+    trades = position.diff()
+    trades_without_na = trades[~trades.isna()]
+    trades_without_zeros = trades_without_na[trades_without_na != 0]
+    prices_aligned_to_trades = price.reindex(trades_without_zeros.index, method="ffill")
+    trades_as_list = list(trades_without_zeros.values)
+    prices_as_list = list(prices_aligned_to_trades.values)
+    dates_as_list = list(prices_aligned_to_trades.index)
+    list_of_trading_fills = [
+        Fill(date, qty, price)
+        for date, qty, price in zip(dates_as_list, trades_as_list, prices_as_list)
+    ]
+    list_of_all_fills = list_of_trading_fills + list_of_holding_fills
+    return list_of_all_fills
+
+
 def calc_cost_deflator(price):
     daily_price = price.resample("1B").ffill()
-    daily_returns = daily_price.ffill().diff()
-    vol_price = daily_returns.rolling(180, min_periods=3).std().ffill()
-    final_vol = vol_price.iloc[-1]
-    cost_deflator = vol_price / final_vol
+    vol = daily_price.diff().rolling(180, min_periods=3).std()
+    cost_deflator = vol / vol.iloc[-1]
     return cost_deflator
 
 
@@ -114,7 +134,6 @@ def pseudo_fills_for_year(year, rolls_per_year, price, adjusted_pos_buffered):
             date=date,
             qty=qty * multiply_roll_costs_by,
             price=get_row_of_series_before_date(price_series, date),
-            price_requires_slippage_adjustment=True,
         )
         for date, qty in zip(date_list, avg_holding_within_a_yr)
         if date <= last_date_with_positions and abs(qty) > 0
