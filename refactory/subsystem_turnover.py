@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from refactory.position_pnl import calc_volatility_scalar
+from refactory.base import calc_volatility_scalar
 
 
 def calc_subsystem_turnover(subsystem_position_raw, raw_price, price, point_size):
