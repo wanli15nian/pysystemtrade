@@ -18,6 +18,15 @@ def calc_weights_and_multiplier(forecast_, net_):
     return weights_daily, multiplier_daily
 
 
+def get_longest_index(list_of_df):
+    longest_index_len = 0
+    longest_index = 0
+    for df in list_of_df:
+        if df.shape[0] > longest_index_len:
+            longest_index_len = df.shape[0]
+            longest_index = df.index
+    return longest_index
+
 def calc_weights_daily(net_):
     # 可以用net_直接算吗？跳过resample weekly会有影响吗？
     # end_list = generate_yearly_end_list(net_.index.levels[1])
@@ -26,6 +35,10 @@ def calc_weights_daily(net_):
     weekly_list = [group.reset_index(level='instrument', drop=True).resample('W').sum()
                    for _, group in net_.groupby(level='instrument')]
     net_weekly = stack_df_list(weekly_list)
+
+    longest_index = get_longest_index(weekly_list)
+    new_end_list = generate_yearly_end_list(longest_index)
+
     end_list = generate_yearly_end_list(net_weekly.index)
 
     # 计算年权重
