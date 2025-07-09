@@ -45,6 +45,7 @@ class Fill:
 def calc_all_fills(position, price, rolls_per_year):
     list_of_years = list(set([int(idx.year) for idx in position.index]))
     list_of_years.sort()
+
     fills_by_year = [pseudo_fills_for_year(year, rolls_per_year, price, position) for year in
                      list_of_years]
     list_of_holding_fills = [item for sublist in fills_by_year for item in sublist]
@@ -137,8 +138,7 @@ def generate_equal_dates_within_year(year, rolls_per_year, false_start_of_year_a
     if false_start_of_year_align:
         first_date = start_of_year
     else:
-        half_period = int(days_between_periods / 2)
-        half_period_increment = datetime.timedelta(days=half_period)
+        half_period_increment = datetime.timedelta(days=int(days_between_periods / 2))
         first_date = start_of_year + half_period_increment
     delta_for_each_period = datetime.timedelta(days=days_between_periods)
     all_dates = [first_date + (delta_for_each_period * period_count)
