@@ -96,8 +96,8 @@ def calc_volatility_scalar(raw_price, price, block_move_value, capital=500000, r
     block_value = block_move_value * raw_price * 0.01
     currency_vol = block_value * vol_percent
 
-    daily_cash_vol_target = capital * (risk_target / 16)
-    volatility_scalar = daily_cash_vol_target / currency_vol
+    daily_currency_vol_target = capital * (risk_target / 16)
+    volatility_scalar = daily_currency_vol_target / currency_vol
     return volatility_scalar
 
 
@@ -109,19 +109,14 @@ def calc_volatility_scalar1(raw_price, price, block_move_value, capital, risk_ta
     '''
 
     pnl_vol = vol_mult * calc_mixed_volatility(price.diff(), slow_vol_years=10)
-    # pnl_vol.ffill(inplace=True)
-    # resampled_carry_price = raw_price.resample('1B').last()
-    # raw_price, pnl_vol = raw_price.align(pnl_vol, join='right')
     vol_percent = 100.0 * (pnl_vol / raw_price.ffill().abs())
 
     block_value = raw_price.ffill() * 0.01 * block_move_value
     block_value.ffill(inplace=True)
     (block_value, vol_percent) = block_value.align(vol_percent, join="inner")
-    # It is to multiply by fx_rate, which is taken to be 1 here
-    fx_rate = 1
-    currency_vol = (block_value * vol_percent).ffill() * fx_rate
+    currency_vol = (block_value * vol_percent).ffill()
 
-    cash_vol_target = capital * risk_target / 16
-    vol_scalar = cash_vol_target / currency_vol
-    vol_scalar = vol_scalar.reindex(price.index, method="ffill")
-    return vol_scalar
+    daily_currency_vol_target = capital * risk_target / 16
+    volatility_scalar = daily_currency_vol_target / currency_vol
+    volatility_scalar = volatility_scalar.reindex(price.index, method="ffill")
+    return volatility_scalar
