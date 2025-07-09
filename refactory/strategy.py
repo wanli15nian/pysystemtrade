@@ -1,15 +1,15 @@
 import numpy as np
 import pandas as pd
 
+from refactory.base import calc_gross_pnl, calc_net_pnl, calc_buffered_position, \
+    calc_volatility_scalar
+from refactory.base import calc_position_target
 from refactory.combine_forecast import calc_weights_and_multiplier
 from refactory.cost import calc_cost
 from refactory.cost_sr import calc_annual_turnover, calc_turnover_weights, calc_weighted_turnover, calc_cost_sr
 from refactory.data_source import get_instrument_info, get_daily_price, get_raw_price
 from refactory.forecast import ewmac, rescale_forecast, floor_vol, price_vol
 from refactory.portfolio_weights import calc_portfolio_weights
-from refactory.base import calc_gross_pnl, calc_net_pnl, calc_position, calc_buffered_position, \
-    calc_volatility_scalar
-from refactory.base import calc_position_target
 from refactory.subsystem_turnover import calc_subsystem_turnover
 
 risk_target = 0.25
@@ -43,7 +43,7 @@ target_ = pd.concat(target_list, keys=instruments, names=['instrument', 'datetim
 
 
 def calc_gross(forecast, pos_target, price, point_size):
-    position = calc_position(forecast, pos_target)
+    position = forecast.mul(pos_target, axis=0) / 10
     position = position.shift(1)
     gross_pnl = calc_gross_pnl(position, price, point_size)
     return gross_pnl

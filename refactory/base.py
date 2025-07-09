@@ -15,11 +15,6 @@ def calc_position_target(price, point_size, capital=1000000, annual_risk_target=
     return position_target
 
 
-def calc_position(forecast, pos_target):
-    position = forecast.mul(pos_target, axis=0) / 10
-    return position
-
-
 def calc_gross_pnl(position, price, point_size):
     pnl_in_points = position.mul(price.ffill().mean(), axis=0)
     pnl_in_points[pnl_in_points.isna()] = 0.0
