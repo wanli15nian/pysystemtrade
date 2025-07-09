@@ -24,7 +24,7 @@ class Fill:
 
 
 def calc_normalised_cost(info, all_fills, cost_deflator, include_slippage):
-    instrument_currency_costs = [-calc_cost_instr_currency_for_a_fill(fill, info, include_slippage)
+    instrument_currency_costs = [-calc_trade_cost(fill.price, fill.qty, info, include_slippage)
                                  for fill in all_fills]
     date_index = [fill.date for fill in all_fills]
     costs_as_pd_series = pd.Series(instrument_currency_costs, date_index)
@@ -33,10 +33,6 @@ def calc_normalised_cost(info, all_fills, cost_deflator, include_slippage):
     reindexed_deflator = cost_deflator.reindex(costs_as_pd_series.index, method="ffill")
     normalised_costs = reindexed_deflator * costs_as_pd_series
     return normalised_costs
-
-
-def calc_cost_instr_currency_for_a_fill(fill, info, include_slippage=True):
-    return calc_trade_cost(fill.price, fill.qty, info, include_slippage)
 
 
 @dataclass
