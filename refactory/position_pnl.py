@@ -43,6 +43,7 @@ def calc_buffered_position(position_raw, vol_scalar, buffer_size=0.10):
     vol_scalar 的另一种理解是Avg pos of the subsystem level
     这么理解的话就是说position 可以在avg pos的10% 区间内浮动
     '''
+    #TODO 这两个参数应该合并成一个参数
     buffer = vol_scalar * buffer_size
     top_pos = (position_raw + buffer).ffill().round()
     bottom_pos = (position_raw - buffer).ffill().round()
