@@ -49,17 +49,35 @@ def calc_all_fills(position, price, rolls_per_year):
     fills_by_year = [pseudo_fills_for_year(year, rolls_per_year, price, position) for year in
                      list_of_years]
     list_of_holding_fills = [item for sublist in fills_by_year for item in sublist]
+
+
+    # trades = position.diff()
+    # trades_without_na = trades[~trades.isna()]
+    # trades_without_zeros = trades_without_na[trades_without_na != 0]
+    # prices_aligned_to_trades = price.reindex(trades_without_zeros.index, method="ffill")
+    # trades_as_list = list(trades_without_zeros.values)
+    # prices_as_list = list(prices_aligned_to_trades.values)
+    # dates_as_list = list(prices_aligned_to_trades.index)
+    # list_of_trading_fills = [
+    #     Fill(date, qty, price)
+    #     for date, qty, price in zip(dates_as_list, trades_as_list, prices_as_list)
+    # ]
+
     trades = position.diff()
     trades_without_na = trades[~trades.isna()]
     trades_without_zeros = trades_without_na[trades_without_na != 0]
     prices_aligned_to_trades = price.reindex(trades_without_zeros.index, method="ffill")
-    trades_as_list = list(trades_without_zeros.values)
-    prices_as_list = list(prices_aligned_to_trades.values)
-    dates_as_list = list(prices_aligned_to_trades.index)
-    list_of_trading_fills = [
-        Fill(date, qty, price)
-        for date, qty, price in zip(dates_as_list, trades_as_list, prices_as_list)
-    ]
+
+    trading_data = pd.DataFrame({
+        'date': prices_aligned_to_trades.index,
+        'quantity': trades_without_zeros.values,
+        'price': prices_aligned_to_trades.values
+    })
+
+    # 将 DataFrame 转换为 Fill 数组
+    list_of_trading_fills = [Fill(row['date'], row['quantity'], row['price']) for _, row in trading_data.iterrows()]
+
+
     list_of_all_fills = list_of_trading_fills + list_of_holding_fills
     return list_of_all_fills
 
@@ -78,13 +96,28 @@ def pseudo_fills_for_year(year, rolls_per_year, price, positions):
 
     last_year_date = generate_equal_dates_within_year(year - 1, rolls_per_year)[-1]
     dl = [last_year_date] + date_list
-    # 创建一个Series，计算每个日期范围的平均持仓量，并指定索引为date_list
-    average_holdings_series = pd.Series(
-        [positions[dl[i]:dl[i + 1]].abs().mean() for i in range(len(date_list))],
-        index=date_list)
-    average_holdings_series = average_holdings_series.fillna(0)
+
+    df = pd.DataFrame({
+        'date': date_list,
+        'quantity': [positions[dl[i]:dl[i + 1]].abs().mean() for i in range(len(date_list))]
+    })
+    df.fillna(0, inplace=True)
 
     last_date_with_positions = price.index[-1]
+    df = df[(df['date'] <= last_date_with_positions) & (df['quantity'].abs() > 0)]
+    df['price'] = df['date'].map(lambda date: get_row_of_series_before_date(price, date))
+    df_fills = pd.concat([df, df]).sort_values(by='date').reset_index(drop=True)
+
+    fills_this_year = [
+        Fill(date=row['date'], qty=row['quantity'], price=row['price'])
+        for _, row in df_fills.iterrows()
+    ]
+    return fills_this_year
+
+    # average_holdings_series = pd.Series(
+    #     [positions[dl[i]:dl[i + 1]].abs().mean() for i in range(len(date_list))],
+    #     index=date_list)
+    # average_holdings_series = average_holdings_series.fillna(0)
 
     # list_of_average_holdings = average_holdings_series.values
     # # 获取价格序列的最后一个日期
@@ -98,24 +131,18 @@ def pseudo_fills_for_year(year, rolls_per_year, price, positions):
     #     if date <= last_date_with_positions and abs(qty) > 0
     # ]
 
-    df = pd.DataFrame({'quantity': average_holdings_series})
-    df = df[(df.index <= last_date_with_positions) & (df['quantity'].abs() > 0)]
-    df['price'] = df.index.map(lambda date: get_row_of_series_before_date(price, date))
-
-    # 从 DataFrame 转换为 Fill 对象列表
-    opening_fills_this_year = [
-        Fill(date=row.name, qty=row['quantity'], price=row['price'])
-        for _, row in df.iterrows()
-    ]
-
-    closing_fills_this_year = [Fill(
-        date=fill.date,
-        qty=-fill.qty,
-        price=fill.price) for fill in opening_fills_this_year]
-
-    fills_this_year = opening_fills_this_year + closing_fills_this_year
-
-    return fills_this_year
+    # # 从 DataFrame 转换为 Fill 对象列表
+    # opening_fills_this_year = [
+    #     Fill(date=row['date'], qty=row['quantity'], price=row['price'])
+    #     for _, row in df.iterrows()
+    # ]
+    #
+    # closing_fills_this_year = [Fill(
+    #     date=fill.date,
+    #     qty=-fill.qty,
+    #     price=fill.price) for fill in opening_fills_this_year]
+    #
+    # fills_this_year = opening_fills_this_year + closing_fills_this_year
 
 
 def generate_equal_dates_within_year(year, rolls_per_year, align_to_start=True):
