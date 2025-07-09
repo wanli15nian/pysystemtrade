@@ -43,7 +43,7 @@ def calc_buffered_position(position_raw, vol_scalar, buffer_size=0.10):
     vol_scalar 的另一种理解是Avg pos of the subsystem level
     这么理解的话就是说position 可以在avg pos的10% 区间内浮动
     '''
-    #TODO 这两个参数应该合并成一个参数
+    # TODO 这两个参数应该合并成一个参数
     buffer = vol_scalar * buffer_size
     top_pos = (position_raw + buffer).ffill().round()
     bottom_pos = (position_raw - buffer).ffill().round()
@@ -92,11 +92,14 @@ def calc_volatility_scalar(raw_price, price, block_move_value, capital=500000, r
 
     pnl_vol = vol_mult * calc_mixed_volatility(price.diff(), slow_vol_years=10)
     vol_percent = 100.0 * (pnl_vol / raw_price.abs())
+
     block_value = block_move_value * raw_price * 0.01
     currency_vol = block_value * vol_percent
+
     daily_cash_vol_target = capital * (risk_target / 16)
     volatility_scalar = daily_cash_vol_target / currency_vol
     return volatility_scalar
+
 
 def calc_volatility_scalar1(raw_price, price, block_move_value, capital, risk_target, vol_mult=1.0):
     '''
@@ -105,22 +108,20 @@ def calc_volatility_scalar1(raw_price, price, block_move_value, capital, risk_ta
     This won't always be the same as the normal 'price'
     '''
 
-    block_value = raw_price.ffill() * 0.01 * block_move_value
-    block_value.ffill(inplace=True)
-
     annualised_price_vol_points = calc_mixed_volatility(price.diff(), slow_vol_years=10)
     annualised_price_vol_points.ffill(inplace=True)
-
     # Align resampled carry price and annualised price volatility in points
     resampled_carry_price = raw_price.resample('1B').last()
     (resampled_carry_price, annualised_price_vol_points) = resampled_carry_price.align(annualised_price_vol_points,
                                                                                        join='right')
-    percentage_vol = 100.0 * (annualised_price_vol_points / resampled_carry_price.ffill().abs())
+    vol_percent = 100.0 * (annualised_price_vol_points / resampled_carry_price.ffill().abs())
 
-    (block_value, percentage_vol) = block_value.align(percentage_vol, join="inner")
+    block_value = raw_price.ffill() * 0.01 * block_move_value
+    block_value.ffill(inplace=True)
+    (block_value, vol_percent) = block_value.align(vol_percent, join="inner")
     # It is to multiply by fx_rate, which is taken to be 1 here
     fx_rate = 1
-    currency_vol = (block_value * percentage_vol).ffill() * fx_rate
+    currency_vol = (block_value * vol_percent).ffill() * fx_rate
 
     cash_vol_target = capital * risk_target / 16
     vol_scalar = cash_vol_target / currency_vol
