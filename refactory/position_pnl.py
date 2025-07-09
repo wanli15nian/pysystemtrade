@@ -109,11 +109,10 @@ def calc_volatility_scalar1(raw_price, price, block_move_value, capital, risk_ta
     '''
 
     annualised_price_vol_points = calc_mixed_volatility(price.diff(), slow_vol_years=10)
-    annualised_price_vol_points.ffill(inplace=True)
-    # Align resampled carry price and annualised price volatility in points
-    resampled_carry_price = raw_price.resample('1B').last()
-    (resampled_carry_price, annualised_price_vol_points) = resampled_carry_price.align(annualised_price_vol_points,
-                                                                                       join='right')
+    # annualised_price_vol_points.ffill(inplace=True)
+    # resampled_carry_price = raw_price.resample('1B').last()
+    resampled_carry_price, annualised_price_vol_points = raw_price.align(annualised_price_vol_points,
+                                                                         join='right')
     vol_percent = 100.0 * (annualised_price_vol_points / resampled_carry_price.ffill().abs())
 
     block_value = raw_price.ffill() * 0.01 * block_move_value
