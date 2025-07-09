@@ -84,27 +84,43 @@ def adjust_by_buffer(last, current, top, bottom, trade_to_edge=True):
         return last
 
 
-def calc_volatility_scalar(raw_price, price, point_size, capital, annual_perc_vol_target):
-    '''
-    Get ratio of required volatility vs volatility of instrument in instrument's own currency
-    Gets daily prices for use with % volatility
-    This won't always be the same as the normal 'price'
-    '''
-    block_value = raw_price.ffill() * 0.01 * point_size
-    block_value.ffill(inplace=True)
-    resampled_carry_price = raw_price.resample('1B').last()
-    annualised_price_vol_points = calc_mixed_volatility(price.diff(), slow_vol_years=10)
-    annualised_price_vol_points.ffill(inplace=True)
-    # Align resampled carry price and annualised price volatility in points
-    (resampled_carry_price, annualised_price_vol_points) = resampled_carry_price.align(annualised_price_vol_points,
-                                                                                       join='right')
-    percentage_vol = 100.0 * (annualised_price_vol_points / resampled_carry_price.ffill().abs())
-    (block_value, percentage_vol) = block_value.align(percentage_vol, join="inner")
-    currency_vol = block_value * percentage_vol
-    # It is to multiply by fx_rate, which is taken to be 1 here
-    value_vol = currency_vol.ffill() * 1
-    perc_vol_target = annual_perc_vol_target / 16
-    cash_vol_target = capital * perc_vol_target
-    vol_scalar = cash_vol_target / value_vol
-    vol_scalar = vol_scalar.reindex(price.index, method="ffill")
-    return vol_scalar
+def calc_volatility_scalar(raw_price, price, block_move_value, capital=500000, risk_target=0.25, vol_mult=1.0):
+    raw_price, price = raw_price.align(price, join="inner")
+    raw_price.ffill(inplace=True)
+    price.ffill(inplace=True)
+    pnl_vol = vol_mult * calc_mixed_volatility(price.diff(), slow_vol_years=10)
+    vol_percent = 100.0 * (pnl_vol / raw_price.abs())
+    block_value = block_move_value * raw_price * 0.01
+    currency_vol = block_value * vol_percent
+    daily_cash_vol_target = capital * (risk_target / 16)
+    volatility_scalar = daily_cash_vol_target / currency_vol
+    return volatility_scalar
+
+# def calc_volatility_scalar(raw_price, price, block_move_value, capital, risk_target):
+#     '''
+#     Get ratio of required volatility vs volatility of instrument in instrument's own currency
+#     Gets daily prices for use with % volatility
+#     This won't always be the same as the normal 'price'
+#     '''
+#
+#     block_value = raw_price.ffill() * 0.01 * block_move_value
+#     block_value.ffill(inplace=True)
+#
+#     annualised_price_vol_points = calc_mixed_volatility(price.diff(), slow_vol_years=10)
+#     annualised_price_vol_points.ffill(inplace=True)
+#
+#     # Align resampled carry price and annualised price volatility in points
+#     resampled_carry_price = raw_price.resample('1B').last()
+#     (resampled_carry_price, annualised_price_vol_points) = resampled_carry_price.align(annualised_price_vol_points,
+#                                                                                        join='right')
+#     percentage_vol = 100.0 * (annualised_price_vol_points / resampled_carry_price.ffill().abs())
+#
+#     (block_value, percentage_vol) = block_value.align(percentage_vol, join="inner")
+#     # It is to multiply by fx_rate, which is taken to be 1 here
+#     fx_rate = 1
+#     currency_vol = (block_value * percentage_vol).ffill() * fx_rate
+#
+#     cash_vol_target = capital * risk_target / 16
+#     vol_scalar = cash_vol_target / currency_vol
+#     vol_scalar = vol_scalar.reindex(price.index, method="ffill")
+#     return vol_scalar
