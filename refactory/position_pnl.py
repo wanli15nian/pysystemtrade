@@ -94,6 +94,7 @@ def calc_volatility_scalar(raw_price, price, block_move_value, capital=500000, r
     vol_percent = 100.0 * (pnl_vol / raw_price.abs())
 
     block_value = block_move_value * raw_price * 0.01
+
     currency_vol = block_value * vol_percent
 
     daily_currency_vol_target = capital * (risk_target / 16)
@@ -108,15 +109,17 @@ def calc_volatility_scalar1(raw_price, price, block_move_value, capital, risk_ta
     This won't always be the same as the normal 'price'
     '''
 
-    pnl_vol = vol_mult * calc_mixed_volatility(price.diff(), slow_vol_years=10)
-    vol_percent = 100.0 * (pnl_vol / raw_price.ffill().abs())
+    # raw_price.ffill(inplace=True)
 
-    block_value = raw_price.ffill() * 0.01 * block_move_value
-    block_value.ffill(inplace=True)
-    (block_value, vol_percent) = block_value.align(vol_percent, join="inner")
+    pnl_vol = vol_mult * calc_mixed_volatility(price.diff(), slow_vol_years=10)
+    vol_percent = 100.0 * (pnl_vol / raw_price.abs())
+
+    block_value = block_move_value * raw_price * 0.01
+
+    block_value, vol_percent = block_value.align(vol_percent, join="inner")
     currency_vol = (block_value * vol_percent).ffill()
 
-    daily_currency_vol_target = capital * risk_target / 16
+    daily_currency_vol_target = capital * (risk_target / 16)
     volatility_scalar = daily_currency_vol_target / currency_vol
-    volatility_scalar = volatility_scalar.reindex(price.index, method="ffill")
+
     return volatility_scalar
