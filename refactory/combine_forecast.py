@@ -7,6 +7,9 @@ from refactory.utils import optimisation, stack_df_list
 def calc_weights_and_multiplier(forecast_, net_):
     # TODO: 这个函数返回两个值不够简单，end_list的耦合需要解开
     weights_daily, end_list = calc_weights_daily(net_)
+
+    # 可以直接用weely的index生成同样的end_list吗？如果可以就能直接解开end_list的耦合
+    # end_list = generate_yearly_end_list(weights_daily.index)
     corr_weekly = calc_corr_weekly(forecast_)
     multiplier_yearly = pd.Series(
         [calc_div_multiplier(weights_daily, get_corr_end(corr_weekly, end), end) for end in end_list],
