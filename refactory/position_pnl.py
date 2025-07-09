@@ -98,7 +98,7 @@ def calc_volatility_scalar(raw_price, price, block_move_value, capital=500000, r
     volatility_scalar = daily_cash_vol_target / currency_vol
     return volatility_scalar
 
-def calc_volatility_scalar1(raw_price, price, block_move_value, capital, risk_target):
+def calc_volatility_scalar1(raw_price, price, block_move_value, capital, risk_target, vol_mult=1.0):
     '''
     Get ratio of required volatility vs volatility of instrument in instrument's own currency
     Gets daily prices for use with % volatility
