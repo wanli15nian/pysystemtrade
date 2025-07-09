@@ -76,22 +76,19 @@ def pseudo_fills_for_year(year, rolls_per_year, price, positions):
 
     date_list = generate_equal_dates_within_year(year, rolls_per_year)
 
+    last_year_date = generate_equal_dates_within_year(year - 1, rolls_per_year)[-1]
+    dl = [last_year_date] + date_list
+    # 创建一个Series，计算每个日期范围的平均持仓量，并指定索引为date_list
+    average_holdings_series = pd.Series(
+        [positions[dl[i]:dl[i + 1]].abs().mean() for i in range(len(date_list))],
+        index=date_list)
+    average_holdings_series = average_holdings_series.fillna(0)
 
-    # 计算每年的平均持有量
-    first_date = generate_equal_dates_within_year(year - 1, rolls_per_year)[-1]
-    subsequent_dates = date_list
-    all_dates = [first_date] + subsequent_dates
-    list_of_average_holdings = []
-    for date_index in range(len(subsequent_dates)):
-        end_date = all_dates[date_index + 1]
-        previous_date = all_dates[date_index]
-        avg_holding = positions[previous_date:end_date].abs().mean()
-        if np.isnan(avg_holding):
-            avg_holding = 0.0
-        list_of_average_holdings.append(avg_holding)
+    # 将Series转换为数组
+    list_of_average_holdings = average_holdings_series.values
 
     # 填充价格序列
-    price_series = price.ffill()
+    price_series = price
     # 获取价格序列的最后一个日期
     last_date_with_positions = price.index[-1]
     multiply_roll_costs_by = 1
