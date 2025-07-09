@@ -4,19 +4,19 @@ import pandas as pd
 from refactory.utils import calc_mixed_volatility
 
 
-def calc_subsystem_turnover(subsystem_position_raw, raw_price, point_size):
-    average_position_for_turnover = calc_average_position(raw_price, point_size)
+def calc_subsystem_turnover(subsystem_position_raw, raw_price, price, point_size):
+    average_position_for_turnover = calc_average_position(raw_price, price, point_size)
     subsystem_turnover = turnover_x_y(subsystem_position_raw, average_position_for_turnover)
     return subsystem_turnover
 
 
-def calc_average_position(raw_price, block_move_value, notional_trading_capital=500000, risk_target=0.25,
+def calc_average_position(raw_price, price, block_move_value, notional_trading_capital=500000, risk_target=0.25,
                           vol_mult=1.0):
     # carry_data = get_instrument_raw_carry_data(instrument).PRICE
     # daily_prices = carry_data.resample('1B').last()
     # denom_price = get_instrument_raw_carry_data(instrument).PRICE
     # denom_price = denom_price.resample('1B').last()
-    daily_prices = raw_price
+    daily_prices = price
     denom_price = raw_price
 
     annual_cash_vol_target = (notional_trading_capital * risk_target)

@@ -84,7 +84,7 @@ def adjust_by_buffer(last, current, top, bottom, trade_to_edge=True):
         return last
 
 
-def calc_volatility_scalar(price, point_size, capital, annual_perc_vol_target):
+def calc_volatility_scalar(raw_price, price, point_size, capital, annual_perc_vol_target):
     '''
     Get ratio of required volatility vs volatility of instrument in instrument's own currency
 
@@ -99,10 +99,9 @@ def calc_volatility_scalar(price, point_size, capital, annual_perc_vol_target):
         )
         return self.get_daily_prices(instrument_code)
     '''
-    carry_price = price
-    block_value = carry_price.ffill() * 0.01 * point_size
+    block_value = raw_price.ffill() * 0.01 * point_size
     block_value.ffill(inplace=True)
-    resampled_carry_price = carry_price.resample('1B').last()
+    resampled_carry_price = raw_price.resample('1B').last()
     annualised_price_vol_points = calc_mixed_volatility(price.diff(), slow_vol_years=10)
     annualised_price_vol_points.ffill(inplace=True)
     # Align resampled carry price and annualised price volatility in points

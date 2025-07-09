@@ -13,8 +13,6 @@ from refactory.position_pnl import calc_position_target
 from refactory.subsystem_turnover import calc_subsystem_turnover
 
 instruments = ["CORN", "SOFR", "SP500_micro", 'US10']
-# TODO 不应该用rules列表
-rules = ['ewmac32', 'ewmac8']
 
 info_ = get_instrument_info().loc[instruments]
 size_ = info_['point_size']
@@ -91,14 +89,15 @@ subsystem_positions_dict = {}
 gross_dict = {}
 costs_dict = {}
 for instrument in instruments:
-    price = price_.loc[instrument]
-    forecast = forecast_.loc[instrument]
     info = info_.loc[instrument]
     point_size = size_[instrument]
 
+    price = price_.loc[instrument]
+    raw_price = raw_price_.loc[instrument]
+    forecast = forecast_.loc[instrument]
+
     combined_forecast = ((forecast_weights * forecast).sum(axis=1) * diversify_multiplier).clip(20, -20)
-    raw_price = get_raw_price(instrument)
-    vol_scalar = calc_volatility_scalar(raw_price, point_size, 500000, 0.25)
+    vol_scalar = calc_volatility_scalar(raw_price, price, point_size, 500000, 0.25)
 
     # TODO 这里是不是缺一个target position？
     subsystem_position_raw = vol_scalar * combined_forecast / 10.0
@@ -116,8 +115,9 @@ subsystem_positions = pd.DataFrame(subsystem_positions_dict).ffill()
 gross_pnl_df = pd.DataFrame(gross_dict)
 cost_df = pd.DataFrame(costs_dict)
 
-subsystem_turnover_ = {i: calc_subsystem_turnover(subsystem_positions[i], raw_price_.loc[i], size_.loc[i])
-                       for i in instruments}
+subsystem_turnover_ = {
+    i: calc_subsystem_turnover(subsystem_positions[i], raw_price_.loc[i], price_.loc[i], size_.loc[i])
+    for i in instruments}
 
 net_return_raw = pd.DataFrame({inst: gross_pnl_df[inst] + cost_df[inst].mean() for inst in instruments})
 portfolio_weights = calc_portfolio_weights(net_return_raw, subsystem_positions)
