@@ -12,6 +12,7 @@ def calc_mixed_volatility(data, days=35, min_periods=10, slow_vol_years=20,
     vol = perc_of_long_vol * long_vol + (1 - perc_of_long_vol) * short_vol
     vol[vol < vol_min] = vol_min
     vol = vol * vol_multiplier
+    vol.ffill(inplace=True)
     return vol
 
 
