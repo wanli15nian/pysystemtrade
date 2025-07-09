@@ -39,12 +39,9 @@ def calc_net_pnl(gross_pnl, cost_SR):
 
 
 def calc_buffered_position(position_raw, vol_scalar, buffer_size=0.10):
-    '''
-    vol_scalar 的另一种理解是Avg pos of the subsystem level
-    这么理解的话就是说position 可以在avg pos的10% 区间内浮动
-    '''
-    # TODO 这两个参数应该合并成一个参数
+    # vol_scalar 的另一种理解是Avg pos of the subsystem level，就是说position 可以在avg pos的10% 区间内浮动
     buffer = vol_scalar * buffer_size
+
     top_pos = (position_raw + buffer).ffill().round()
     bottom_pos = (position_raw - buffer).ffill().round()
     position_raw = position_raw.ffill().round()
@@ -60,9 +57,6 @@ def calc_buffered_position(position_raw, vol_scalar, buffer_size=0.10):
                                 top_pos.values[index], bottom_pos.values[index])
         buffered_position_list.append(last)
     buffered_position = pd.Series(buffered_position_list, index=position_raw.index)
-    # last = position_raw.shift(1).bfill()
-    # df = pd.DataFrame({'last': last, 'current': position_raw, 'top': top_pos, 'bottom': bottom_pos})
-    # buffered_position = df.apply(lambda x: adjust_by_buffer(x['last'], x['current'], x['top'], x['bottom']), axis=1)
 
     return buffered_position
 
@@ -101,4 +95,7 @@ def calc_volatility_scalar(raw_price, price, block_move_value, capital=500000, r
 
     daily_currency_vol_target = capital * (risk_target / 16)
     volatility_scalar = daily_currency_vol_target / currency_vol
+
+    volatility_scalar.ffill(inplace=True)
+
     return volatility_scalar
