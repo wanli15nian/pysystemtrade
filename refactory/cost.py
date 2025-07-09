@@ -21,27 +21,6 @@ class Fill:
     price_requires_slippage_adjustment: bool = False
 
 
-def calc_all_fills(position, price, rolls_per_year):
-    list_of_years = list(set([int(idx.year) for idx in position.index]))
-    list_of_years.sort()
-    fills_by_year = [pseudo_fills_for_year(year, rolls_per_year, price, position) for year in
-                     list_of_years]
-    list_of_holding_fills = [item for sublist in fills_by_year for item in sublist]
-    trades = position.diff()
-    trades_without_na = trades[~trades.isna()]
-    trades_without_zeros = trades_without_na[trades_without_na != 0]
-    prices_aligned_to_trades = price.reindex(trades_without_zeros.index, method="ffill")
-    trades_as_list = list(trades_without_zeros.values)
-    prices_as_list = list(prices_aligned_to_trades.values)
-    dates_as_list = list(prices_aligned_to_trades.index)
-    list_of_trading_fills = [
-        Fill(date, qty, price, price_requires_slippage_adjustment=True)
-        for date, qty, price in zip(dates_as_list, trades_as_list, prices_as_list)
-    ]
-    list_of_all_fills = list_of_trading_fills + list_of_holding_fills
-    return list_of_all_fills
-
-
 def calc_normalised_cost(info, all_fills, cost_deflator, include_slippage):
     point_size = info['point_size']
     instrument_currency_costs = [-calc_cost_instr_currency_for_a_fill(fill, point_size, info, include_slippage)
@@ -56,13 +35,14 @@ def calc_normalised_cost(info, all_fills, cost_deflator, include_slippage):
 
 
 def calc_cost_instr_currency_for_a_fill(fill, point_size, info, include_slippage=True):
+    blocks = fill.qty
+    price = fill.price
+
     slippage = info['spread_cost']
     per_trade = info['per_trade']
     per_block = info['per_block']
     percentage = info['percentage']
 
-    blocks = fill.qty
-    price = fill.price
     if include_slippage:
         slippage_costs = abs(blocks) * point_size * slippage
     else:
