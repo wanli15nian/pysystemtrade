@@ -72,7 +72,7 @@ def calc_volatility_scalar(raw_price, price, block_move_value, capital=500000, r
     vol_percent = 100.0 * (pnl_vol / raw_price.abs())
 
     block_value = block_move_value * raw_price * 0.01
-    # TODO 这个到底起了什么作用？去掉结果会有差异
+    # TODO 这个到底起了什么作用？去掉了结果为什么会有差异？
     block_value, vol_percent = block_value.align(vol_percent, join="inner")
 
     currency_vol = block_value * vol_percent
