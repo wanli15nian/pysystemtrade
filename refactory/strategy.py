@@ -98,9 +98,7 @@ for instrument in instruments:
     forecast = forecast_.loc[instrument]
 
     combined_forecast = ((forecast_weights * forecast).sum(axis=1) * diversify_multiplier).clip(20, -20)
-    # FIXME: 为何前面的risk_target是0.16，这里却用0.25?,risk_target应该作为一个常数在最前面设置。
     vol_scalar = calc_volatility_scalar(raw_price, price, point_size, 500000, risk_target)
-
     subsystem_position_raw = vol_scalar * combined_forecast / 10.0
     subsystem_position_buffered = calc_buffered_position(subsystem_position_raw, vol_scalar, 0.10)
     position = subsystem_position_buffered.shift(1)

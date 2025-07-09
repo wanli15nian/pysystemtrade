@@ -16,6 +16,9 @@ def calc_weights_and_multiplier(forecast_, net_):
 
 
 def calc_weights_daily(net_):
+    # 可以用net_直接算吗？跳过resample weekly会有影响吗？
+    # end_list = generate_yearly_end_list(net_.index.levels[1])
+
     # 转换成周数据
     weekly_list = [group.reset_index(level='instrument', drop=True).resample('W').sum()
                    for _, group in net_.groupby(level='instrument')]
