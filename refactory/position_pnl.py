@@ -40,23 +40,18 @@ def calc_net_pnl(gross_pnl, cost_SR):
 
 def calc_buffered_position(position_raw, vol_scalar, buffer_size=0.10):
     # vol_scalar 的另一种理解是Avg pos of the subsystem level，就是说position 可以在avg pos的10% 区间内浮动
+
     buffer = vol_scalar * buffer_size
+    top = (position_raw + buffer).ffill().round()
+    bottom = (position_raw - buffer).ffill().round()
+    position = position_raw.ffill().round()
 
-    top_pos = (position_raw + buffer).ffill().round()
-    bottom_pos = (position_raw - buffer).ffill().round()
-    position_raw = position_raw.ffill().round()
-
-    last = position_raw.values[0]
-    if np.isnan(last):
-        last = 0.0
-    buffered_position_list = [last]
-
-    # range(len(position_raw)) 跳过第一个Element
-    for index in range(1, len(position_raw)):
-        last = adjust_by_buffer(last, position_raw.values[index],
-                                top_pos.values[index], bottom_pos.values[index])
+    last = 0.0
+    buffered_position_list = []
+    for index in range(len(position)):
+        last = adjust_by_buffer(last, position.iloc[index], top.iloc[index], bottom.iloc[index])
         buffered_position_list.append(last)
-    buffered_position = pd.Series(buffered_position_list, index=position_raw.index)
+    buffered_position = pd.Series(buffered_position_list, index=position.index)
 
     return buffered_position
 
@@ -64,19 +59,28 @@ def calc_buffered_position(position_raw, vol_scalar, buffer_size=0.10):
 def adjust_by_buffer(last, current, top, bottom, trade_to_edge=True):
     if np.isnan(top) or np.isnan(bottom) or np.isnan(current):
         return last
-
-    if last > top:
-        if trade_to_edge:
-            return top
-        else:
-            return current
-    elif last < bottom:
-        if trade_to_edge:
-            return bottom
-        else:
-            return current
+    if trade_to_edge:
+        return min(max(last, bottom), top)  # 如果在buffer内则不调仓，调仓就调到buffer边缘，尽量减少调仓幅度
     else:
-        return last
+        return last if (bottom <= last <= top) else current  # 如果在buffer内则不调仓
+
+
+# def adjust_by_buffer(last, current, top, bottom, trade_to_edge=True):
+#     if np.isnan(top) or np.isnan(bottom) or np.isnan(current):
+#         return last
+#
+#     if last > top:
+#         if trade_to_edge:
+#             return top
+#         else:
+#             return current
+#     elif last < bottom:
+#         if trade_to_edge:
+#             return bottom
+#         else:
+#             return current
+#     else:
+#         return last
 
 
 def calc_volatility_scalar(raw_price, price, block_move_value, capital=500000, risk_target=0.25, vol_mult=1.0):
