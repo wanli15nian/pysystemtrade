@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 
+from refactory.position_pnl import calc_trade_cost
 from refactory.utils import calc_mixed_volatility
 
 
@@ -42,24 +43,11 @@ def calc_cost_sr_per(price, info, notional_blocks_traded=1):
 
 
 def calc_cost_per(price, info, notional_blocks_traded):
-    point_size = info['point_size']
-    spread_cost = info['spread_cost']
-    per_trade = info['per_trade']
-    per_block = info['per_block']
-    percentage = info['percentage']
     # A股股票必须是100股的整数倍，这个参数是这个100的意思吗？
     blocks = notional_blocks_traded
     # 过去一年的均价
     average_price = float(price[price.index[-1] - pd.DateOffset(years=1):].mean())
-    # 交易佣金，三种方式只会有一种，其他两种为零，可以用取最大值的方法
-    commission_percentage = blocks * average_price * point_size * percentage
-    commission_per_block = blocks * per_block
-    commission = max([per_trade, commission_per_block, commission_percentage])
-    # 交易滑点，现在只考虑一个点，以后可以加上参数控制滑几个点
-    slippage = blocks * spread_cost * point_size
-    # 交易成本，包括slippage和commission
-    cost = commission + slippage
-    return cost
+    return calc_trade_cost(average_price, blocks, info)
 
 
 def calc_ann_vol(price, point_size):

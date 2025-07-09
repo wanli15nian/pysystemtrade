@@ -4,6 +4,8 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
+from refactory.position_pnl import calc_trade_cost
+
 
 def calc_cost(position, price, info, include_slippage=True):
     rolls_per_year = int(info['rolls_per_year'])  # TODO: 用【】取会自动转为浮点型，临时方案是强制给转成整型
@@ -35,30 +37,10 @@ def calc_normalised_cost(info, all_fills, cost_deflator, include_slippage):
 
 
 def calc_cost_instr_currency_for_a_fill(fill, point_size, info, include_slippage=True):
-    blocks = fill.qty
     price = fill.price
+    quantity = fill.qty
 
-    slippage = info['spread_cost']
-    per_trade = info['per_trade']
-    per_block = info['per_block']
-    percentage = info['percentage']
-
-    if include_slippage:
-        slippage_costs = abs(blocks) * point_size * slippage
-    else:
-        slippage_costs = 0
-
-    '''
-    三种Commission cost 的计算方式
-    '''
-
-    block_price_multiplier = point_size * price
-    per_block = (abs(blocks) * per_block)
-    perc_commission = abs(blocks) * block_price_multiplier * percentage
-    commission_costs = max([per_trade, per_block, perc_commission])
-
-    total_cost = slippage_costs + commission_costs
-    return total_cost
+    return calc_trade_cost(price, quantity, info, include_slippage)
 
 
 @dataclass

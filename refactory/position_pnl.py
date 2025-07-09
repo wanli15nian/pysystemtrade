@@ -82,3 +82,31 @@ def adjust_by_buffer(last, current, top, bottom, trade_to_edge=True):
         return min(max(last, bottom), top)  # 如果在buffer内则不调仓，调仓就调到buffer边缘，尽量减少调仓幅度
     else:
         return last if (bottom <= last <= top) else current  # 如果在buffer内则不调仓
+
+
+def calc_commission(price, quantity, info):
+    # 交易佣金，三种方式只会有一种，其他两种为零，可以用取最大值的方法
+    point_size = info['point_size']
+    per_trade = info['per_trade']
+    per_block = info['per_block']
+    percentage = info['percentage']
+    block_price_multiplier = point_size * price
+    per_block = (abs(quantity) * per_block)
+    perc_commission = abs(quantity) * block_price_multiplier * percentage
+    commission_costs = max([per_trade, per_block, perc_commission])
+    return commission_costs
+
+
+def calc_slippage(quantity, info):
+    # 交易滑点，现在只考虑一个点，以后可以加上参数控制滑几个点
+    slippage = info['spread_cost']
+    point_size = info['point_size']
+    slippage_ = (abs(quantity) * point_size * slippage)
+    return slippage_
+
+
+def calc_trade_cost(price, quantity, info, include_slippage=True):
+    commission_costs = calc_commission(price, quantity, info)
+    slippage_costs = calc_slippage(quantity, info) if include_slippage else 0
+    total_cost = slippage_costs + commission_costs
+    return total_cost
