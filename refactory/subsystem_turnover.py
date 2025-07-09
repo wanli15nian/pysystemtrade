@@ -17,21 +17,19 @@ def calc_average_position(raw_price, price, block_move_value, notional_trading_c
     # denom_price = get_instrument_raw_carry_data(instrument).PRICE
     # denom_price = denom_price.resample('1B').last()
 
-    annual_cash_vol_target = (notional_trading_capital * risk_target)
-    daily_cash_vol_target = annual_cash_vol_target / 16
-
+    daily_cash_vol_target = (notional_trading_capital * risk_target) / 16
     block_value = block_move_value * raw_price.ffill() * 0.01
-    price_returns = price.diff()
-    raw_vol = calc_mixed_volatility(price_returns, slow_vol_years=10)
+
+    raw_vol = calc_mixed_volatility(price.diff(), slow_vol_years=10)
     return_vol = vol_mult * raw_vol
 
-    denom_price = raw_price
-    (denom_price, return_vol) = denom_price.align(return_vol, join="right")
-    daily_perc_vol1 = 100.0 * (return_vol / denom_price.ffill().abs())
+    (denom_price, return_vol) = raw_price.align(return_vol, join="right")
+    denom_price.ffill(inplace=True)
+    percentage_vol = 100.0 * (return_vol / denom_price.abs())
 
-    (block_value, daily_perc_vol) = block_value.align(daily_perc_vol1, join="inner")
-    instr_ccy_vol = block_value.ffill() * daily_perc_vol
-    instr_value_vol = instr_ccy_vol.ffill()
+    (block_value, percentage_vol) = block_value.align(percentage_vol, join="inner")
+    currency_vol = block_value.ffill() * percentage_vol
+    instr_value_vol = currency_vol.ffill()
 
     average_position_for_turnover = daily_cash_vol_target / instr_value_vol
 
