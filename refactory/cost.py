@@ -84,26 +84,28 @@ def pseudo_fills_for_year(year, rolls_per_year, price, positions):
         index=date_list)
     average_holdings_series = average_holdings_series.fillna(0)
 
-    # 将Series转换为数组
-    list_of_average_holdings = average_holdings_series.values
-
-    # 填充价格序列
-    price_series = price
-    # 获取价格序列的最后一个日期
     last_date_with_positions = price.index[-1]
-    multiply_roll_costs_by = 1
 
-    ## We multiply the quantity rather than the actual costs, as the later
-    ##   cost calculation doesn't distinguish between rolls and other trades
+    # list_of_average_holdings = average_holdings_series.values
+    # # 获取价格序列的最后一个日期
+    # opening_fills_this_year = [
+    #     Fill(
+    #         date=date,
+    #         qty=qty,
+    #         price=get_row_of_series_before_date(price, date),
+    #     )
+    #     for date, qty in zip(date_list, list_of_average_holdings)
+    #     if date <= last_date_with_positions and abs(qty) > 0
+    # ]
 
+    df = pd.DataFrame({'quantity': average_holdings_series})
+    df = df[(df.index <= last_date_with_positions) & (df['quantity'].abs() > 0)]
+    df['price'] = df.index.map(lambda date: get_row_of_series_before_date(price, date))
+
+    # 从 DataFrame 转换为 Fill 对象列表
     opening_fills_this_year = [
-        Fill(
-            date=date,
-            qty=qty * multiply_roll_costs_by,
-            price=get_row_of_series_before_date(price_series, date),
-        )
-        for date, qty in zip(date_list, list_of_average_holdings)
-        if date <= last_date_with_positions and abs(qty) > 0
+        Fill(date=row.name, qty=row['quantity'], price=row['price'])
+        for _, row in df.iterrows()
     ]
 
     closing_fills_this_year = [Fill(
