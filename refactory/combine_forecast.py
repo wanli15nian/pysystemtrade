@@ -55,16 +55,16 @@ def calc_forecast_weights(instr_num, pnl, fit_end, span_multiple=50000, min_peri
     span = instr_num * span_multiple
 
     min_periods = instr_num * min_periods_corr_multiple
-    corr = calc_corr_matrix(pnl, min_periods, fit_end, span)
+    corr = calc_corr_matrix(pnl, fit_end, min_periods, span)
 
     periods = instr_num * min_periods_multiple
-    norm_std, norm_mean = calc_mean_std(pnl, periods, fit_end, span)
+    norm_std, norm_mean = calc_mean_std(pnl, fit_end, periods, span)
 
     weights = optimisation(corr, norm_mean, norm_std)
     return weights
 
 
-def calc_corr_matrix(data, min_periods, fit_end, span):
+def calc_corr_matrix(data, fit_end, min_periods, span):
     raw_corr = data.ewm(span=span, min_periods=min_periods, ignore_na=True).corr(
         pairwise=True)  # span 和min_periods 都是config 里面的4倍，因为4个instruments
     corr_matrix_values = (
@@ -73,7 +73,7 @@ def calc_corr_matrix(data, min_periods, fit_end, span):
     return corr_matrix_values
 
 
-def calc_mean_std(data, min_periods, fit_end, span=50000):
+def calc_mean_std(data, fit_end, min_periods, span=50000):
     last_index = data.index[data.index <= fit_end].size - 1
     # 计算标准差和均值
     std_daily = data.ewm(span=span, min_periods=min_periods).std().iloc[last_index]
@@ -98,11 +98,9 @@ def calc_div_mult_daily(weights_daily, forecast_):
 
 
 def calc_corr_weekly(forecast_, lookback=250, periods=20):
+    forecast_weekly = forecast_.groupby([pd.Grouper(level=1, freq='W'), 'instrument']).last()
+    forecast_weekly = forecast_weekly.droplevel('instrument')
     instruments_num = len(forecast_.index.levels[0])
-
-    weekly_list = [group.droplevel('instrument').resample('W').last()
-                   for _, group in forecast_.groupby(level='instrument')]
-    forecast_weekly = stack_df_list(weekly_list)
     corr_weekly = forecast_weekly.ewm(span=lookback * instruments_num, min_periods=periods * instruments_num,
                                       ignore_na=True).corr(pairwise=True)
     return corr_weekly
