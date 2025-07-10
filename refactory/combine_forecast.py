@@ -10,6 +10,13 @@ def calc_weights_and_multiplier(forecast_, net_):
 
     # 可以直接用weely的index生成同样的end_list吗？如果可以就能直接解开end_list的耦合
     # end_list = generate_yearly_end_list(weights_daily.index)
+
+    # weights_weekly = weights_daily.resample('W').last()
+    # end_list1 = generate_yearly_end_list(weights_weekly.index)
+    # end_list = [(e + pd.Timedelta(milliseconds=3)) for e in end_list1]
+
+    end_list = get_end_list(weights_daily.index)
+
     corr_weekly = calc_corr_weekly(forecast_)
     multiplier_yearly = pd.Series(
         [calc_div_multiplier(weights_daily, get_corr_end(corr_weekly, end), end) for end in end_list],
@@ -36,27 +43,13 @@ def calc_weights_and_multiplier(forecast_, net_):
 
 
 def calc_weights_daily(net_):
-    # 可以用net_直接算吗？跳过resample weekly会有影响吗？
-    # end_list = generate_yearly_end_list(net_.index.levels[1])
+    # 计算年切分点
+    end_list = get_end_list(net_.index.levels[1])
 
     # 转换成周数据
-    # weekly_list = [group.reset_index(level='instrument', drop=True).resample('W').sum()
-    #                for _, group in net_.groupby(level='instrument')]
-
-    weekly_df = (net_.groupby(level=0).apply(lambda x: x.droplevel('instrument').resample('W').sum()))
-    weekly_list = [group.reset_index(level='instrument', drop=True) for _, group in
-                   weekly_df.groupby(level='instrument')]
-
-    # end_list = generate_yearly_end_list(weekly_df.index.levels[1])
-    # l1 = weekly_df.index.levels[1]
-
-    # temp = get_multi_index_df(weekly_list, net_.index.levels[0])
-    # longest_index = get_longest_index(weekly_list)
-    # new_end_list = generate_yearly_end_list(longest_index)
-
+    weekly_list = [group.reset_index(level='instrument', drop=True).resample('W').sum()
+                   for _, group in net_.groupby(level='instrument')]
     net_weekly = stack_df_list(weekly_list)
-    end_list = generate_yearly_end_list(net_weekly.index)
-    # l2 = net_weekly.index
 
     # 计算年权重
     instruments_num = len(net_.index.levels[0])
@@ -78,6 +71,16 @@ def calc_weights_daily(net_):
     # weight_df = weights_yearly.reindex(price.index, method='ffill').fillna(1 / rule_num) # 原先是reindex为price的，改成了net的,简单测试没问题
 
     return weights_daily, end_list
+
+
+def get_end_list(daily_index):
+    daily_series = pd.Series(index=daily_index)
+    weekly_series = daily_series.resample('W').last()
+    weekly_index = weekly_series.index
+    # weekly_index = weekly_df.index.levels[1]
+    end_list = generate_yearly_end_list(weekly_index)
+    end_list = [(e + pd.Timedelta(milliseconds=3)) for e in end_list]
+    return end_list
 
 
 def generate_yearly_end_list(index):
