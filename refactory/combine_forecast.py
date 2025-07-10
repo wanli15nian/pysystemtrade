@@ -4,6 +4,9 @@ import pandas as pd
 from refactory.utils import optimisation, stack_df_list
 
 
+# TODO：又是日频，又是周频，又是年频，有些乱
+# TODO: stack这种傻办法需要改成直接用multiIndex做
+
 def get_end_list(daily_index):
     # 转成周频的
     daily_series = pd.Series(index=daily_index)
