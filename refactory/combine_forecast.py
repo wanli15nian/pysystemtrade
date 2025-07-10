@@ -45,55 +45,44 @@ def calc_weights_daily(net_):
     return weights_daily
 
 
-def calc_forecast_weights(instr_num, pnl, fit_end, span_multiple=50000, min_periods_corr_multiple=10,
+def calc_forecast_weights(instr_num, pnl, fit_end, span_multiple=50000, min_periods_corr=10,
                           min_periods_multiple=5):
     span = instr_num * span_multiple
 
-    min_periods = instr_num * min_periods_corr_multiple
-    corr = calc_corr_matrix(pnl, fit_end, min_periods, span)
+    min_periods = instr_num * min_periods_corr
+    raw_corr = pnl.ewm(span=span, min_periods=min_periods, ignore_na=True).corr(pairwise=True)
+    corr_matrix_values = raw_corr[raw_corr.index.get_level_values(0) <= fit_end].tail(len(pnl.columns)).values
+    corr = np.clip(corr_matrix_values, a_min=0, a_max=None)
 
-    periods = instr_num * min_periods_multiple
-    norm_std, norm_mean = calc_mean_std(pnl, fit_end, periods, span)
-
-    weights = optimisation(corr, norm_mean, norm_std)
-    return weights
-
-
-def calc_corr_matrix(data, fit_end, min_periods, span):
-    raw_corr = data.ewm(span=span, min_periods=min_periods, ignore_na=True).corr(
-        pairwise=True)  # span 和min_periods 都是config 里面的4倍，因为4个instruments
-    corr_matrix_values = (
-        raw_corr[raw_corr.index.get_level_values(0) <= fit_end].tail(len(data.columns)).values)  # 截取fit_period之前的数据
-    corr_matrix_values = [[max(0, item) for item in sublist] for sublist in corr_matrix_values]
-    return corr_matrix_values
-
-
-def calc_mean_std(data, fit_end, min_periods, span=50000):
-    last_index = data.index[data.index <= fit_end].size - 1
     # 计算标准差和均值
-    std_daily = data.ewm(span=span, min_periods=min_periods).std().iloc[last_index]
-    mean_daily = data.ewm(span=span, min_periods=min_periods).mean().iloc[last_index]
+    periods = instr_num * min_periods_multiple
+    # last_index = pnl.index[pnl.index <= fit_end].size - 1
+    # std_daily = pnl.ewm(span=span, min_periods=periods).std().iloc[last_index]
+    # mean_daily = pnl.ewm(span=span, min_periods=periods).mean().iloc[last_index]
+    std_daily = pnl.ewm(span=span, min_periods=periods).std().asof(fit_end)
+    mean_daily = pnl.ewm(span=span, min_periods=periods).mean().asof(fit_end)
     # 年化处理
     std = std_daily * ((365.25 / 7.0) ** 0.5)
     mean = mean_daily * (365.25 / 7.0)
     # 计算归一化标准差和归一化均值
-    norm_std = [(np.nanmean(std))] * len(std)
-    norm_mean = mean / (std / np.nanmean(std))
-    return norm_std, norm_mean
+    std = [(np.nanmean(std))] * len(std)
+    mean = mean / (std / np.nanmean(std))
+
+    weights = optimisation(corr, mean, std)
+    return weights
 
 
 def calc_div_mult_daily(weights_daily, forecast_):
     end_list = get_end_list(weights_daily.index)
-    corr_weekly = calc_corr_weekly(forecast_)
+    corr_weekly = calc_forecast_corr(forecast_)
     multiplier_yearly = pd.Series(
-        # [calc_div_multiplier(weights_daily, get_corr_end(corr_weekly, end), end) for end in end_list],
-        [calc_div_mult(weights_daily, corr_weekly, end) for end in end_list],
+        [calc_div_mult_yearly(weights_daily, corr_weekly, end) for end in end_list],
         index=end_list)
     multiplier_daily = multiplier_yearly.reindex(weights_daily.index, method="ffill").fillna(1.0).ewm(span=125).mean()
     return multiplier_daily
 
 
-def calc_corr_weekly(forecast_, lookback=250, periods=20):
+def calc_forecast_corr(forecast_, lookback=250, periods=20):
     forecast_weekly = forecast_.groupby([pd.Grouper(level=1, freq='W'), 'instrument']).last()
     forecast_weekly = forecast_weekly.droplevel('instrument')
     instruments_num = len(forecast_.index.levels[0])
@@ -102,38 +91,10 @@ def calc_corr_weekly(forecast_, lookback=250, periods=20):
     return corr_weekly
 
 
-def calc_div_mult(weights_daily, corr_weekly, end, dm_max=2.5):
-    corr_end = (corr_weekly[corr_weekly.index.get_level_values(0) <= end]
-                .tail(len(corr_weekly.index.levels[0]))
-                .values)[-1]
-    corr = [max(0, value) for value in corr_end]
-
-    weight_slice = weights_daily[weights_daily.index <= end]
-    if weight_slice.shape[0] == 0:
-        return 1.0
-    weights = np.array(weight_slice.iloc[-1])
-    # 计算Portfolio variance in correlation space, 且设Limit
-    # FIXME:如果是3个rule，这代码就有问题了
-    corr_matrix = np.array([[corr[1], corr[0]], [corr[0], corr[1]]])
-    try:
-        risk = np.sqrt(weights.dot(corr_matrix).dot(weights))
-    except:
-        risk = 1.0
-    risk = 1.0 if (np.isnan(risk) or risk < 1e-7) else risk
-    return min(1.0 / risk, dm_max)
-
-
-def calc_div_multiplier(weights_daily, corr, end, dm_max=2.5):
-    weight_slice = weights_daily[weights_daily.index <= end]
-    if weight_slice.shape[0] == 0:
-        return 1.0
-    weights = np.array(weight_slice.iloc[-1])
-    # 计算Portfolio variance in correlation space, 且设Limit
-    # FIXME:如果是3个rule，这代码就有问题了
-    corr_matrix = np.array([[corr[1], corr[0]], [corr[0], corr[1]]])
-    try:
-        risk = np.sqrt(weights.dot(corr_matrix).dot(weights))
-    except:
-        risk = 1.0
+def calc_div_mult_yearly(weights_daily, corr_weekly, end, dm_max=2.5):
+    corr_matrix = corr_weekly[corr_weekly.index.get_level_values(0) <= end].tail(
+        len(corr_weekly.columns)).values
+    weights = np.array(weights_daily[weights_daily.index <= end].iloc[-1])
+    risk = np.sqrt(weights.dot(corr_matrix).dot(weights))
     risk = 1.0 if (np.isnan(risk) or risk < 1e-7) else risk
     return min(1.0 / risk, dm_max)
