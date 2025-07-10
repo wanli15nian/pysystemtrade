@@ -130,9 +130,12 @@ print(portfolio_weights)
 
 print('END')
 
-fc = forecast_.loc['US10']['ewmac32']
-print(fc.tail(5))
-sc = target_.loc['US10']
-print(sc.tail(5))
-gr = gross_.loc['US10']['ewmac32']
-print(gr.tail(5))
+_forecast = forecast_.loc['US10']['ewmac32']
+print(_forecast.tail(5))
+_position_target = target_.loc['US10']
+print(_position_target.tail(5))
+_gross = gross_.loc['US10']['ewmac32']
+print(_gross.tail(5))
+_price_pnl = price_.loc['US10'].diff()
+print(_price_pnl.tail(5))
+_info = info_.loc['US10']
