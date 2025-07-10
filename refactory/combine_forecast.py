@@ -54,11 +54,11 @@ def calc_forecast_weights(instr_num, pnl, fit_end, span_multiple=50000, min_peri
     corr_matrix_values = raw_corr[raw_corr.index.get_level_values(0) <= fit_end].tail(len(pnl.columns)).values
     corr = np.clip(corr_matrix_values, a_min=0, a_max=None)
 
-    periods = instr_num * min_periods_multiple
-    last_index = pnl.index[pnl.index <= fit_end].size - 1
     # 计算标准差和均值
-    std_daily = pnl.ewm(span=span, min_periods=periods).std().iloc[last_index]
-    mean_daily = pnl.ewm(span=span, min_periods=periods).mean().iloc[last_index]
+    periods = instr_num * min_periods_multiple
+    std_daily = pnl.ewm(span=span, min_periods=periods).std().asof(fit_end)
+    mean_daily = pnl.ewm(span=span, min_periods=periods).mean().asof(fit_end)
+
     # 年化处理
     std = std_daily * ((365.25 / 7.0) ** 0.5)
     mean = mean_daily * (365.25 / 7.0)
