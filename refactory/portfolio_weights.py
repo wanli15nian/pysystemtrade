@@ -64,7 +64,7 @@ def normalise_weights(smoothed_instr_weights):
                                       index=smoothed_instr_weights.index)
     return normalised_weights
 
-
+# TODO: stack这种傻办法需要改成直接用multiIndex做
 def calc_portfolio_weights(net_return_raw, positions):
     data_dict = {'asset': net_return_raw}
     resampled = [pnl.resample('W').sum() for pnl in data_dict.values()]

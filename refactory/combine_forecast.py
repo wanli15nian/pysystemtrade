@@ -1,11 +1,10 @@
 import numpy as np
 import pandas as pd
 
-from refactory.utils import optimisation, stack_df_list
+from refactory.utils import optimisation
 
 
 # TODO：又是日频，又是周频，又是年频，有些乱
-# TODO: stack这种傻办法需要改成直接用multiIndex做
 
 def get_end_list(daily_index):
     # 转成周频的
@@ -16,8 +15,6 @@ def get_end_list(daily_index):
     yearly = pd.date_range(weekly_index[-1], weekly_index[0], freq='-365D').to_list()
     yearly.reverse()
     end_list = yearly[1:-1]
-    # TODO: 因为原来是stack之后做的，end都有一个3毫秒。以后把这行去掉
-    end_list = [(e + pd.Timedelta(milliseconds=3)) for e in end_list]
     return end_list
 
 
@@ -25,10 +22,8 @@ def calc_weights_daily(net_):
     # 计算年切分点
     end_list = get_end_list(net_.index.levels[1])
 
-    # 转换成周数据
-    weekly_list = [group.reset_index(level='instrument', drop=True).resample('W').sum()
-                   for _, group in net_.groupby(level='instrument')]
-    net_weekly = stack_df_list(weekly_list)
+    net_weekly = net_.groupby([pd.Grouper(level=1, freq='W'), 'instrument']).last()
+    net_weekly = net_weekly.droplevel('instrument')
 
     # 计算年权重
     instruments_num = len(net_.index.levels[0])
@@ -107,7 +102,7 @@ def calc_corr_weekly(forecast_, lookback=250, periods=20):
 
 
 def calc_div_multiplier(weights_daily, corr, end, dm_max=2.5):
-    weight_slice = weights_daily[:end]
+    weight_slice = weights_daily[weights_daily.index <= end]
     if weight_slice.shape[0] == 0:
         return 1.0
     weights = np.array(weight_slice.iloc[-1])
