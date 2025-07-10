@@ -5,41 +5,15 @@ from refactory.utils import optimisation, stack_df_list
 
 
 def calc_weights_and_multiplier(forecast_, net_):
-    # TODO: 这个函数返回两个值不够简单，end_list的耦合需要解开
-    weights_daily, end_list = calc_weights_daily(net_)
-
-    # 可以直接用weely的index生成同样的end_list吗？如果可以就能直接解开end_list的耦合
-    # end_list = generate_yearly_end_list(weights_daily.index)
-
-    # weights_weekly = weights_daily.resample('W').last()
-    # end_list1 = generate_yearly_end_list(weights_weekly.index)
-    # end_list = [(e + pd.Timedelta(milliseconds=3)) for e in end_list1]
+    weights_daily = calc_weights_daily(net_)
 
     end_list = get_end_list(weights_daily.index)
-
     corr_weekly = calc_corr_weekly(forecast_)
     multiplier_yearly = pd.Series(
         [calc_div_multiplier(weights_daily, get_corr_end(corr_weekly, end), end) for end in end_list],
         index=end_list)
     multiplier_daily = multiplier_yearly.reindex(weights_daily.index, method="ffill").fillna(1.0).ewm(span=125).mean()
     return weights_daily, multiplier_daily
-
-
-# def get_longest_index(list_of_df):
-#     longest_index_len = 0
-#     longest_index = 0
-#     for df in list_of_df:
-#         if df.shape[0] > longest_index_len:
-#             longest_index_len = df.shape[0]
-#             longest_index = df.index
-#     return longest_index
-
-
-# def get_multi_index_df(list_of_df, instruments):
-#     dfs_named = {instr: df for instr, df in zip(instruments, list_of_df)}
-#     combined_df = pd.concat(dfs_named)
-#     multi_index_df = (combined_df.rename_axis(['instruments', 'date']).swaplevel().sort_index())
-#     return multi_index_df
 
 
 def calc_weights_daily(net_):
@@ -70,15 +44,19 @@ def calc_weights_daily(net_):
     weights_daily = weight_df.resample('1B').mean().ewm(span=125).mean()
     # weight_df = weights_yearly.reindex(price.index, method='ffill').fillna(1 / rule_num) # 原先是reindex为price的，改成了net的,简单测试没问题
 
-    return weights_daily, end_list
+    return weights_daily
 
 
 def get_end_list(daily_index):
+    # 转成周频的
     daily_series = pd.Series(index=daily_index)
     weekly_series = daily_series.resample('W').last()
     weekly_index = weekly_series.index
-    # weekly_index = weekly_df.index.levels[1]
-    end_list = generate_yearly_end_list(weekly_index)
+    # 从结束日期开始倒推，然后reverse()
+    yearly = pd.date_range(weekly_index[-1], weekly_index[0], freq='-365D').to_list()
+    yearly.reverse()
+    end_list = yearly[1:-1]
+    # TODO: 因为原来是stack之后做的，end都有一个3毫秒。以后把这行去掉
     end_list = [(e + pd.Timedelta(milliseconds=3)) for e in end_list]
     return end_list
 
