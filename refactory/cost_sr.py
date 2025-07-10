@@ -10,10 +10,20 @@ def calc_cost_sr(turnover_annual, average_turnover, weighted_turnover, pnl, pric
     cost_sr_annual = get_cost_sr_annual(weighted_turnover, price, info)
     vol_annual = calc_mixed_volatility(price.diff(), slow_vol_years=10) * 16
     cost_annual = (-cost_sr_annual * vol_annual * position_target).bfill()  # TODO: 向后填充有用未来数据的可能
-    # 计算日均成本
+
+    position_target = position_target.shift(1)
+    temp_1 = cost_annual.reindex(position_target.index)
+    temp_2 = temp_1[~position_target.isna()]
+    temp_3 = temp_2.reindex(price.index, method='ffill')
     point_size = info['point_size']
-    interval_as_year = cost_annual.index.to_series().diff().dt.total_seconds() / (365.25 * 24 * 60 * 60)
-    cost_daily = cost_annual * interval_as_year * point_size
+    interval_as_year = temp_3.index.to_series().diff().dt.total_seconds() / (365.25 * 24 * 60 * 60)
+    cost_daily = temp_3 * interval_as_year * point_size
+
+
+    # 计算日均成本
+    # point_size = info['point_size']
+    # interval_as_year = cost_annual.index.to_series().diff().dt.total_seconds() / (365.25 * 24 * 60 * 60)
+    # cost_daily = cost_annual * interval_as_year * point_size
     cost_daily_mean = cost_daily.mean()
     # 计算年夏普成本
     pnl_vol_daily = pnl.std()
