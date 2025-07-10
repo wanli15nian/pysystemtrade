@@ -19,6 +19,16 @@ combiner = ForecastCombine()
 raw_data = RawData()
 position_size = PositionSizing()
 possizer = PositionSizing()
+fcs = ForecastScaleCap()
+
+
+ewmac_8 = TradingRule((ewmac, [], dict(Lfast=8, Lslow=32)))
+ewmac_32 = TradingRule(dict(function=ewmac, other_args=dict(Lfast=32, Lslow=128)))
+my_rules = Rules(dict(ewmac8=ewmac_8, ewmac32=ewmac_32))
+
+
+my_system = System([my_account, fcs, my_rules, combiner, raw_data, position_size], data, my_config)
+
 
 my_config.percentage_vol_target = 25
 my_config.notional_trading_capital = 500000
@@ -27,20 +37,10 @@ my_config.instruments = ["US10", "SOFR", "CORN", "SP500_micro"]
 my_config.use_forecast_scale_estimates = True
 my_config.use_forecast_weight_estimates = True
 my_config.use_forecast_div_mult_estimates = True
-
-ewmac_8 = TradingRule((ewmac, [], dict(Lfast=8, Lslow=32)))
-ewmac_32 = TradingRule(dict(function=ewmac, other_args=dict(Lfast=32, Lslow=128)))
-my_rules = Rules(dict(ewmac8=ewmac_8, ewmac32=ewmac_32))
-
-fcs = ForecastScaleCap()
-my_system = System(
-    [my_account, fcs, my_rules, combiner, raw_data, position_size], data, my_config
-)
-
 my_config.forecast_scalar_estimate["pool_instruments"] = False
+
+
 print(my_system.forecastScaleCap.get_forecast_scalar("SOFR", "ewmac32").tail(5))
-
 print(my_system.forecastScaleCap.get_capped_forecast("SOFR", "ewmac32").tail(5))
-
 print(my_system.combForecast.get_forecast_weights("SOFR").mean())
 print(my_system.combForecast.get_forecast_diversification_multiplier("SOFR").tail(5))
