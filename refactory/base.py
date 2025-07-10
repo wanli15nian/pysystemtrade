@@ -16,13 +16,13 @@ def calc_position_target(price, point_size, capital=1000000, annual_risk_target=
 
 
 def calc_gross_pnl(position, price, point_size):
-    pnl_in_points = position.mul(price.ffill().mean(), axis=0)
-    pnl_in_points[pnl_in_points.isna()] = 0.0
+    pnl_in_points = position.mul(price.diff(), axis=0).fillna(0)
+    # pnl_in_points[pnl_in_points.isna()] = 0.0
     pnl = pnl_in_points * point_size
     # TODO 换算成日频的，说明price可以是分钟级别的，后面需要详细检查一下在计算position之前不应限定只是日频的
-    daily_pnl = pnl.resample("B").sum()
-    daily_pnl = daily_pnl.replace(0, np.nan)
-    return daily_pnl
+    # daily_pnl = pnl.resample("B").sum()
+    # daily_pnl = daily_pnl.replace(0, np.nan)
+    return pnl
 
 
 def calc_net_pnl(gross_pnl, cost_SR):
