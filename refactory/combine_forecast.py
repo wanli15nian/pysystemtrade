@@ -4,16 +4,18 @@ import pandas as pd
 from refactory.utils import optimisation, stack_df_list
 
 
-def calc_weights_and_multiplier(forecast_, net_):
-    weights_daily = calc_weights_daily(net_)
-
-    end_list = get_end_list(weights_daily.index)
-    corr_weekly = calc_corr_weekly(forecast_)
-    multiplier_yearly = pd.Series(
-        [calc_div_multiplier(weights_daily, get_corr_end(corr_weekly, end), end) for end in end_list],
-        index=end_list)
-    multiplier_daily = multiplier_yearly.reindex(weights_daily.index, method="ffill").fillna(1.0).ewm(span=125).mean()
-    return weights_daily, multiplier_daily
+def get_end_list(daily_index):
+    # 转成周频的
+    daily_series = pd.Series(index=daily_index)
+    weekly_series = daily_series.resample('W').last()
+    weekly_index = weekly_series.index
+    # 从结束日期开始倒推，然后reverse()
+    yearly = pd.date_range(weekly_index[-1], weekly_index[0], freq='-365D').to_list()
+    yearly.reverse()
+    end_list = yearly[1:-1]
+    # TODO: 因为原来是stack之后做的，end都有一个3毫秒。以后把这行去掉
+    end_list = [(e + pd.Timedelta(milliseconds=3)) for e in end_list]
+    return end_list
 
 
 def calc_weights_daily(net_):
@@ -36,36 +38,13 @@ def calc_weights_daily(net_):
     rules = weight_yearly_raw.columns
     initial_weight = pd.DataFrame({rule: 1 / len(rules) for rule in rules}, index=[initial_date])
     weights_yearly = pd.concat([initial_weight, weight_yearly_raw], axis=0)
-    # end_list = weights_yearly.index[1:].to_list()     #end_list和weights的index只差最开始的一个日期
 
     # 把按年的Index ffill成按天的Index
     universal_index = net_.index.levels[1]
     weight_df = weights_yearly.reindex(universal_index, method='ffill').fillna(1 / len(weights_yearly.columns))
     weights_daily = weight_df.resample('1B').mean().ewm(span=125).mean()
-    # weight_df = weights_yearly.reindex(price.index, method='ffill').fillna(1 / rule_num) # 原先是reindex为price的，改成了net的,简单测试没问题
 
     return weights_daily
-
-
-def get_end_list(daily_index):
-    # 转成周频的
-    daily_series = pd.Series(index=daily_index)
-    weekly_series = daily_series.resample('W').last()
-    weekly_index = weekly_series.index
-    # 从结束日期开始倒推，然后reverse()
-    yearly = pd.date_range(weekly_index[-1], weekly_index[0], freq='-365D').to_list()
-    yearly.reverse()
-    end_list = yearly[1:-1]
-    # TODO: 因为原来是stack之后做的，end都有一个3毫秒。以后把这行去掉
-    end_list = [(e + pd.Timedelta(milliseconds=3)) for e in end_list]
-    return end_list
-
-
-def generate_yearly_end_list(index):
-    # 从结束日期开始倒推，然后reverse()
-    yearly = pd.date_range(index[-1], index[0], freq='-365D').to_list()
-    yearly.reverse()
-    return yearly[1:-1]
 
 
 def calc_forecast_weights(instr_num, pnl, fit_end, span_multiple=50000, min_periods_corr_multiple=10,
@@ -103,6 +82,16 @@ def calc_mean_std(data, min_periods, fit_end, span=50000):
     norm_std = [(np.nanmean(std))] * len(std)
     norm_mean = mean / (std / np.nanmean(std))
     return norm_std, norm_mean
+
+
+def calc_div_mult_daily(weights_daily, forecast_):
+    end_list = get_end_list(weights_daily.index)
+    corr_weekly = calc_corr_weekly(forecast_)
+    multiplier_yearly = pd.Series(
+        [calc_div_multiplier(weights_daily, get_corr_end(corr_weekly, end), end) for end in end_list],
+        index=end_list)
+    multiplier_daily = multiplier_yearly.reindex(weights_daily.index, method="ffill").fillna(1.0).ewm(span=125).mean()
+    return multiplier_daily
 
 
 def calc_corr_weekly(forecast_, lookback=250, periods=20):

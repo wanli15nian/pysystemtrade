@@ -4,7 +4,7 @@ import pandas as pd
 from refactory.base import calc_gross_pnl, calc_net_pnl, calc_buffered_position, \
     calc_volatility_scalar
 from refactory.base import calc_position_target
-from refactory.combine_forecast import calc_weights_and_multiplier
+from refactory.combine_forecast import calc_weights_daily, calc_div_mult_daily
 from refactory.cost import calc_cost
 from refactory.cost_sr import calc_annual_turnover, calc_turnover_weights, calc_weighted_turnover, calc_cost_sr
 from refactory.data_source import get_instrument_info, get_daily_price, get_raw_price
@@ -86,7 +86,8 @@ net_ = pd.concat(net_list, keys=instruments, names=['instrument', 'datetime'])
 
 print('calculate pnl for instrument and rule')
 
-forecast_weights, diversify_multiplier = calc_weights_and_multiplier(forecast_, net_)
+forecast_weights = calc_weights_daily(net_)
+forcast_div_mult = calc_div_mult_daily(forecast_weights, forecast_)
 
 subsystem_positions_dict = {}
 gross_dict = {}
@@ -99,7 +100,7 @@ for instrument in instruments:
     raw_price = raw_price_.loc[instrument]
     forecast = forecast_.loc[instrument]
 
-    combined_forecast = ((forecast_weights * forecast).sum(axis=1) * diversify_multiplier).clip(20, -20)
+    combined_forecast = ((forecast_weights * forecast).sum(axis=1) * forcast_div_mult).clip(20, -20)
     vol_scalar = calc_volatility_scalar(raw_price, price, point_size, 500000, risk_target)
     subsystem_position_raw = vol_scalar * combined_forecast / 10.0
     subsystem_position_buffered = calc_buffered_position(subsystem_position_raw, vol_scalar, 0.10)
