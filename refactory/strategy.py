@@ -12,7 +12,7 @@ from refactory.forecast import ewmac, rescale_forecast, floor_vol, price_vol
 from refactory.portfolio_weights import calc_portfolio_weights
 from refactory.subsystem_turnover import calc_subsystem_turnover
 
-risk_target = 0.25
+risk_target = 0.16
 # instruments = ["CORN", "SOFR", "SP500_micro", 'US10']
 instruments = ["US10", "SOFR", "CORN", "SP500_micro"]
 
@@ -130,7 +130,9 @@ print(portfolio_weights)
 
 print('END')
 
-# print(forecast_.loc['US10']['ewmac8'].tail(5))
-
-print(forecast_.loc['SOFR']['ewmac32'].tail(5))
-print(gross_.loc['SOFR']['ewmac32'])
+fc = forecast_.loc['US10']['ewmac32']
+print(fc.tail(5))
+sc = target_.loc['US10']
+print(sc.tail(5))
+gr = gross_.loc['US10']['ewmac32']
+print(gr.tail(5))
