@@ -44,7 +44,8 @@ target_ = pd.concat(target_list, keys=instruments, names=['instrument', 'datetim
 
 
 def calc_gross(forecast, pos_target, price, point_size):
-    position = forecast.mul(pos_target, axis=0) / 10
+    aligned_avg = pos_target.reindex(forecast.index, method='ffill')
+    position = forecast.mul(aligned_avg, axis=0) / 10
     position = position.shift(1)
     gross_pnl = calc_gross_pnl(position, price, point_size)
     return gross_pnl
