@@ -4,7 +4,7 @@ import pandas as pd
 from refactory.utils import calc_mixed_volatility
 
 
-def calc_position_target(price, point_size, capital=1000000, annual_risk_target=0.16):
+def calc_position_target(price, point_size, capital=500000, annual_risk_target=0.16):
     '''
     根据自行设置的risk target 所计算出的单一品种的目标仓位
     每个contract 能提供的cash vol 为ret_volatility * point_size (每手2500单位，每个单位的vol 为ret_volatility)
@@ -16,6 +16,9 @@ def calc_position_target(price, point_size, capital=1000000, annual_risk_target=
 
 
 def calc_gross_pnl(position, price, point_size):
+    # FIXME 源代码确实是shift 了两次，没看出来为什么
+    position = position.shift(1).ffill()
+    price = price.ffill()
     pnl_in_points = position.mul(price.diff(), axis=0).fillna(0)
     # pnl_in_points[pnl_in_points.isna()] = 0.0
     pnl = pnl_in_points * point_size
