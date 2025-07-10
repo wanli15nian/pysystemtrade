@@ -130,5 +130,7 @@ print(portfolio_weights)
 
 print('END')
 
-# forecast_.loc['SOFR']['ewmac32'].tail(5)
-# forecast_.loc['US10']['ewmac8'].tail(5)
+# print(forecast_.loc['US10']['ewmac8'].tail(5))
+
+print(forecast_.loc['SOFR']['ewmac32'].tail(5))
+print(gross_.loc['SOFR']['ewmac32'])

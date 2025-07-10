@@ -34,9 +34,9 @@ my_config.use_forecast_div_mult_estimates = True
 my_config.forecast_scalar_estimate["pool_instruments"] = False
 
 # print(my_system.forecastScaleCap.get_forecast_scalar("SOFR", "ewmac32").tail(5))
-# print(my_system.forecastScaleCap.get_capped_forecast("SOFR", "ewmac32").tail(5))
 # print(my_system.forecastScaleCap.get_capped_forecast("US10", "ewmac8").tail(5))
-print(my_system.accounts.pandl_for_instrument_forecast('SOFR', 'ewmac32'))
+print(my_system.forecastScaleCap.get_capped_forecast("SOFR", "ewmac32").tail(5))
+print(my_system.accounts.pandl_for_instrument_forecast('SOFR', 'ewmac32').tail(5))
 
 # print(my_system.combForecast.get_forecast_weights("SOFR").mean())
 # print(my_system.combForecast.get_forecast_diversification_multiplier("SOFR").tail(5))
