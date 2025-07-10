@@ -104,23 +104,19 @@ def calc_corr_weekly(forecast_, lookback=250, periods=20):
     return corr_weekly
 
 
-def calc_div_multiplier(weights_daily, corr, end):
+def calc_div_multiplier(weights_daily, corr, end, dm_max=2.5):
     weight_slice = weights_daily[:end]
     if weight_slice.shape[0] == 0:
         return 1.0
-    last_weight_for_period = np.array(weight_slice.iloc[-1])
-    return calc_div_mult_single_period(corr, last_weight_for_period)
-
-
-def calc_div_mult_single_period(corr, weights, dm_max=2.5):
+    weights = np.array(weight_slice.iloc[-1])
     # 计算Portfolio variance in correlation space, 且设Limit
+    # FIXME:如果是3个rule，这代码就有问题了
     corr_matrix = np.array([[corr[1], corr[0]], [corr[0], corr[1]]])
     try:
         risk = np.sqrt(weights.dot(corr_matrix).dot(weights))
     except:
-        return 1.0
-    if np.isnan(risk) or risk < 1e-7:
-        return 1.0
+        risk = 1.0
+    risk = 1.0 if (np.isnan(risk) or risk < 1e-7) else risk
     return min(1.0 / risk, dm_max)
 
 
