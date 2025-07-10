@@ -46,6 +46,7 @@ print(my_system.forecastScaleCap.get_capped_forecast("SOFR", "ewmac32").tail(5))
 
 
 
+
 my_config.forecast_weight_estimate = dict(method="one_period")
 my_config.use_forecast_weight_estimates = True
 my_config.use_forecast_div_mult_estimates = True
