@@ -86,7 +86,8 @@ def calc_div_mult_daily(weights_daily, forecast_):
     end_list = get_end_list(weights_daily.index)
     corr_weekly = calc_corr_weekly(forecast_)
     multiplier_yearly = pd.Series(
-        [calc_div_multiplier(weights_daily, get_corr_end(corr_weekly, end), end) for end in end_list],
+        # [calc_div_multiplier(weights_daily, get_corr_end(corr_weekly, end), end) for end in end_list],
+        [calc_div_mult(weights_daily, corr_weekly, end) for end in end_list],
         index=end_list)
     multiplier_daily = multiplier_yearly.reindex(weights_daily.index, method="ffill").fillna(1.0).ewm(span=125).mean()
     return multiplier_daily
@@ -99,6 +100,27 @@ def calc_corr_weekly(forecast_, lookback=250, periods=20):
     corr_weekly = forecast_weekly.ewm(span=lookback * instruments_num, min_periods=periods * instruments_num,
                                       ignore_na=True).corr(pairwise=True)
     return corr_weekly
+
+
+def calc_div_mult(weights_daily, corr_weekly, end, dm_max=2.5):
+    corr_end = (corr_weekly[corr_weekly.index.get_level_values(0) <= end]
+                .tail(len(corr_weekly.index.levels[0]))
+                .values)[-1]
+    corr = [max(0, value) for value in corr_end]
+
+    weight_slice = weights_daily[weights_daily.index <= end]
+    if weight_slice.shape[0] == 0:
+        return 1.0
+    weights = np.array(weight_slice.iloc[-1])
+    # 计算Portfolio variance in correlation space, 且设Limit
+    # FIXME:如果是3个rule，这代码就有问题了
+    corr_matrix = np.array([[corr[1], corr[0]], [corr[0], corr[1]]])
+    try:
+        risk = np.sqrt(weights.dot(corr_matrix).dot(weights))
+    except:
+        risk = 1.0
+    risk = 1.0 if (np.isnan(risk) or risk < 1e-7) else risk
+    return min(1.0 / risk, dm_max)
 
 
 def calc_div_multiplier(weights_daily, corr, end, dm_max=2.5):
@@ -115,11 +137,3 @@ def calc_div_multiplier(weights_daily, corr, end, dm_max=2.5):
         risk = 1.0
     risk = 1.0 if (np.isnan(risk) or risk < 1e-7) else risk
     return min(1.0 / risk, dm_max)
-
-
-def get_corr_end(corr_weekly, end):
-    corr_end = (corr_weekly[corr_weekly.index.get_level_values(0) <= end]
-                .tail(len(corr_weekly.index.levels[0]))
-                .values)[-1]
-    corr_end = [max(0, value) for value in corr_end]
-    return corr_end
