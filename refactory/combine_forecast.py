@@ -63,8 +63,9 @@ def calc_forecast_weights(instr_num, pnl, fit_end, span_multiple=50000, min_peri
     std = std_daily * ((365.25 / 7.0) ** 0.5)
     mean = mean_daily * (365.25 / 7.0)
     # 计算归一化标准差和归一化均值
-    norm_std = [(np.nanmean(std))] * len(std)
-    norm_mean = mean / (std / np.nanmean(std))
+    mean_std = np.nanmean(std)
+    norm_std = [mean_std] * len(std)
+    norm_mean = mean * (mean_std / std)
 
     weights = optimisation(corr, norm_mean, norm_std)
     return weights
