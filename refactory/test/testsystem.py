@@ -13,21 +13,26 @@ from systems.forecast_combine import ForecastCombine
 from systems.accounts.accounts_stage import Account
 from systems.rawdata import RawData
 from systems.positionsizing import PositionSizing
+from sysdata.config.configdata import Config
+
+my_config = Config()
+my_config
+
 
 my_account = Account()
 combiner = ForecastCombine()
 raw_data = RawData()
 position_size = PositionSizing()
+possizer = PositionSizing()
+my_config.percentage_vol_target = 25
+my_config.notional_trading_capital = 500000
+my_config.base_currency = "USD"
+
 
 from systems.trading_rules import TradingRule
 ewmac_8 = TradingRule((ewmac, [], dict(Lfast=8, Lslow=32)))
 ewmac_32 = TradingRule(dict(function=ewmac, other_args=dict(Lfast=32, Lslow=128)))
 my_rules = Rules(dict(ewmac8=ewmac_8, ewmac32=ewmac_32))
-
-from sysdata.config.configdata import Config
-
-my_config = Config()
-my_config
 
 from systems.forecast_scale_cap import ForecastScaleCap
 
@@ -42,8 +47,6 @@ print(my_system.forecastScaleCap.get_forecast_scalar("SOFR", "ewmac32").tail(5))
 fcs = ForecastScaleCap()
 my_system = System([fcs, my_rules], data, my_config)
 print(my_system.forecastScaleCap.get_capped_forecast("SOFR", "ewmac32").tail(5))
-
-
 
 
 my_config.forecast_weight_estimate = dict(method="one_period")
