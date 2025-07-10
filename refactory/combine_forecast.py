@@ -54,21 +54,21 @@ def calc_forecast_weights(instr_num, pnl, fit_end, span_multiple=50000, min_peri
     corr_matrix_values = raw_corr[raw_corr.index.get_level_values(0) <= fit_end].tail(len(pnl.columns)).values
     corr = np.clip(corr_matrix_values, a_min=0, a_max=None)
 
-    # 计算标准差和均值
     periods = instr_num * min_periods_multiple
-    # last_index = pnl.index[pnl.index <= fit_end].size - 1
-    # std_daily = pnl.ewm(span=span, min_periods=periods).std().iloc[last_index]
-    # mean_daily = pnl.ewm(span=span, min_periods=periods).mean().iloc[last_index]
-    std_daily = pnl.ewm(span=span, min_periods=periods).std().asof(fit_end)
-    mean_daily = pnl.ewm(span=span, min_periods=periods).mean().asof(fit_end)
+    last_index = pnl.index[pnl.index <= fit_end].size - 1
+    # 计算标准差和均值
+    std_daily = pnl.ewm(span=span, min_periods=periods).std().iloc[last_index]
+    mean_daily = pnl.ewm(span=span, min_periods=periods).mean().iloc[last_index]
     # 年化处理
     std = std_daily * ((365.25 / 7.0) ** 0.5)
     mean = mean_daily * (365.25 / 7.0)
     # 计算归一化标准差和归一化均值
-    std = [(np.nanmean(std))] * len(std)
-    mean = mean / (std / np.nanmean(std))
+    std1 = [(np.nanmean(std))] * len(std)
+    mean1 = mean / (std / np.nanmean(std))
+    result = mean1, std1
+    norm_mean, norm_std = result
 
-    weights = optimisation(corr, mean, std)
+    weights = optimisation(corr, norm_mean, norm_std)
     return weights
 
 
