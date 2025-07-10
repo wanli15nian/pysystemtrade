@@ -18,22 +18,21 @@ def calc_weights_and_multiplier(forecast_, net_):
     return weights_daily, multiplier_daily
 
 
-def get_longest_index(list_of_df):
-    longest_index_len = 0
-    longest_index = 0
-    for df in list_of_df:
-        if df.shape[0] > longest_index_len:
-            longest_index_len = df.shape[0]
-            longest_index = df.index
-    return longest_index
+# def get_longest_index(list_of_df):
+#     longest_index_len = 0
+#     longest_index = 0
+#     for df in list_of_df:
+#         if df.shape[0] > longest_index_len:
+#             longest_index_len = df.shape[0]
+#             longest_index = df.index
+#     return longest_index
 
 
-def get_multi_index_df(list_of_df, instruments):
-    dfs_named = {instr: df for instr, df in zip(instruments, list_of_df)}
-    combined_df = pd.concat(dfs_named)
-    multi_index_df = (combined_df.rename_axis(['instruments', 'date']).swaplevel().sort_index())
-    return multi_index_df
-
+# def get_multi_index_df(list_of_df, instruments):
+#     dfs_named = {instr: df for instr, df in zip(instruments, list_of_df)}
+#     combined_df = pd.concat(dfs_named)
+#     multi_index_df = (combined_df.rename_axis(['instruments', 'date']).swaplevel().sort_index())
+#     return multi_index_df
 
 
 def calc_weights_daily(net_):
@@ -41,17 +40,23 @@ def calc_weights_daily(net_):
     # end_list = generate_yearly_end_list(net_.index.levels[1])
 
     # 转换成周数据
-    weekly_list = [group.reset_index(level='instrument', drop=True).resample('W').sum()
-                   for _, group in net_.groupby(level='instrument')]
+    # weekly_list = [group.reset_index(level='instrument', drop=True).resample('W').sum()
+    #                for _, group in net_.groupby(level='instrument')]
+
+    weekly_df = (net_.groupby(level=0).apply(lambda x: x.droplevel('instrument').resample('W').sum()))
+    weekly_list = [group.reset_index(level='instrument', drop=True) for _, group in
+                   weekly_df.groupby(level='instrument')]
+
+    # end_list = generate_yearly_end_list(weekly_df.index.levels[1])
+    # l1 = weekly_df.index.levels[1]
+
+    # temp = get_multi_index_df(weekly_list, net_.index.levels[0])
+    # longest_index = get_longest_index(weekly_list)
+    # new_end_list = generate_yearly_end_list(longest_index)
+
     net_weekly = stack_df_list(weekly_list)
-
-
-    temp = get_multi_index_df(weekly_list, net_.index.levels[0])
-
-    longest_index = get_longest_index(weekly_list)
-    new_end_list = generate_yearly_end_list(longest_index)
-
     end_list = generate_yearly_end_list(net_weekly.index)
+    # l2 = net_weekly.index
 
     # 计算年权重
     instruments_num = len(net_.index.levels[0])
@@ -100,13 +105,13 @@ def calc_corr_matrix(data, min_periods, fit_end, span=500000):
     raw_corr = data.ewm(span=span, min_periods=min_periods, ignore_na=True).corr(
         pairwise=True)  # span 和min_periods 都是config 里面的4倍，因为4个instruments
     corr_matrix_values = (
-        raw_corr[raw_corr.index.get_level_values(0) < fit_end].tail(len(data.columns)).values)  # 截取fit_period之前的数据
+        raw_corr[raw_corr.index.get_level_values(0) <= fit_end].tail(len(data.columns)).values)  # 截取fit_period之前的数据
     corr_matrix_values = [[max(0, item) for item in sublist] for sublist in corr_matrix_values]
     return corr_matrix_values
 
 
 def calc_mean_std(data, min_periods, fit_end, span=50000):
-    last_index = data.index[data.index < fit_end].size - 1
+    last_index = data.index[data.index <= fit_end].size - 1
     # 计算标准差和均值
     std_daily = data.ewm(span=span, min_periods=min_periods).std().iloc[last_index]
     mean_daily = data.ewm(span=span, min_periods=min_periods).mean().iloc[last_index]
@@ -130,14 +135,10 @@ def calc_corr_weekly(forecast_, lookback=250, periods=20):
 
 
 def calc_div_multiplier(weights_daily, corr, end):
-    # 获取weights_daily数组中从0到end的切片
     weight_slice = weights_daily[:end]
-    # 如果切片的长度为0，则返回1.0
     if weight_slice.shape[0] == 0:
         return 1.0
-    # 获取切片中最后一个元素的数组
     last_weight_for_period = np.array(weight_slice.iloc[-1])
-    # 调用calc_div_mult_single_period函数，传入corr和last_weight_for_period，返回结果
     return calc_div_mult_single_period(corr, last_weight_for_period)
 
 
@@ -154,7 +155,7 @@ def calc_div_mult_single_period(corr, weights, dm_max=2.5):
 
 
 def get_corr_end(corr_weekly, end):
-    corr_end = (corr_weekly[corr_weekly.index.get_level_values(0) < end]
+    corr_end = (corr_weekly[corr_weekly.index.get_level_values(0) <= end]
                 .tail(len(corr_weekly.index.levels[0]))
                 .values)[-1]
     corr_end = [max(0, value) for value in corr_end]
