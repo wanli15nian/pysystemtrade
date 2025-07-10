@@ -64,7 +64,7 @@ def calc_forecast_weights(instr_num, pnl, fit_end, span_multiple=50000, min_peri
     return weights
 
 
-def calc_corr_matrix(data, min_periods, fit_end, span=500000):
+def calc_corr_matrix(data, min_periods, fit_end, span):
     raw_corr = data.ewm(span=span, min_periods=min_periods, ignore_na=True).corr(
         pairwise=True)  # span 和min_periods 都是config 里面的4倍，因为4个instruments
     corr_matrix_values = (
@@ -98,10 +98,11 @@ def calc_div_mult_daily(weights_daily, forecast_):
 
 
 def calc_corr_weekly(forecast_, lookback=250, periods=20):
+    instruments_num = len(forecast_.index.levels[0])
+
     weekly_list = [group.droplevel('instrument').resample('W').last()
                    for _, group in forecast_.groupby(level='instrument')]
     forecast_weekly = stack_df_list(weekly_list)
-    instruments_num = len(forecast_.index.levels[0])
     corr_weekly = forecast_weekly.ewm(span=lookback * instruments_num, min_periods=periods * instruments_num,
                                       ignore_na=True).corr(pairwise=True)
     return corr_weekly
