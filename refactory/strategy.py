@@ -13,7 +13,8 @@ from refactory.portfolio_weights import calc_portfolio_weights
 from refactory.subsystem_turnover import calc_subsystem_turnover
 
 risk_target = 0.25
-instruments = ["CORN", "SOFR", "SP500_micro", 'US10']
+# instruments = ["CORN", "SOFR", "SP500_micro", 'US10']
+instruments =["US10", "SOFR", "CORN", "SP500_micro"]
 
 info_ = get_instrument_info().loc[instruments]
 size_ = info_['point_size']
