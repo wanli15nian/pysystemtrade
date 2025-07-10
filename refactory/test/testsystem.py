@@ -18,7 +18,6 @@ my_account = Account()
 combiner = ForecastCombine()
 raw_data = RawData()
 position_size = PositionSizing()
-possizer = PositionSizing()
 fcs = ForecastScaleCap()
 
 
