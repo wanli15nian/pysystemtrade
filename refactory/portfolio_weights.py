@@ -6,13 +6,12 @@ import pandas as pd
 from refactory.utils import optimisation, stack_df_list
 
 
-def calc_corr_matrix(net_return_df, span=500000, min_periods=10):
-    end = net_return_df.index[-1]
-    corr = net_return_df.ewm(span=span, min_periods=min_periods, ignore_na=True).corr(pairwise=True)
-    size_of_matrix = len(corr.columns)
-    corr_matrix_values = (corr[corr.index.get_level_values(0) < end].tail(size_of_matrix).values)
-    corr_matrix_values[corr_matrix_values < 0.0] = 0.0
-    corr_matrix_df = pd.DataFrame(corr_matrix_values, columns=corr.columns)
+def calc_corr_matrix(net, span=500000, min_periods=10):
+    corr = net.ewm(span=span, min_periods=min_periods, ignore_na=True).corr(pairwise=True)
+    corr_matrix_df = (corr[corr.index.get_level_values(0) < net.index[-1]]
+                      .tail(len(corr.columns))
+                      .droplevel(0)
+                      .clip(lower=0))  # 所有小于0的值设为0
     return corr_matrix_df
 
 
@@ -63,6 +62,7 @@ def normalise_weights(smoothed_instr_weights):
     normalised_weights = pd.DataFrame(normalised_weights_np, columns=smoothed_instr_weights.columns,
                                       index=smoothed_instr_weights.index)
     return normalised_weights
+
 
 # TODO: stack这种傻办法需要改成直接用multiIndex做
 def calc_portfolio_weights(net_return_raw, positions):
