@@ -137,3 +137,7 @@ _forecast = forecast_.loc['US10']['ewmac32']
 _position_target = target_.loc['US10']
 _gross = gross_.loc['US10']['ewmac32']
 _info = info_.loc['US10']
+
+position_ = forecast_.mul(target_, axis=0) / 10
+_position = position_.loc['US10']['ewmac32']
+
