@@ -14,7 +14,7 @@ from refactory.subsystem_turnover import calc_subsystem_turnover
 
 risk_target = 0.25
 # instruments = ["CORN", "SOFR", "SP500_micro", 'US10']
-instruments =["US10", "SOFR", "CORN", "SP500_micro"]
+instruments = ["US10", "SOFR", "CORN", "SP500_micro"]
 
 info_ = get_instrument_info().loc[instruments]
 size_ = info_['point_size']
@@ -129,3 +129,6 @@ portfolio_weights = calc_portfolio_weights(net_return_raw, subsystem_positions)
 print(portfolio_weights)
 
 print('END')
+
+# forecast_.loc['SOFR']['ewmac32'].tail(5)
+# forecast_.loc['US10']['ewmac8'].tail(5)
