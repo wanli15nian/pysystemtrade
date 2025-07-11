@@ -9,6 +9,8 @@ def calc_position_target(price, point_size, capital=500000, annual_risk_target=0
     根据自行设置的risk target 所计算出的单一品种的目标仓位
     每个contract 能提供的cash vol 为ret_volatility * point_size (每手2500单位，每个单位的vol 为ret_volatility)
     '''
+    # TODO: 加上下面这句结果会不一样，price为空值的时候意味什么？
+    # price = price.ffill()
     pnl_vol = calc_mixed_volatility(price.diff(), slow_vol_years=10)  # ret_vol 不是百分比，而是绝对值
     risk_target = annual_risk_target / (256 ** 0.5)
     position_target = (capital * risk_target) / (pnl_vol * point_size)
