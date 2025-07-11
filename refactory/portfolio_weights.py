@@ -3,7 +3,37 @@ from copy import copy
 import numpy as np
 import pandas as pd
 
-from refactory.utils import optimisation, stack_df_list
+from refactory.utils import optimisation
+
+
+# TODO: stack这种傻办法需要改成直接用multiIndex做
+def calc_portfolio_weights(net_return_raw, positions, target_sr=0.5):
+    net_weekly = net_return_raw.resample('W').sum()
+
+    net_std_annual = net_weekly.ewm(span=50000, min_periods=5).std().iloc[-1] * (365.25 / 7.0) ** 0.5
+    norm_std = [net_std_annual.mean()] * len(net_std_annual)
+    mean_list = [target_sr * s for s in norm_std]
+    # std_mean = net_std_annual.mean()
+    # norm_std = [std_mean] * len(net_std_annual)
+    # mean_list = [target_sr * std_mean] * len(net_std_annual)
+
+    corr_matrix_df = calc_corr_matrix(net_weekly)
+
+    shrunk_corr = calc_avg_corr_matrix(corr_matrix_df)
+    shrunk_corr_values = shrunk_corr.values
+
+    weights = optimisation(corr=shrunk_corr_values, norm_mean=mean_list, norm_stdev=norm_std)
+
+    instruments = net_weekly.columns.to_list()
+    start = net_weekly.index[0]
+    weights_df = pd.DataFrame({asset_name: weight for (asset_name, weight) in zip(instruments, weights)},
+                              index=[start])
+
+    positions[(~positions.isna()).sum(axis=1) == 0] = 0
+    smoothed_instr_weights = calc_smoothed_instr_weights(weights_df, positions)
+    normalised_weights = normalise_weights(smoothed_instr_weights)
+
+    return normalised_weights
 
 
 def calc_corr_matrix(net, span=500000, min_periods=10):
@@ -13,17 +43,6 @@ def calc_corr_matrix(net, span=500000, min_periods=10):
                       .droplevel(0)
                       .clip(lower=0))  # 所有小于0的值设为0
     return corr_matrix_df
-
-
-def calc_net_mean_std(net_return_df):
-    end = net_return_df.index[-1]
-    last_index = net_return_df.index[net_return_df.index < end].size - 1
-    ewm_return = net_return_df.ewm(span=50000, min_periods=5)
-    exponential_mean = ewm_return.mean()
-    annualised_return_mean = exponential_mean.iloc[last_index] * 365.25 / 7.0
-    exponential_std = ewm_return.std()
-    annualised_return_std = exponential_std.iloc[last_index] * (365.25 / 7.0) ** 0.5
-    return annualised_return_mean, annualised_return_std
 
 
 def calc_avg_corr_matrix(corr_matrix_df, shrinkage_corr=0.5):
@@ -61,32 +80,4 @@ def normalise_weights(smoothed_instr_weights):
     normalised_weights_np = weight_multiplier_array.transpose() * smoothed_instr_weights.values
     normalised_weights = pd.DataFrame(normalised_weights_np, columns=smoothed_instr_weights.columns,
                                       index=smoothed_instr_weights.index)
-    return normalised_weights
-
-
-# TODO: stack这种傻办法需要改成直接用multiIndex做
-def calc_portfolio_weights(net_return_raw, positions):
-    data_dict = {'asset': net_return_raw}
-    resampled = [pnl.resample('W').sum() for pnl in data_dict.values()]
-    net_return_df = stack_df_list(resampled)
-
-    corr_matrix_df = calc_corr_matrix(net_return_df)
-    shrunk_corr = calc_avg_corr_matrix(corr_matrix_df)
-    annualised_return_mean, annualised_return_std = calc_net_mean_std(net_return_df)
-    # shrunk_means = calc_shrunk_means(annualised_return_mean, annualised_return_std)
-
-    target_sr = 0.5
-    norm_std = [annualised_return_std.mean()] * 4
-    mean_list = [target_sr * asset_stdev for asset_stdev in norm_std]
-    weights = optimisation(corr=shrunk_corr.values, norm_mean=mean_list, norm_stdev=norm_std)
-
-    instruments = net_return_df.columns.to_list()
-    start = net_return_df.index[0]
-    weights_df = pd.DataFrame({asset_name: weight for (asset_name, weight) in zip(instruments, weights)},
-                              index=[start])
-
-    positions[(~positions.isna()).sum(axis=1) == 0] = 0
-    smoothed_instr_weights = calc_smoothed_instr_weights(weights_df, positions)
-    normalised_weights = normalise_weights(smoothed_instr_weights)
-
     return normalised_weights
