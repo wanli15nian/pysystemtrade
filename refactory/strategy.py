@@ -68,6 +68,7 @@ def calc_annual_sr(gross, costs):
 
 annual_sr = calc_annual_sr(gross_rule.loc['US10'], cost_rule.loc['US10'])
 
+
 forecast_weights = calc_forecast_weights(net_rule)
 forcast_div_mult = calc_div_mult_daily(forecast_weights, forecast_rule)
 forecast_inst = c(lambda i: combine_forecast(forecast_rule.loc[i], forecast_weights, forcast_div_mult))
