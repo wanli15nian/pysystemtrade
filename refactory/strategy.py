@@ -110,6 +110,10 @@ subsystem_positions = pd.DataFrame(subsystem_positions_dict)
 gross_pnl_df = pd.DataFrame(gross_dict)
 cost_df = pd.DataFrame(costs_dict)
 
+# subsystem_positions = position_inst
+# gross_pnl_df = gross_inst
+# cost_df = cost_inst
+
 subsystem_turnover_ = {
     i: calc_subsystem_turnover(subsystem_positions[i], price_.loc[i], size_.loc[i])
     for i in instruments}
