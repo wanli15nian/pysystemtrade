@@ -4,8 +4,8 @@ import pandas as pd
 from refactory.base import calc_volatility_scalar
 
 
-def calc_subsystem_turnover(subsystem_position_raw, raw_price, price, point_size):
-    average_position_for_turnover = calc_volatility_scalar(raw_price, price, point_size)
+def calc_subsystem_turnover(subsystem_position_raw, price, point_size):
+    average_position_for_turnover = calc_volatility_scalar(price, point_size)
     subsystem_turnover = turnover_x_y(subsystem_position_raw, average_position_for_turnover)
     return subsystem_turnover
 

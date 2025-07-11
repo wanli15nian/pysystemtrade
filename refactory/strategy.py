@@ -2,8 +2,8 @@ import numpy as np
 import pandas as pd
 
 from refactory.base import calc_gross_pnl, calc_net_pnl, calc_buffered_position, \
-    calc_volatility_scalar, calc_position
-from refactory.base import calc_position_target
+    calc_position
+from refactory.base import calc_volatility_scalar
 from refactory.combine_forecast import calc_weights_daily, calc_div_mult_daily
 from refactory.cost import calc_cost
 from refactory.cost_sr import calc_annual_turnover, calc_turnover_weights, calc_weighted_turnover, calc_rule_daily_cost
@@ -38,7 +38,7 @@ raw_price_ = pd.concat(raw_price_list, keys=instruments, names=['instrument', 'd
 forecast_list = (calc_forecasts(price_.loc[i]) for i in instruments)
 forecast_ = pd.concat(forecast_list, keys=instruments, names=['instrument', 'datetime'])
 
-target_list = (calc_position_target(price_.loc[i], size_.loc[i], capital=1000000, annual_risk_target=risk_target)
+target_list = (calc_volatility_scalar(price_.loc[i], size_.loc[i], capital=1000000, annual_risk_target=risk_target)
                for i in instruments)
 target_ = pd.concat(target_list, keys=instruments, names=['instrument', 'datetime'])
 
@@ -79,11 +79,11 @@ for instrument in instruments:
     point_size = size_[instrument]
 
     price = price_.loc[instrument]
-    raw_price = raw_price_.loc[instrument]
+    # raw_price = raw_price_.loc[instrument]
     forecast = forecast_.loc[instrument]
 
     combined_forecast = ((forecast_weights * forecast).sum(axis=1) * forcast_div_mult).clip(20, -20)
-    vol_scalar = calc_volatility_scalar(raw_price, price, point_size, 500000, risk_target)
+    vol_scalar = calc_volatility_scalar(price, point_size, 500000, risk_target)
     subsystem_position_raw = vol_scalar * combined_forecast / 10.0
     subsystem_position_buffered = calc_buffered_position(subsystem_position_raw, vol_scalar, 0.10)
     position = subsystem_position_buffered.shift(1)
@@ -100,11 +100,12 @@ gross_pnl_df = pd.DataFrame(gross_dict)
 cost_df = pd.DataFrame(costs_dict)
 
 subsystem_turnover_ = {
-    i: calc_subsystem_turnover(subsystem_positions[i], raw_price_.loc[i], price_.loc[i], size_.loc[i])
+    i: calc_subsystem_turnover(subsystem_positions[i], price_.loc[i], size_.loc[i])
     for i in instruments}
 
 net_return_raw = pd.DataFrame({inst: gross_pnl_df[inst] + cost_df[inst].mean() for inst in instruments})
 portfolio_weights = calc_portfolio_weights(net_return_raw, subsystem_positions)
+print(portfolio_weights)
 
 print('END')
 
@@ -119,7 +120,6 @@ _position_target = target_.loc['US10']
 _position = position_.loc['US10']['ewmac32']
 _gross = gross_.loc['US10']['ewmac32']
 _cost = cost_.loc['US10']['ewmac32']
-
 _net = net_.loc['US10']['ewmac32']
 
-print(_net)
+# print(_net)

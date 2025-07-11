@@ -4,19 +4,6 @@ import pandas as pd
 from refactory.utils import calc_mixed_volatility
 
 
-def calc_position_target(price, point_size, capital=500000, annual_risk_target=0.16):
-    '''
-    根据自行设置的risk target 所计算出的单一品种的目标仓位
-    每个contract 能提供的cash vol 为ret_volatility * point_size (每手2500单位，每个单位的vol 为ret_volatility)
-    '''
-    # TODO: 加上下面这句结果会不一样，price为空值的时候意味什么？
-    # price = price.ffill()
-    pnl_vol = calc_mixed_volatility(price.diff(), slow_vol_years=10)  # ret_vol 不是百分比，而是绝对值
-    risk_target = annual_risk_target / (256 ** 0.5)
-    position_target = (capital * risk_target) / (pnl_vol * point_size)
-    return position_target
-
-
 def calc_position(forecast, position_target):
     aligned_avg = position_target.reindex(forecast.index, method='ffill')
     position = forecast.mul(aligned_avg, axis=0) / 10
@@ -40,26 +27,17 @@ def calc_net_pnl(gross_pnl, daily_costs):
     return net_pnl_rule
 
 
-def calc_volatility_scalar(raw_price, price, block_move_value, capital=500000, risk_target=0.25, vol_mult=1.0):
-    # raw_price, price = raw_price.align(price, join="inner")
-    # raw_price.ffill(inplace=True)
-    # price.ffill(inplace=True)
-
-    pnl_vol = vol_mult * calc_mixed_volatility(price.diff(), slow_vol_years=10)
-    vol_percent = 100.0 * (pnl_vol / raw_price.abs())
-
-    block_value = block_move_value * raw_price * 0.01
-    # TODO 这个到底起了什么作用？去掉了结果为什么会有差异？
-    block_value, vol_percent = block_value.align(vol_percent, join="inner")
-
-    currency_vol = block_value * vol_percent
-
-    daily_currency_vol_target = capital * (risk_target / 16)
-    volatility_scalar = daily_currency_vol_target / currency_vol
-
-    volatility_scalar.ffill(inplace=True)
-
-    return volatility_scalar
+def calc_volatility_scalar(price, point_size, capital=500000, annual_risk_target=0.16):
+    '''
+    根据自行设置的risk target 所计算出的单一品种的目标仓位
+    每个contract 能提供的cash vol 为ret_volatility * point_size (每手2500单位，每个单位的vol 为ret_volatility)
+    '''
+    # TODO: 加上下面这句结果会不一样，price为空值的时候意味什么？
+    # price = price.ffill()
+    pnl_vol = calc_mixed_volatility(price.diff(), slow_vol_years=10)  # ret_vol 不是百分比，而是绝对值
+    risk_target = annual_risk_target / (256 ** 0.5)
+    position_target = (capital * risk_target) / (pnl_vol * point_size)
+    return position_target
 
 
 def calc_buffered_position(position_raw, vol_scalar, buffer_size=0.10, trade_to_edge=True):
@@ -113,3 +91,23 @@ def calc_slippage(quantity, info):
     point_size = info['point_size']
     slippage_ = (abs(quantity) * point_size * slippage)
     return slippage_
+
+# def calc_volatility_scalar1(raw_price, price, block_move_value, capital=500000, risk_target=0.25, vol_mult=1.0):
+#     # raw_price, price = raw_price.align(price, join="inner")
+#     # raw_price.ffill(inplace=True)
+#     # price.ffill(inplace=True)
+#
+#     pnl_vol = vol_mult * calc_mixed_volatility(price.diff(), slow_vol_years=10)
+#     vol_percent = 100.0 * (pnl_vol / raw_price.abs())
+#
+#     block_value = block_move_value * raw_price * 0.01
+#     block_value, vol_percent = block_value.align(vol_percent, join="inner")
+#
+#     currency_vol = block_value * vol_percent
+#
+#     daily_currency_vol_target = capital * (risk_target / 16)
+#     volatility_scalar = daily_currency_vol_target / currency_vol
+#
+#     volatility_scalar.ffill(inplace=True)
+#
+#     return volatility_scalar
