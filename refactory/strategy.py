@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 from refactory.base import calc_gross_pnl, calc_net_pnl, calc_buffered_position, \
-    calc_volatility_scalar
+    calc_volatility_scalar, calc_position
 from refactory.base import calc_position_target
 from refactory.combine_forecast import calc_weights_daily, calc_div_mult_daily
 from refactory.cost import calc_cost
@@ -42,18 +42,10 @@ target_list = (calc_position_target(price_.loc[i], size_.loc[i], capital=1000000
                for i in instruments)
 target_ = pd.concat(target_list, keys=instruments, names=['instrument', 'datetime'])
 
-position_ = (forecast_.mul(target_, axis=0) / 10).shift(1)
+position_list = [calc_position(forecast_.loc[i], target_.loc[i]) for i in instruments]
+position_ = pd.concat(position_list, keys=instruments, names=['instrument', 'datetime'])
 
-
-def calc_gross(forecast, pos_target, price, point_size):
-    aligned_avg = pos_target.reindex(forecast.index, method='ffill')
-    position = forecast.mul(aligned_avg, axis=0) / 10
-    position = position.shift(1)
-    gross_pnl = calc_gross_pnl(position, price, point_size)
-    return gross_pnl
-
-
-gross_list = (calc_gross(forecast_.loc[i], target_.loc[i], price_.loc[i], size_.loc[i]) for i in instruments)
+gross_list = (calc_gross_pnl(position_.loc[i], price_.loc[i], size_.loc[i]) for i in instruments)
 gross_ = pd.concat(gross_list, keys=instruments, names=['instrument', 'datetime'])
 
 turnover_func = lambda x: x.reset_index(level='instrument', drop=True).apply(calc_annual_turnover)

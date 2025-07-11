@@ -15,17 +15,18 @@ def calc_position_target(price, point_size, capital=500000, annual_risk_target=0
     return position_target
 
 
+def calc_position(forecast, position_target):
+    aligned_avg = position_target.reindex(forecast.index, method='ffill')
+    position = forecast.mul(aligned_avg, axis=0) / 10
+    position = position.shift(1)
+    return position
+
+
 def calc_gross_pnl(position, price, point_size):
     # FIXME 源代码确实是shift 了两次，没看出来为什么
     position = position.shift(1).ffill()
-    price = price.ffill()
-    pnl_in_points = position.mul(price.diff(), axis=0).fillna(0)
-    # pnl_in_points[pnl_in_points.isna()] = 0.0
-    pnl = pnl_in_points * point_size
-    # TODO 换算成日频的，说明price可以是分钟级别的，后面需要详细检查一下在计算position之前不应限定只是日频的
-    # daily_pnl = pnl.resample("B").sum()
-    # daily_pnl = daily_pnl.replace(0, np.nan)
-    return pnl
+    pnl_in_points = position.mul(price.ffill().diff(), axis=0).fillna(0)
+    return pnl_in_points * point_size
 
 
 def calc_net_pnl(gross_pnl, daily_costs):
