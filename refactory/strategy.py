@@ -10,6 +10,9 @@ from refactory.forecast import ewmac, rescale_forecast, floor_vol, price_vol
 from refactory.portfolio_weights import calc_portfolio_weights
 from refactory.subsystem_turnover import calc_subsystem_turnover
 
+# --------------------------------------------------------------------------------------------------------------------
+
+
 risk_target = 0.16
 instruments = ["US10", "SOFR", "CORN", "SP500_micro"]
 
@@ -23,17 +26,21 @@ def calc_forecasts(price):
     return forecast_df
 
 
+# -------------------------------------------------------------------------------------------------------------------
+
 def m(func, instruments=instruments):
+    # 纵向组装。将func返回的dataset组装成muliIndex的dataset
     return pd.concat((func(i) for i in instruments),
                      keys=instruments,
                      names=['instrument', 'datetime'])
 
 
 def c(func, instruments=instruments):
+    # 横向组装。每个instrument拼成一列
     return pd.DataFrame({i: func(i) for i in instruments})
 
 
-# -------------------------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------------------------------------
 
 
 info_ = get_instrument_info().loc[instruments]
