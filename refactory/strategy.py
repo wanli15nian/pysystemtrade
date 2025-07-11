@@ -1,7 +1,7 @@
 import pandas as pd
 
 from refactory.base import calc_gross_pnl, calc_net_pnl, calc_position, combine_forecast, calc_position_buffered
-from refactory.base import calc_volatility_scalar
+from refactory.base import calc_vol_scalar
 from refactory.combine_forecast import calc_weights_daily, calc_div_mult_daily
 from refactory.cost import calc_cost
 from refactory.cost_sr import estimate_turnover, calc_cost_daily
@@ -33,27 +33,29 @@ def c(func, instruments=instruments):
     return pd.DataFrame({i: func(i) for i in instruments})
 
 
+# -------------------------------------------------------------------------------------------------------
+
+
 info_ = get_instrument_info().loc[instruments]
 size_ = info_['point_size']
-
 price_ = m(get_price)
 raw_price_ = m(get_raw_price)
 
-forecast_ = m(lambda i: calc_forecasts(price_.loc[i]))
-vol_scalar_ = m(
-    lambda i: calc_volatility_scalar(price_.loc[i], size_.loc[i], capital=1000000, annual_risk_target=risk_target))
-position_ = m(lambda i: calc_position(forecast_.loc[i], vol_scalar_.loc[i]))
+print('get price and info')
 
-gross_ = m(lambda i: calc_gross_pnl(position_.loc[i], price_.loc[i], size_.loc[i]))
-turnover_estimated = estimate_turnover(forecast_)
-cost_ = m(lambda i: calc_cost_daily(turnover_estimated, price_.loc[i], vol_scalar_.loc[i], info_.loc[i]))
-net_ = calc_net_pnl(gross_, cost_)
+vol_scalar_ = m(lambda i: calc_vol_scalar(price_.loc[i], size_.loc[i], capital=1000000, risk_target=risk_target))
+forecast_rule = m(lambda i: calc_forecasts(price_.loc[i]))
+position_rule = m(lambda i: calc_position(forecast_rule.loc[i], vol_scalar_.loc[i]))
+gross_rule = m(lambda i: calc_gross_pnl(position_rule.loc[i], price_.loc[i], size_.loc[i]))
+turnover_estimated = estimate_turnover(forecast_rule)
+cost_rule = m(lambda i: calc_cost_daily(turnover_estimated, price_.loc[i], vol_scalar_.loc[i], info_.loc[i]))
+net_rule = calc_net_pnl(gross_rule, cost_rule)
 
 print('calculate pnl for instrument and rule')
 
-forecast_weights = calc_weights_daily(net_)
-forcast_div_mult = calc_div_mult_daily(forecast_weights, forecast_)
-forecast_inst = c(lambda i: combine_forecast(forecast_.loc[i], forecast_weights, forcast_div_mult))
+forecast_weights = calc_weights_daily(net_rule)
+forcast_div_mult = calc_div_mult_daily(forecast_weights, forecast_rule)
+forecast_inst = c(lambda i: combine_forecast(forecast_rule.loc[i], forecast_weights, forcast_div_mult))
 position_inst = c(lambda i: calc_position_buffered(forecast_inst[i], vol_scalar_.loc[i]))
 gross_inst = c(lambda i: calc_gross_pnl(position_inst[i], price_.loc[i], size_.loc[i]))
 cost_inst = c(lambda i: calc_cost(position_inst[i], price_.loc[i], info_.loc[i]))
@@ -67,20 +69,25 @@ print(portfolio_weights)
 
 print('calculate weightes for portfolio')
 
+# --------------------------------------------------------------------------------------------------------------------
+
 _info = info_.loc['US10']
 _raw_price = raw_price_.loc['US10']
 _price = price_.loc['US10']
 _price_pnl = price_.loc['US10'].diff()
 
-_forecast = forecast_.loc['US10']['ewmac32']
+_forecast = forecast_rule.loc['US10']['ewmac32']
 
 _position_target = vol_scalar_.loc['US10']
-_position = position_.loc['US10']['ewmac32']
-_gross = gross_.loc['US10']['ewmac32']
-_cost = cost_.loc['US10']['ewmac32']
-_net = net_.loc['US10']['ewmac32']
+_position = position_rule.loc['US10']['ewmac32']
+_gross = gross_rule.loc['US10']['ewmac32']
+_cost = cost_rule.loc['US10']['ewmac32']
+_net = net_rule.loc['US10']['ewmac32']
 
 # print(_net)
+
+
+# --------------------------------------------------------------------------------------------------------------------
 
 
 #
