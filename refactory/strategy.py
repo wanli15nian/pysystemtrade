@@ -105,7 +105,6 @@ subsystem_turnover_ = {
 
 net_return_raw = pd.DataFrame({inst: gross_pnl_df[inst] + cost_df[inst].mean() for inst in instruments})
 portfolio_weights = calc_portfolio_weights(net_return_raw, subsystem_positions)
-print(portfolio_weights)
 
 print('END')
 
@@ -122,3 +121,5 @@ _gross = gross_.loc['US10']['ewmac32']
 _cost = cost_.loc['US10']['ewmac32']
 
 _net = net_.loc['US10']['ewmac32']
+
+print(_net)
