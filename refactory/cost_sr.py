@@ -5,32 +5,34 @@ from refactory.base import calc_fill_cost
 from refactory.utils import calc_mixed_volatility
 
 
-def calc_rule_daily_cost(turnover_annual, average_turnover, weighted_turnover, pnl, price, position_target, info):
+def calc_rule_daily_cost(weighted_turnover, price, position_target, info):
+    point_size = info['point_size']
+
     # 计算年成本
     cost_sr_annual = get_cost_sr_annual(weighted_turnover, price, info)
     vol_annual = calc_mixed_volatility(price.diff(), slow_vol_years=10) * 16
-    cost_annual = (-cost_sr_annual * vol_annual * position_target).bfill()  # TODO: 向后填充有用未来数据的可能
-
+    # FIXME:position_target.shift(1)应该先做吧？
+    # FIXME:bfill是否应该改成ffill？
+    cost_annual = (-cost_sr_annual * vol_annual * position_target).ffill()
     position_target = position_target.shift(1)
-    temp_1 = cost_annual.reindex(position_target.index)
-    temp_2 = temp_1[~position_target.isna()]
-    temp_3 = temp_2.reindex(price.index, method='ffill')
-    point_size = info['point_size']
-    interval_as_year = temp_3.index.to_series().diff().dt.total_seconds() / (365.25 * 24 * 60 * 60)
-    cost_daily = temp_3 * interval_as_year * point_size
 
+    cost_annual = (cost_annual.reindex(position_target.index)
+                   [~position_target.isna()]
+                   .reindex(price.index, method='ffill'))
+    interval_as_year = cost_annual.index.to_series().diff().dt.total_seconds() / (365.25 * 24 * 60 * 60)
+    cost_daily = cost_annual * interval_as_year * point_size
 
+    # FIXME 看看这些东西什么时候会被用上，目前处于无用状态
     # 计算日均成本
     # point_size = info['point_size']
     # interval_as_year = cost_annual.index.to_series().diff().dt.total_seconds() / (365.25 * 24 * 60 * 60)
     # cost_daily = cost_annual * interval_as_year * point_size
-    # FIXME 看看这些东西什么时候会被用上，目前处于无用状态
-    cost_daily_mean = cost_daily.mean()
-    # 计算年夏普成本
-    pnl_vol_daily = pnl.std()
-    cost_sr_annual = 16 * (cost_daily_mean / pnl_vol_daily)
-    # 计算平均年夏普成本
-    cost_sr = cost_sr_annual * (average_turnover / turnover_annual) * 2
+    # cost_daily_mean = cost_daily.mean()
+    # # 计算年夏普成本
+    # pnl_vol_daily = pnl.std()
+    # cost_sr_annual = 16 * (cost_daily_mean / pnl_vol_daily)
+    # # 计算平均年夏普成本
+    # cost_sr = cost_sr_annual * (average_turnover / turnover_annual) * 2
 
     return cost_daily
 

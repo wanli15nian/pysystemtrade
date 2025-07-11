@@ -42,6 +42,8 @@ target_list = (calc_position_target(price_.loc[i], size_.loc[i], capital=1000000
                for i in instruments)
 target_ = pd.concat(target_list, keys=instruments, names=['instrument', 'datetime'])
 
+position_ = (forecast_.mul(target_, axis=0) / 10).shift(1)
+
 
 def calc_gross(forecast, pos_target, price, point_size):
     aligned_avg = pos_target.reindex(forecast.index, method='ffill')
@@ -61,21 +63,12 @@ average_turnover_ = turnover_.apply(np.nanmean)
 turnover_weight = calc_turnover_weights(forecast_)
 weighted_turnover_ = turnover_.apply(lambda x: calc_weighted_turnover(turnover_weight, x))
 
-
-def calc_daily_costs(turnover, average_turnover_, weighted_turnover_, gross, price, position_target, info):
-    rules = gross.columns.to_list()
-    daily_cost_dict = {rule: calc_rule_daily_cost(turnover[rule], average_turnover_[rule], weighted_turnover_[rule], gross[rule],
-                                                  price, position_target, info) for rule in rules}
-    daily_cost_dict = pd.DataFrame(daily_cost_dict)
-    return daily_cost_dict
-
-
 daily_cost_list = (
-    calc_daily_costs(turnover_.loc[i], average_turnover_, weighted_turnover_, gross_.loc[i], price_.loc[i],
-                     target_.loc[i], info_.loc[i])
-    for i in instruments)
-# cost_sr_ = pd.DataFrame(cost_sr_list, index=instruments, columns=gross_.columns)
-cost_sr_ = pd.concat(daily_cost_list, keys=instruments, names=['instruments', 'datetime'])
+    pd.DataFrame({rule: calc_rule_daily_cost(weighted_turnover_[rule], price_.loc[i], target_.loc[i], info_.loc[i])
+                  for rule in (weighted_turnover_.index.to_list())}
+                 ) for i in instruments)
+cost_ = pd.concat(daily_cost_list, keys=instruments, names=['instruments', 'datetime'])
+
 
 def calc_net_pnl_rules(gross_pnl, daily_cost_df):
     return pd.DataFrame({
@@ -84,7 +77,7 @@ def calc_net_pnl_rules(gross_pnl, daily_cost_df):
     })
 
 
-net_list = [calc_net_pnl_rules(gross_.loc[i], cost_sr_.loc[i]) for i in instruments]
+net_list = [calc_net_pnl_rules(gross_.loc[i], cost_.loc[i]) for i in instruments]
 net_ = pd.concat(net_list, keys=instruments, names=['instrument', 'datetime'])
 
 print('calculate pnl for instrument and rule')
@@ -132,14 +125,14 @@ print(portfolio_weights)
 
 print('END')
 
-_price = price_.loc['US10']
-_raw_price = raw_price_.loc['US10']
-_price_pnl = price_.loc['US10'].diff()
-_forecast = forecast_.loc['US10']['ewmac32']
-_position_target = target_.loc['US10']
-_gross = gross_.loc['US10']['ewmac32']
 _info = info_.loc['US10']
+_raw_price = raw_price_.loc['US10']
+_price = price_.loc['US10']
+_price_pnl = price_.loc['US10'].diff()
 
-position_ = forecast_.mul(target_, axis=0) / 10
+_forecast = forecast_.loc['US10']['ewmac32']
+
+_position_target = target_.loc['US10']
 _position = position_.loc['US10']['ewmac32']
-
+_gross = gross_.loc['US10']['ewmac32']
+_cost = cost_.loc['US10']['ewmac32']
