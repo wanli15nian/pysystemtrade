@@ -7,7 +7,7 @@ from refactory.base import calc_position_target
 from refactory.combine_forecast import calc_weights_daily, calc_div_mult_daily
 from refactory.cost import calc_cost
 from refactory.cost_sr import calc_annual_turnover, calc_turnover_weights, calc_weighted_turnover, calc_rule_daily_cost
-from refactory.data_source import get_instrument_info, get_daily_price, get_raw_price
+from refactory.data_source import get_instrument_info, get_price, get_raw_price
 from refactory.forecast import ewmac, rescale_forecast, floor_vol, price_vol
 from refactory.portfolio_weights import calc_portfolio_weights
 from refactory.subsystem_turnover import calc_subsystem_turnover
@@ -19,12 +19,6 @@ instruments = ["US10", "SOFR", "CORN", "SP500_micro"]
 info_ = get_instrument_info().loc[instruments]
 size_ = info_['point_size']
 
-price_list = (get_daily_price(i) for i in instruments)
-price_ = pd.concat(price_list, keys=instruments, names=['instrument', 'datetime'])
-
-raw_price_list = (get_raw_price(i) for i in instruments)
-raw_price_ = pd.concat(raw_price_list, keys=instruments, names=['instrument', 'datetime'])
-
 
 def calc_forecasts(price):
     raw_ewmac32 = ewmac(price, 32, 128, 1)
@@ -34,6 +28,12 @@ def calc_forecasts(price):
     forecast_df = pd.DataFrame({'ewmac32': ewmac32, 'ewmac8': ewmac8})
     return forecast_df
 
+
+price_list = (get_price(i) for i in instruments)
+price_ = pd.concat(price_list, keys=instruments, names=['instrument', 'datetime'])
+
+raw_price_list = (get_raw_price(i) for i in instruments)
+raw_price_ = pd.concat(raw_price_list, keys=instruments, names=['instrument', 'datetime'])
 
 forecast_list = (calc_forecasts(price_.loc[i]) for i in instruments)
 forecast_ = pd.concat(forecast_list, keys=instruments, names=['instrument', 'datetime'])

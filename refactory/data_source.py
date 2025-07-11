@@ -1,7 +1,7 @@
 import pandas as pd
 
 
-def get_daily_price(instrument_code):
+def get_price(instrument_code):
     df = pd.read_csv('data/adjusted_prices_csv/' + instrument_code + '.csv', parse_dates=['DATETIME'],
                      index_col='DATETIME')
     daily_price = df.resample('1B').last()
