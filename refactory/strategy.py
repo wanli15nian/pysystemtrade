@@ -1,4 +1,3 @@
-import numpy as np
 import pandas as pd
 
 from refactory.base import calc_gross_pnl, calc_net_pnl, calc_buffered_position, \
@@ -6,7 +5,7 @@ from refactory.base import calc_gross_pnl, calc_net_pnl, calc_buffered_position,
 from refactory.base import calc_volatility_scalar
 from refactory.combine_forecast import calc_weights_daily, calc_div_mult_daily
 from refactory.cost import calc_cost
-from refactory.cost_sr import calc_annual_turnover, calc_turnover_weights, calc_weighted_turnover, calc_rule_daily_cost
+from refactory.cost_sr import estimate_turnover, calc_cost_daily
 from refactory.data_source import get_instrument_info, get_price, get_raw_price
 from refactory.forecast import ewmac, rescale_forecast, floor_vol, price_vol
 from refactory.portfolio_weights import calc_portfolio_weights
@@ -25,8 +24,28 @@ def calc_forecasts(price):
     return forecast_df
 
 
-# info_ = get_instrument_info().loc[instruments]
-# size_ = info_['point_size']
+def m(func, instruments=instruments):
+    return pd.concat((func(i) for i in instruments),
+                     keys=instruments,
+                     names=['instrument', 'datetime'])
+
+
+info_ = get_instrument_info().loc[instruments]
+size_ = info_['point_size']
+
+price_ = m(get_price)
+raw_price_ = m(get_raw_price)
+
+forecast_ = m(lambda i: calc_forecasts(price_.loc[i]))
+vol_scalar_ = m(
+    lambda i: calc_volatility_scalar(price_.loc[i], size_.loc[i], capital=1000000, annual_risk_target=risk_target))
+position_ = m(lambda i: calc_position(forecast_.loc[i], vol_scalar_.loc[i]))
+
+gross_ = m(lambda i: calc_gross_pnl(position_.loc[i], price_.loc[i], size_.loc[i]))
+turnover_estimated = estimate_turnover(forecast_)
+cost_ = m(lambda i: calc_cost_daily(turnover_estimated, price_.loc[i], vol_scalar_.loc[i], info_.loc[i]))
+net_ = calc_net_pnl(gross_, cost_)
+
 #
 # price_list = (get_price(i) for i in instruments)
 # price_ = pd.concat(price_list, keys=instruments, names=['instrument', 'datetime'])
@@ -46,42 +65,15 @@ def calc_forecasts(price):
 #
 # gross_list = (calc_gross_pnl(position_.loc[i], price_.loc[i], size_.loc[i]) for i in instruments)
 # gross_ = pd.concat(gross_list, keys=instruments, names=['instrument', 'datetime'])
-
-
-def m(func, instruments=instruments):
-    return pd.concat((func(i) for i in instruments),
-                     keys=instruments,
-                     names=['instrument', 'datetime'])
-
-
-info_ = get_instrument_info().loc[instruments]
-size_ = info_['point_size']
-
-price_ = m(get_price)
-raw_price_ = m(get_raw_price)
-forecast_ = m(lambda i: calc_forecasts(price_.loc[i]))
-target_ = m(
-    lambda i: calc_volatility_scalar(price_.loc[i], size_.loc[i], capital=1000000, annual_risk_target=risk_target))
-position_ = m(lambda i: calc_position(forecast_.loc[i], target_.loc[i]))
-gross_ = m(lambda i: calc_gross_pnl(position_.loc[i], price_.loc[i], size_.loc[i]))
-
-turnover_func = lambda x: x.reset_index(level='instrument', drop=True).apply(calc_annual_turnover)
-turnover_ = forecast_.groupby(level='instrument').apply(turnover_func)
-average_turnover_ = turnover_.apply(np.nanmean)
-
-turnover_weight = calc_turnover_weights(forecast_)
-weighted_turnover_ = turnover_.apply(lambda x: calc_weighted_turnover(turnover_weight, x))
-
-daily_cost_list = [
-    pd.DataFrame({r: calc_rule_daily_cost(weighted_turnover_[r], price_.loc[i], target_.loc[i], info_.loc[i])
-                  for r in (weighted_turnover_.index.to_list())})
-    for i in instruments]
-cost_ = pd.concat(daily_cost_list, keys=instruments, names=['instruments', 'datetime'])
-
-net_list = [pd.DataFrame({r: calc_net_pnl(gross_.loc[i][r], cost_.loc[i][r])
-                          for r in gross_.loc[i].columns})
-            for i in instruments]
-net_ = pd.concat(net_list, keys=instruments, names=['instrument', 'datetime'])
+#
+# daily_cost_list = [calc_cost_daily(turnover_estimated, price_.loc[i], vol_scalar_.loc[i], info_.loc[i])
+#                    for i in instruments]
+# cost_ = pd.concat(daily_cost_list, keys=instruments, names=['instruments', 'datetime'])
+#
+# net_list = [pd.DataFrame({r: calc_net_pnl(gross_.loc[i][r], cost_.loc[i][r])
+#                           for r in gross_.loc[i].columns})
+#             for i in instruments]
+# net_ = pd.concat(net_list, keys=instruments, names=['instrument', 'datetime'])
 
 print('calculate pnl for instrument and rule')
 
@@ -121,7 +113,7 @@ subsystem_turnover_ = {
 
 net_return_raw = pd.DataFrame({inst: gross_pnl_df[inst] + cost_df[inst].mean() for inst in instruments})
 portfolio_weights = calc_portfolio_weights(net_return_raw, subsystem_positions)
-# print(portfolio_weights)
+print(portfolio_weights)
 
 print('END')
 
@@ -132,7 +124,7 @@ _price_pnl = price_.loc['US10'].diff()
 
 _forecast = forecast_.loc['US10']['ewmac32']
 
-_position_target = target_.loc['US10']
+_position_target = vol_scalar_.loc['US10']
 _position = position_.loc['US10']['ewmac32']
 _gross = gross_.loc['US10']['ewmac32']
 _cost = cost_.loc['US10']['ewmac32']

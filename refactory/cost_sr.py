@@ -95,3 +95,19 @@ def calc_weighted_turnover(weights, turnovers, total=1.0):
     w[np.isnan(w * t)] = 0.0  # 应该是考虑到万一有的turnover没有的情况，对应也就不给weight
     w1 = w * total / np.nansum(w)
     return np.nansum(w1 * t)
+
+
+# FIXME: 待权衡清理
+def estimate_turnover(forecast_):
+    turnover_func = lambda x: x.reset_index(level='instrument', drop=True).apply(calc_annual_turnover)
+    turnover_ = forecast_.groupby(level='instrument').apply(turnover_func)
+    average_turnover_ = turnover_.apply(np.nanmean)
+    turnover_weight = calc_turnover_weights(forecast_)
+    weighted_turnover_ = turnover_.apply(lambda x: calc_weighted_turnover(turnover_weight, x))
+    return weighted_turnover_
+
+
+# FIXME: 待清理
+def calc_cost_daily(turnover, price, vol_scalar, info):
+    return pd.DataFrame({r: calc_rule_daily_cost(turnover[r], price, vol_scalar, info)
+                         for r in (turnover.index.to_list())})
