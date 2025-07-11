@@ -3,7 +3,7 @@ from copy import copy
 import numpy as np
 import pandas as pd
 
-from refactory.utils import optimisation
+from refactory.base import optimisation
 
 
 def calc_portfolio_weights(net_, positions, target_sr=0.5):

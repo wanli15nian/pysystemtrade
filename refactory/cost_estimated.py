@@ -1,7 +1,6 @@
 import pandas as pd
 
-from refactory.base import calc_cost_of_fill
-from refactory.utils import calc_mixed_volatility
+from refactory.base import calc_cost_of_fill, calc_mixed_volatility
 
 
 def calc_cost_estimated(price, turnover, vol_scalar, info):

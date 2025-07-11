@@ -1,7 +1,6 @@
 import numpy as np
 import pandas as pd
-
-from refactory.utils import calc_mixed_volatility
+from scipy.optimize import minimize
 
 
 def calc_position(forecast, vol_scalar, buffer_size=0):
@@ -94,3 +93,37 @@ def calc_slippage(quantity, info):
     point_size = info['point_size']
     slippage_ = (abs(quantity) * point_size * slippage)
     return slippage_
+
+
+def optimisation(corr, norm_mean, norm_stdev):
+    def addem(weights):
+        return 1.0 - sum(weights)
+
+    def neg_SR(weights, sigma, mus):
+        estimated_returns = np.dot(weights, mus)[0]
+        stdev = weights.dot(sigma).dot(weights.transpose()) ** 0.5
+        sr = -estimated_returns / stdev
+        return sr
+
+    number = len(corr)
+    mus = np.array(norm_mean, ndmin=2).transpose()  # mus 没问题
+    sigma = np.diag(norm_stdev).dot(corr).dot(np.diag(norm_stdev))
+    start_weights = np.array([1 / number] * number)
+    bounds = [(0.0, 1.0)] * number
+    cdict = [{"type": "eq", "fun": addem}]
+    ans = minimize(neg_SR, start_weights, (sigma, mus), method='SLSQP', constraints=cdict, bounds=bounds, tol=0.00001)
+    weight = ans['x']
+    return weight
+
+
+def calc_mixed_volatility(data, days=35, min_periods=10, slow_vol_years=20,
+                          perc_of_long_vol=0.3, vol_min=0.0000000001,
+                          vol_multiplier=1.0):
+    # 长期和短期波动进行权重处理
+    short_vol = data.ewm(adjust=True, span=days, min_periods=min_periods).std()
+    long_vol = short_vol.ewm(adjust=True, span=slow_vol_years * 256).mean()
+    vol = perc_of_long_vol * long_vol + (1 - perc_of_long_vol) * short_vol
+    vol[vol < vol_min] = vol_min
+    vol = vol * vol_multiplier
+    vol.ffill(inplace=True)
+    return vol
