@@ -38,6 +38,8 @@ my_config.forecast_scalar_estimate["pool_instruments"] = False
 fc = my_system.forecastScaleCap.get_forecast_scalar("US10", "ewmac32")
 print(fc.tail(5))
 
+capped_forecast = my_system.forecastScaleCap.get_capped_forecast('US10', 'ewmac32')
+
 gr = my_system.accounts.pandl_for_instrument_forecast('US10', 'ewmac32')
 print(gr.tail(5))
 
