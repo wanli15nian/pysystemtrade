@@ -90,7 +90,7 @@ _rule_gross = gross_rule.loc['US10']['ewmac32']
 _rule_cost = cost_rule.loc['US10']['ewmac32']
 _rule_net = net_rule.loc['US10']['ewmac32']
 
-# print(_net)
+# print(_rule_net)
 
 
 # --------------------------------------------------------------------------------------------------------------------

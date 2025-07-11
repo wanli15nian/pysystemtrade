@@ -68,7 +68,7 @@ def adjust_by_buffer(last, current, top, bottom, trade_to_edge=True):
         return last if (bottom <= last <= top) else current  # 如果在buffer内则不调仓
 
 
-def calc_cost_of_fill(price, quantity, info, include_slippage=True):
+def calc_cost_of_fill(price, info, quantity, include_slippage=True):
     commission_costs = calc_commission(price, quantity, info)
     slippage_costs = calc_slippage(quantity, info) if include_slippage else 0
     total_cost = slippage_costs + commission_costs

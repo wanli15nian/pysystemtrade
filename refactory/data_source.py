@@ -10,6 +10,7 @@ def get_price(instrument_code):
     return daily_price['price']
 
 
+# TODO：price要不要做ffill？做了结果会不一样
 def get_raw_price(instrument_code):
     df = pd.read_csv('data/multiple_prices_csv/' + instrument_code + '.csv', parse_dates=['DATETIME'],
                      index_col='DATETIME')
