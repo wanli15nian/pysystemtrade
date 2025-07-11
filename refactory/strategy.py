@@ -120,3 +120,5 @@ _position_target = target_.loc['US10']
 _position = position_.loc['US10']['ewmac32']
 _gross = gross_.loc['US10']['ewmac32']
 _cost = cost_.loc['US10']['ewmac32']
+
+_net = net_.loc['US10']['ewmac32']

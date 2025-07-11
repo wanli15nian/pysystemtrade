@@ -20,6 +20,7 @@ def calc_position_target(price, point_size, capital=500000, annual_risk_target=0
 def calc_position(forecast, position_target):
     aligned_avg = position_target.reindex(forecast.index, method='ffill')
     position = forecast.mul(aligned_avg, axis=0) / 10
+    # position = position.ffill()
     position = position.shift(1)
     return position
 
