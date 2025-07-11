@@ -3,8 +3,8 @@ import pandas as pd
 from refactory.base import calc_gross_pnl, calc_net_pnl, calc_position, combine_forecast
 from refactory.base import calc_vol_scalar
 from refactory.combine_forecast import calc_weights_daily, calc_div_mult_daily
-from refactory.cost import calc_cost
-from refactory.cost_sr import estimate_turnover, calc_cost_daily
+from refactory.cost_actual import calc_cost_actual
+from refactory.cost_estimated import estimate_turnover, calc_cost_estimated
 from refactory.data_source import get_instrument_info, get_price, get_raw_price
 from refactory.forecast import ewmac, rescale_forecast, floor_vol, price_vol
 from refactory.portfolio_weights import calc_portfolio_weights
@@ -54,7 +54,7 @@ forecast_rule = m(lambda i: calc_forecasts(price_.loc[i]))
 position_rule = m(lambda i: calc_position(forecast_rule.loc[i], vol_scalar_.loc[i]))
 gross_rule = m(lambda i: calc_gross_pnl(position_rule.loc[i], price_.loc[i], size_.loc[i]))
 turnover_estimated = estimate_turnover(forecast_rule)
-cost_rule = m(lambda i: calc_cost_daily(turnover_estimated, price_.loc[i], vol_scalar_.loc[i], info_.loc[i]))
+cost_rule = m(lambda i: calc_cost_estimated(price_.loc[i], turnover_estimated, vol_scalar_.loc[i], info_.loc[i]))
 net_rule = calc_net_pnl(gross_rule, cost_rule)
 
 print('calculate pnl for instrument and rule')
@@ -64,7 +64,7 @@ forcast_div_mult = calc_div_mult_daily(forecast_weights, forecast_rule)
 forecast_inst = c(lambda i: combine_forecast(forecast_rule.loc[i], forecast_weights, forcast_div_mult))
 position_inst = c(lambda i: calc_position(forecast_inst[i], vol_scalar_.loc[i], buffer_size=0.10))
 gross_inst = c(lambda i: calc_gross_pnl(position_inst[i], price_.loc[i], size_.loc[i]))
-cost_inst = c(lambda i: calc_cost(position_inst[i], price_.loc[i], info_.loc[i]))
+cost_inst = c(lambda i: calc_cost_actual(position_inst[i], price_.loc[i], info_.loc[i]))
 
 subsystem_turnover_ = {i: calc_subsystem_turnover(position_inst[i], price_.loc[i], size_.loc[i])
                        for i in instruments}

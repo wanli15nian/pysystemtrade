@@ -5,7 +5,7 @@ import pandas as pd
 from refactory.base import calc_cost_of_fill
 
 
-def calc_cost(position, price, info, include_slippage=True):
+def calc_cost_actual(position, price, info, include_slippage=True):
     rolls_per_year = int(info['rolls_per_year'])
     all_fills = calc_all_fills(position, price, rolls_per_year)
 
@@ -14,15 +14,18 @@ def calc_cost(position, price, info, include_slippage=True):
     fill_cost = pd.Series(all_fills['cost'].values, index=all_fills['date']).sort_index()
     raw_costs = fill_cost.groupby(fill_cost.index).sum()
 
-    cost_deflator = calc_cost_deflator(price)
+    daily_price = price.resample("1B").ffill()
+    vol = daily_price.diff().rolling(180, min_periods=3).std()
+    cost_deflator = vol / vol.iloc[-1]
     cost_deflator = cost_deflator.reindex(raw_costs.index, method="ffill")
+
     return cost_deflator * raw_costs
 
 
 def calc_all_fills(position, price, rolls_per_year):
     list_of_years = list(set([int(idx.year) for idx in position.index]))
     list_of_years.sort()
-    holding_fills = pd.concat([pseudo_fills_for_year(year, rolls_per_year, price, position) for year in
+    holding_fills = pd.concat([pseudo_holding_fills(year, rolls_per_year, price, position) for year in
                                list_of_years])
 
     trades = position.diff().dropna()  # 计算持仓变化并去除缺失值
@@ -38,7 +41,7 @@ def calc_all_fills(position, price, rolls_per_year):
     return all_fills
 
 
-def pseudo_fills_for_year(year, rolls_per_year, price, positions):
+def pseudo_holding_fills(year, rolls_per_year, price, positions):
     if rolls_per_year == 0:
         return []
 
@@ -69,12 +72,6 @@ def generate_equal_dates_within_year(year, rolls_per_year, align_to_start=True):
     all_dates = [first_date + (datetime.timedelta(days=days_of_roll) * period_count)
                  for period_count in range(rolls_per_year)]
     return all_dates
-
-
-def calc_cost_deflator(price):
-    daily_price = price.resample("1B").ffill()
-    vol = daily_price.diff().rolling(180, min_periods=3).std()
-    return vol / vol.iloc[-1]
 
 #
 #

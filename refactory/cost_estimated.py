@@ -5,14 +5,14 @@ from refactory.base import calc_cost_of_fill
 from refactory.utils import calc_mixed_volatility
 
 
-def calc_cost_daily(turnover, price, vol_scalar, info):
+def calc_cost_estimated(price, turnover, vol_scalar, info):
     return pd.DataFrame({r: estimate_cost(price, turnover[r], vol_scalar, info)
                          for r in (turnover.index.to_list())})
 
 
-def estimate_cost(price, weighted_turnover, vol_scalar, info):
+def estimate_cost(price, turnover, vol_scalar, info):
     # 计算年夏普成本
-    cost_sr_annual = get_cost_sr_annual(weighted_turnover, price, info)
+    cost_sr_annual = get_cost_sr_annual(turnover, price, info)
     vol_annual = calc_mixed_volatility(price.diff(), slow_vol_years=10) * 16
     cost_annual = (-cost_sr_annual * vol_annual * vol_scalar).ffill()
     # 计算日成本
@@ -26,13 +26,13 @@ def estimate_cost(price, weighted_turnover, vol_scalar, info):
     return cost_daily
 
 
-def get_cost_sr_annual(weighted_turnover, price, info):
+def get_cost_sr_annual(turnover, price, info):
     # A股股票必须是100股的整数倍，notional_blocks这个参数是这个100的意思吗？
     # 总成本 = 交易成本 + 移仓换月成本，都是以SR计算的。
     cost_sr_per = calc_cost_sr_per(price, info)
     rolls_per_year = int(info['rolls_per_year'])
     holding_cost = rolls_per_year * 2.0 * cost_sr_per
-    transaction_cost = weighted_turnover * cost_sr_per
+    transaction_cost = turnover * cost_sr_per
     cost_sr_annual = transaction_cost + holding_cost
     return cost_sr_annual
 
