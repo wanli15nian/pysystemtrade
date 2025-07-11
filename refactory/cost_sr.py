@@ -30,7 +30,7 @@ def calc_cost_sr(turnover_annual, average_turnover, weighted_turnover, pnl, pric
     cost_sr_annual = 16 * (cost_daily_mean / pnl_vol_daily)
     # 计算平均年夏普成本
     cost_sr = cost_sr_annual * (average_turnover / turnover_annual) * 2
-    return cost_sr
+    return cost_daily
 
 
 def get_cost_sr_annual(weighted_turnover, price, info):

@@ -66,15 +66,16 @@ def calc_cost_sr_rules(turnover, average_turnover_, weighted_turnover_, gross, p
     rules = gross.columns.to_list()
     cost_SR_dict = {rule: calc_cost_sr(turnover[rule], average_turnover_[rule], weighted_turnover_[rule], gross[rule],
                                        price, position_target, info) for rule in rules}
-    return cost_SR_dict
+    cost_SR_df = pd.DataFrame(cost_SR_dict)
+    return cost_SR_df
 
 
 cost_sr_list = (
     calc_cost_sr_rules(turnover_.loc[i], average_turnover_, weighted_turnover_, gross_.loc[i], price_.loc[i],
                        target_.loc[i], info_.loc[i])
     for i in instruments)
-cost_sr_ = pd.DataFrame(cost_sr_list, index=instruments, columns=gross_.columns)
-
+# cost_sr_ = pd.DataFrame(cost_sr_list, index=instruments, columns=gross_.columns)
+cost_sr_ = pd.concat(cost_sr_list, keys=instruments, names=['instruments', 'datetime'])
 
 def calc_net_pnl_rules(gross_pnl, cost_SR_dict):
     return pd.DataFrame({
