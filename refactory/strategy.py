@@ -2,12 +2,12 @@ import pandas as pd
 
 from refactory.base import calc_gross_pnl, calc_net_pnl, calc_position, combine_forecast
 from refactory.base import calc_vol_scalar
-from refactory.combine_forecast import calc_weights_daily, calc_div_mult_daily
+from refactory.weights_forecast import calc_forecast_weights, calc_div_mult_daily
 from refactory.cost_actual import calc_cost_actual
 from refactory.cost_estimated import estimate_turnover, calc_cost_estimated
 from refactory.data_source import get_instrument_info, get_price, get_raw_price
 from refactory.forecast import ewmac, rescale_forecast, floor_vol, price_vol
-from refactory.portfolio_weights import calc_portfolio_weights
+from refactory.weights_portfolio import calc_portfolio_weights
 from refactory.subsystem_turnover import calc_subsystem_turnover
 
 # --------------------------------------------------------------------------------------------------------------------
@@ -59,7 +59,7 @@ net_rule = calc_net_pnl(gross_rule, cost_rule)
 
 print('calculate pnl for instrument and rule')
 
-forecast_weights = calc_weights_daily(net_rule)
+forecast_weights = calc_forecast_weights(net_rule)
 forcast_div_mult = calc_div_mult_daily(forecast_weights, forecast_rule)
 forecast_inst = c(lambda i: combine_forecast(forecast_rule.loc[i], forecast_weights, forcast_div_mult))
 position_inst = c(lambda i: calc_position(forecast_inst[i], vol_scalar_.loc[i], buffer_size=0.10))

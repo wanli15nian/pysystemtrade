@@ -6,19 +6,8 @@ from refactory.utils import optimisation
 
 # TODO：又是日频，又是周频，又是年频，有些乱
 
-def get_end_list(daily_index):
-    # 转成周频的
-    daily_series = pd.Series(index=daily_index)
-    weekly_series = daily_series.resample('W').last()
-    weekly_index = weekly_series.index
-    # 从结束日期开始倒推，然后reverse()
-    yearly = pd.date_range(weekly_index[-1], weekly_index[0], freq='-365D').to_list()
-    yearly.reverse()
-    end_list = yearly[1:-1]
-    return end_list
 
-
-def calc_weights_daily(net_):
+def calc_forecast_weights(net_):
     # 计算年切分点
     end_list = get_end_list(net_.index.levels[1])
 
@@ -28,7 +17,7 @@ def calc_weights_daily(net_):
     # 计算年权重
     instruments_num = len(net_.index.levels[0])
     weight_yearly_raw = pd.DataFrame(
-        [calc_forecast_weights(instruments_num, net_weekly, end) for end in end_list],
+        [calc_forecast_weight_yearly(instruments_num, net_weekly, end) for end in end_list],
         index=end_list, columns=net_weekly.columns)
 
     # 加上最开始的日期，用平均权重
@@ -45,8 +34,8 @@ def calc_weights_daily(net_):
     return weights_daily
 
 
-def calc_forecast_weights(instr_num, pnl, fit_end, span_multiple=50000, min_periods_corr=10,
-                          min_periods_multiple=5):
+def calc_forecast_weight_yearly(instr_num, pnl, fit_end, span_multiple=50000, min_periods_corr=10,
+                                min_periods_multiple=5):
     span = instr_num * span_multiple
 
     min_periods = instr_num * min_periods_corr
@@ -97,3 +86,15 @@ def calc_div_mult_yearly(weights_daily, corr_weekly, end, dm_max=2.5):
     risk = np.sqrt(weights.dot(corr_matrix).dot(weights))
     risk = 1.0 if (np.isnan(risk) or risk < 1e-7) else risk
     return min(1.0 / risk, dm_max)
+
+
+def get_end_list(daily_index):
+    # 转成周频的
+    daily_series = pd.Series(index=daily_index)
+    weekly_series = daily_series.resample('W').last()
+    weekly_index = weekly_series.index
+    # 从结束日期开始倒推，然后reverse()
+    yearly = pd.date_range(weekly_index[-1], weekly_index[0], freq='-365D').to_list()
+    yearly.reverse()
+    end_list = yearly[1:-1]
+    return end_list
