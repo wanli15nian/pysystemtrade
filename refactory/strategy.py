@@ -1,6 +1,6 @@
 import pandas as pd
 
-from refactory.base import calc_gross_pnl, calc_net_pnl, calc_position, combine_forecast, calc_position_buffered
+from refactory.base import calc_gross_pnl, calc_net_pnl, calc_position, combine_forecast
 from refactory.base import calc_vol_scalar
 from refactory.combine_forecast import calc_weights_daily, calc_div_mult_daily
 from refactory.cost import calc_cost
@@ -63,7 +63,7 @@ print('calculate pnl for instrument and rule')
 forecast_weights = calc_weights_daily(net_rule)
 forcast_div_mult = calc_div_mult_daily(forecast_weights, forecast_rule)
 forecast_inst = c(lambda i: combine_forecast(forecast_rule.loc[i], forecast_weights, forcast_div_mult))
-position_inst = c(lambda i: calc_position_buffered(forecast_inst[i], vol_scalar_.loc[i]))
+position_inst = c(lambda i: calc_position(forecast_inst[i], vol_scalar_.loc[i], buffer_size=0.10))
 gross_inst = c(lambda i: calc_gross_pnl(position_inst[i], price_.loc[i], size_.loc[i]))
 cost_inst = c(lambda i: calc_cost(position_inst[i], price_.loc[i], info_.loc[i]))
 

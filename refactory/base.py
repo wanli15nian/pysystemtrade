@@ -4,9 +4,11 @@ import pandas as pd
 from refactory.utils import calc_mixed_volatility
 
 
-def calc_position(forecast, position_target):
-    aligned_avg = position_target.reindex(forecast.index, method='ffill')
+def calc_position(forecast, vol_scalar, buffer_size=0):
+    aligned_avg = vol_scalar.reindex(forecast.index, method='ffill')
     position = forecast.mul(aligned_avg, axis=0) / 10
+    if buffer_size > 0:
+        position = trans_buffered_position(position, vol_scalar, 0.10)
     # position = position.ffill()
     position = position.shift(1)
     return position
@@ -38,6 +40,12 @@ def calc_vol_scalar(price, point_size, capital=500000, risk_target=0.16):
     risk_target = risk_target / (256 ** 0.5)
     position_target = (capital * risk_target) / (pnl_vol * point_size)
     return position_target
+
+
+# FIXME:待整理，放到前面去
+def combine_forecast(forecast, forecast_weights, forcast_div_mult):
+    combined_forecast = ((forecast_weights * forecast).sum(axis=1) * forcast_div_mult).clip(20, -20)
+    return combined_forecast
 
 
 def trans_buffered_position(position_raw, vol_scalar, buffer_size=0.10, trade_to_edge=True):
@@ -92,7 +100,6 @@ def calc_slippage(quantity, info):
     slippage_ = (abs(quantity) * point_size * slippage)
     return slippage_
 
-
 # def calc_volatility_scalar1(raw_price, price, block_move_value, capital=500000, risk_target=0.25, vol_mult=1.0):
 #     # raw_price, price = raw_price.align(price, join="inner")
 #     # raw_price.ffill(inplace=True)
@@ -112,16 +119,3 @@ def calc_slippage(quantity, info):
 #     volatility_scalar.ffill(inplace=True)
 #
 #     return volatility_scalar
-
-
-# FIXME:待整理，放到前面去
-def combine_forecast(forecast, forecast_weights, forcast_div_mult):
-    combined_forecast = ((forecast_weights * forecast).sum(axis=1) * forcast_div_mult).clip(20, -20)
-    return combined_forecast
-
-
-def calc_position_buffered(combined_forecast, vol_scalar):
-    subsystem_position_raw = vol_scalar * combined_forecast / 10.0
-    subsystem_position_buffered = trans_buffered_position(subsystem_position_raw, vol_scalar, 0.10)
-    position = subsystem_position_buffered.shift(1).ffill()
-    return position
