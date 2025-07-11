@@ -1,13 +1,13 @@
 import pandas as pd
 
-from refactory.base import calc_gross_pnl, calc_net_pnl, calc_position, combine_forecast, calc_vol_scalar
+from refactory.base import calc_gross_pnl, calc_net_pnl, calc_position, combine_forecast
 from refactory.base import calc_vol_scalar
-from refactory.turnover import calc_turnover
-from refactory.weights_forecast import calc_forecast_weights, calc_div_mult_daily
 from refactory.cost_actual import calc_cost_actual
-from refactory.cost_estimated import estimate_turnover, calc_cost_estimated
+from refactory.cost_estimated import calc_cost_estimated
 from refactory.data_source import get_instrument_info, get_price, get_raw_price
 from refactory.forecast import ewmac, rescale_forecast, floor_vol, price_vol
+from refactory.turnover import calc_turnover, estimate_turnover
+from refactory.weights_forecast import calc_forecast_weights, calc_div_mult_daily
 from refactory.weights_portfolio import calc_portfolio_weights
 
 # --------------------------------------------------------------------------------------------------------------------
@@ -66,14 +66,7 @@ position_inst = c(lambda i: calc_position(forecast_inst[i], vol_scalar_.loc[i], 
 gross_inst = c(lambda i: calc_gross_pnl(position_inst[i], price_.loc[i], size_.loc[i]))
 cost_inst = c(lambda i: calc_cost_actual(position_inst[i], price_.loc[i], info_.loc[i]))
 
-
-def calc_subsystem_turnover(position, price, point_size):
-    vol_scalar = calc_vol_scalar(price, point_size)
-    return calc_turnover(position, vol_scalar)
-
-
-subsystem_turnover_ = {i: calc_subsystem_turnover(position_inst[i], price_.loc[i], size_.loc[i])
-                       for i in instruments}
+subsystem_turnover_ = {i: calc_turnover(position_inst[i], vol_scalar_.loc[i]) for i in instruments}
 
 # TODO: 为什么是mean？
 net_inst = pd.DataFrame({inst: gross_inst[inst] + cost_inst[inst].mean() for inst in instruments})
