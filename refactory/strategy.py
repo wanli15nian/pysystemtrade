@@ -13,11 +13,7 @@ from refactory.portfolio_weights import calc_portfolio_weights
 from refactory.subsystem_turnover import calc_subsystem_turnover
 
 risk_target = 0.16
-# instruments = ["CORN", "SOFR", "SP500_micro", 'US10']
 instruments = ["US10", "SOFR", "CORN", "SP500_micro"]
-
-info_ = get_instrument_info().loc[instruments]
-size_ = info_['point_size']
 
 
 def calc_forecasts(price):
@@ -29,24 +25,45 @@ def calc_forecasts(price):
     return forecast_df
 
 
-price_list = (get_price(i) for i in instruments)
-price_ = pd.concat(price_list, keys=instruments, names=['instrument', 'datetime'])
+# info_ = get_instrument_info().loc[instruments]
+# size_ = info_['point_size']
+#
+# price_list = (get_price(i) for i in instruments)
+# price_ = pd.concat(price_list, keys=instruments, names=['instrument', 'datetime'])
+#
+# raw_price_list = (get_raw_price(i) for i in instruments)
+# raw_price_ = pd.concat(raw_price_list, keys=instruments, names=['instrument', 'datetime'])
+#
+# forecast_list = (calc_forecasts(price_.loc[i]) for i in instruments)
+# forecast_ = pd.concat(forecast_list, keys=instruments, names=['instrument', 'datetime'])
+#
+# target_list = (calc_volatility_scalar(price_.loc[i], size_.loc[i], capital=1000000, annual_risk_target=risk_target)
+#                for i in instruments)
+# target_ = pd.concat(target_list, keys=instruments, names=['instrument', 'datetime'])
+#
+# position_list = [calc_position(forecast_.loc[i], target_.loc[i]) for i in instruments]
+# position_ = pd.concat(position_list, keys=instruments, names=['instrument', 'datetime'])
+#
+# gross_list = (calc_gross_pnl(position_.loc[i], price_.loc[i], size_.loc[i]) for i in instruments)
+# gross_ = pd.concat(gross_list, keys=instruments, names=['instrument', 'datetime'])
 
-raw_price_list = (get_raw_price(i) for i in instruments)
-raw_price_ = pd.concat(raw_price_list, keys=instruments, names=['instrument', 'datetime'])
 
-forecast_list = (calc_forecasts(price_.loc[i]) for i in instruments)
-forecast_ = pd.concat(forecast_list, keys=instruments, names=['instrument', 'datetime'])
+def m(func, instruments=instruments):
+    return pd.concat((func(i) for i in instruments),
+                     keys=instruments,
+                     names=['instrument', 'datetime'])
 
-target_list = (calc_volatility_scalar(price_.loc[i], size_.loc[i], capital=1000000, annual_risk_target=risk_target)
-               for i in instruments)
-target_ = pd.concat(target_list, keys=instruments, names=['instrument', 'datetime'])
 
-position_list = [calc_position(forecast_.loc[i], target_.loc[i]) for i in instruments]
-position_ = pd.concat(position_list, keys=instruments, names=['instrument', 'datetime'])
+info_ = get_instrument_info().loc[instruments]
+size_ = info_['point_size']
 
-gross_list = (calc_gross_pnl(position_.loc[i], price_.loc[i], size_.loc[i]) for i in instruments)
-gross_ = pd.concat(gross_list, keys=instruments, names=['instrument', 'datetime'])
+price_ = m(get_price)
+raw_price_ = m(get_raw_price)
+forecast_ = m(lambda i: calc_forecasts(price_.loc[i]))
+target_ = m(
+    lambda i: calc_volatility_scalar(price_.loc[i], size_.loc[i], capital=1000000, annual_risk_target=risk_target))
+position_ = m(lambda i: calc_position(forecast_.loc[i], target_.loc[i]))
+gross_ = m(lambda i: calc_gross_pnl(position_.loc[i], price_.loc[i], size_.loc[i]))
 
 turnover_func = lambda x: x.reset_index(level='instrument', drop=True).apply(calc_annual_turnover)
 turnover_ = forecast_.groupby(level='instrument').apply(turnover_func)
@@ -79,7 +96,6 @@ for instrument in instruments:
     point_size = size_[instrument]
 
     price = price_.loc[instrument]
-    # raw_price = raw_price_.loc[instrument]
     forecast = forecast_.loc[instrument]
 
     combined_forecast = ((forecast_weights * forecast).sum(axis=1) * forcast_div_mult).clip(20, -20)
