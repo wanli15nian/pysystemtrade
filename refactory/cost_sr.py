@@ -5,7 +5,7 @@ from refactory.base import calc_fill_cost
 from refactory.utils import calc_mixed_volatility
 
 
-def calc_cost_sr(turnover_annual, average_turnover, weighted_turnover, pnl, price, position_target, info):
+def calc_rule_daily_cost(turnover_annual, average_turnover, weighted_turnover, pnl, price, position_target, info):
     # 计算年成本
     cost_sr_annual = get_cost_sr_annual(weighted_turnover, price, info)
     vol_annual = calc_mixed_volatility(price.diff(), slow_vol_years=10) * 16
@@ -24,6 +24,7 @@ def calc_cost_sr(turnover_annual, average_turnover, weighted_turnover, pnl, pric
     # point_size = info['point_size']
     # interval_as_year = cost_annual.index.to_series().diff().dt.total_seconds() / (365.25 * 24 * 60 * 60)
     # cost_daily = cost_annual * interval_as_year * point_size
+    # FIXME 看看这些东西什么时候会被用上，目前处于无用状态
     cost_daily_mean = cost_daily.mean()
     # 计算年夏普成本
     pnl_vol_daily = pnl.std()

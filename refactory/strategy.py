@@ -6,7 +6,7 @@ from refactory.base import calc_gross_pnl, calc_net_pnl, calc_buffered_position,
 from refactory.base import calc_position_target
 from refactory.combine_forecast import calc_weights_daily, calc_div_mult_daily
 from refactory.cost import calc_cost
-from refactory.cost_sr import calc_annual_turnover, calc_turnover_weights, calc_weighted_turnover, calc_cost_sr
+from refactory.cost_sr import calc_annual_turnover, calc_turnover_weights, calc_weighted_turnover, calc_rule_daily_cost
 from refactory.data_source import get_instrument_info, get_daily_price, get_raw_price
 from refactory.forecast import ewmac, rescale_forecast, floor_vol, price_vol
 from refactory.portfolio_weights import calc_portfolio_weights
@@ -62,20 +62,20 @@ turnover_weight = calc_turnover_weights(forecast_)
 weighted_turnover_ = turnover_.apply(lambda x: calc_weighted_turnover(turnover_weight, x))
 
 
-def calc_cost_sr_rules(turnover, average_turnover_, weighted_turnover_, gross, price, position_target, info):
+def calc_daily_costs(turnover, average_turnover_, weighted_turnover_, gross, price, position_target, info):
     rules = gross.columns.to_list()
-    cost_SR_dict = {rule: calc_cost_sr(turnover[rule], average_turnover_[rule], weighted_turnover_[rule], gross[rule],
-                                       price, position_target, info) for rule in rules}
-    cost_SR_df = pd.DataFrame(cost_SR_dict)
-    return cost_SR_df
+    daily_cost_dict = {rule: calc_rule_daily_cost(turnover[rule], average_turnover_[rule], weighted_turnover_[rule], gross[rule],
+                                                  price, position_target, info) for rule in rules}
+    daily_cost_dict = pd.DataFrame(daily_cost_dict)
+    return daily_cost_dict
 
 
-cost_sr_list = (
-    calc_cost_sr_rules(turnover_.loc[i], average_turnover_, weighted_turnover_, gross_.loc[i], price_.loc[i],
-                       target_.loc[i], info_.loc[i])
+daily_cost_list = (
+    calc_daily_costs(turnover_.loc[i], average_turnover_, weighted_turnover_, gross_.loc[i], price_.loc[i],
+                     target_.loc[i], info_.loc[i])
     for i in instruments)
 # cost_sr_ = pd.DataFrame(cost_sr_list, index=instruments, columns=gross_.columns)
-cost_sr_ = pd.concat(cost_sr_list, keys=instruments, names=['instruments', 'datetime'])
+cost_sr_ = pd.concat(daily_cost_list, keys=instruments, names=['instruments', 'datetime'])
 
 def calc_net_pnl_rules(gross_pnl, daily_cost_df):
     return pd.DataFrame({
