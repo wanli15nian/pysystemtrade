@@ -59,6 +59,15 @@ net_rule = calc_net_pnl(gross_rule, cost_rule)
 
 print('calculate pnl for instrument and rule')
 
+def calc_annual_sr(gross, costs):
+    gross.replace(0.0, pd.NA, inplace=True)
+    daily_avg_costs = costs.mean()
+    daily_return_std = gross.std()
+    annual_sr = 16 * daily_avg_costs / daily_return_std
+    return annual_sr
+
+annual_sr = calc_annual_sr(gross_rule.loc['US10'], cost_rule.loc['US10'])
+
 forecast_weights = calc_forecast_weights(net_rule)
 forcast_div_mult = calc_div_mult_daily(forecast_weights, forecast_rule)
 forecast_inst = c(lambda i: combine_forecast(forecast_rule.loc[i], forecast_weights, forcast_div_mult))
