@@ -29,6 +29,10 @@ def m(func, instruments=instruments):
                      names=['instrument', 'datetime'])
 
 
+def c(func, instruments=instruments):
+    return pd.DataFrame({i: func(i) for i in instruments})
+
+
 info_ = get_instrument_info().loc[instruments]
 size_ = info_['point_size']
 
@@ -44,6 +48,40 @@ gross_ = m(lambda i: calc_gross_pnl(position_.loc[i], price_.loc[i], size_.loc[i
 turnover_estimated = estimate_turnover(forecast_)
 cost_ = m(lambda i: calc_cost_daily(turnover_estimated, price_.loc[i], vol_scalar_.loc[i], info_.loc[i]))
 net_ = calc_net_pnl(gross_, cost_)
+
+print('calculate pnl for instrument and rule')
+
+forecast_weights = calc_weights_daily(net_)
+forcast_div_mult = calc_div_mult_daily(forecast_weights, forecast_)
+forecast_inst = c(lambda i: combine_forecast(forecast_.loc[i], forecast_weights, forcast_div_mult))
+position_inst = c(lambda i: calc_position_buffered(forecast_inst[i], vol_scalar_.loc[i]))
+gross_inst = c(lambda i: calc_gross_pnl(position_inst[i], price_.loc[i], size_.loc[i]))
+cost_inst = c(lambda i: calc_cost(position_inst[i], price_.loc[i], info_.loc[i]))
+
+subsystem_turnover_ = {i: calc_subsystem_turnover(position_inst[i], price_.loc[i], size_.loc[i])
+                       for i in instruments}
+
+net_inst = pd.DataFrame({inst: gross_inst[inst] + cost_inst[inst].mean() for inst in instruments})
+portfolio_weights = calc_portfolio_weights(net_inst, position_inst)
+print(portfolio_weights)
+
+print('calculate weightes for portfolio')
+
+_info = info_.loc['US10']
+_raw_price = raw_price_.loc['US10']
+_price = price_.loc['US10']
+_price_pnl = price_.loc['US10'].diff()
+
+_forecast = forecast_.loc['US10']['ewmac32']
+
+_position_target = vol_scalar_.loc['US10']
+_position = position_.loc['US10']['ewmac32']
+_gross = gross_.loc['US10']['ewmac32']
+_cost = cost_.loc['US10']['ewmac32']
+_net = net_.loc['US10']['ewmac32']
+
+# print(_net)
+
 
 #
 # price_list = (get_price(i) for i in instruments)
@@ -73,68 +111,28 @@ net_ = calc_net_pnl(gross_, cost_)
 #                           for r in gross_.loc[i].columns})
 #             for i in instruments]
 # net_ = pd.concat(net_list, keys=instruments, names=['instrument', 'datetime'])
-
-print('calculate pnl for instrument and rule')
-
-forecast_weights = calc_weights_daily(net_)
-forcast_div_mult = calc_div_mult_daily(forecast_weights, forecast_)
-
-forecast_inst = m(lambda i: combine_forecast(forecast_.loc[i], forecast_weights, forcast_div_mult))
-position_inst = m(lambda i: calc_position_buffered(forecast_inst.loc[i], vol_scalar_.loc[i]))
-gross_inst = m(lambda i: calc_gross_pnl(position_inst.loc[i], price_.loc[i], size_.loc[i]))
-cost_inst = m(lambda i: calc_cost(position_inst.loc[i], price_.loc[i], info_.loc[i]))
-
-subsystem_positions_dict = {}
-gross_dict = {}
-costs_dict = {}
-
-for instrument in instruments:
-    info = info_.loc[instrument]
-    point_size = size_[instrument]
-
-    price = price_.loc[instrument]
-    forecast = forecast_.loc[instrument]
-    vol_scalar = vol_scalar_.loc[instrument]
-
-    combined_forecast = combine_forecast(forecast, forecast_weights, forcast_div_mult)
-    position = calc_position_buffered(combined_forecast, vol_scalar)
-    gross_pnl = calc_gross_pnl(position, price, point_size)
-    normalised_costs = calc_cost(position, price, info)
-
-    gross_dict[instrument] = gross_pnl
-    costs_dict[instrument] = normalised_costs
-    subsystem_positions_dict[instrument] = position
-    print('calc_pnl_across_subsytem_for_indiv_instr')
-
-subsystem_positions = pd.DataFrame(subsystem_positions_dict)
-gross_pnl_df = pd.DataFrame(gross_dict)
-cost_df = pd.DataFrame(costs_dict)
-
-# subsystem_positions = position_inst
-# gross_pnl_df = gross_inst
-# cost_df = cost_inst
-
-subsystem_turnover_ = {
-    i: calc_subsystem_turnover(subsystem_positions[i], price_.loc[i], size_.loc[i])
-    for i in instruments}
-
-net_return_raw = pd.DataFrame({inst: gross_pnl_df[inst] + cost_df[inst].mean() for inst in instruments})
-portfolio_weights = calc_portfolio_weights(net_return_raw, subsystem_positions)
-print(portfolio_weights)
-
-print('END')
-
-_info = info_.loc['US10']
-_raw_price = raw_price_.loc['US10']
-_price = price_.loc['US10']
-_price_pnl = price_.loc['US10'].diff()
-
-_forecast = forecast_.loc['US10']['ewmac32']
-
-_position_target = vol_scalar_.loc['US10']
-_position = position_.loc['US10']['ewmac32']
-_gross = gross_.loc['US10']['ewmac32']
-_cost = cost_.loc['US10']['ewmac32']
-_net = net_.loc['US10']['ewmac32']
-
-# print(_net)
+# subsystem_positions_dict = {}
+# gross_dict = {}
+# costs_dict = {}
+#
+# for instrument in instruments:
+#     info = info_.loc[instrument]
+#     point_size = size_[instrument]
+#
+#     price = price_.loc[instrument]
+#     forecast = forecast_.loc[instrument]
+#     vol_scalar = vol_scalar_.loc[instrument]
+#
+#     combined_forecast = combine_forecast(forecast, forecast_weights, forcast_div_mult)
+#     position = calc_position_buffered(combined_forecast, vol_scalar)
+#     gross_pnl = calc_gross_pnl(position, price, point_size)
+#     normalised_costs = calc_cost(position, price, info)
+#
+#     gross_dict[instrument] = gross_pnl
+#     costs_dict[instrument] = normalised_costs
+#     subsystem_positions_dict[instrument] = position
+#     print('calc_pnl_across_subsytem_for_indiv_instr')
+#
+# subsystem_positions = pd.DataFrame(subsystem_positions_dict)
+# gross_pnl_df = pd.DataFrame(gross_dict)
+# cost_df = pd.DataFrame(costs_dict)
