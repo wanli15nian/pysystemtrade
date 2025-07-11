@@ -84,12 +84,16 @@ def calc_annual_sr(instr, gross_rule, cost_rule, rule_raw_turnover, cost_multipl
     annual_sr = pooled_turnover_costs * cost_multiplier
     return annual_sr
 
-annual_sr = calc_annual_sr('US10', gross_rule, cost_rule, rule_raw_turnover)
-gross = gross_rule.loc['US10'].replace(0.0, np.nan)
-gross_std = gross.std()
-daily_returns_cost = annual_sr * gross_std / 16
-net_returns = pd.DataFrame((gross[rule] + daily_returns_cost[rule]) for rule in rules).transpose()
+annual_sr = c(lambda i: calc_annual_sr(i, gross_rule, cost_rule, rule_raw_turnover))
 
+def calc_net_rule_for_forecast_weights(instr, gross_rule, annual_sr):
+    gross = gross_rule.loc[instr].replace(0.0, np.nan)
+    gross_std = gross.std()
+    daily_returns_cost = annual_sr[instr] * gross_std / 16
+    net_rule_fw = pd.DataFrame((gross[rule] + daily_returns_cost[rule]) for rule in rules).transpose()
+    return net_rule_fw
+
+net_rule_fw = m(lambda i: calc_net_rule_for_forecast_weights(i, gross_rule, annual_sr))
 
 forecast_weights = calc_forecast_weights(net_rule)
 forcast_div_mult = calc_div_mult_daily(forecast_weights, forecast_rule)
