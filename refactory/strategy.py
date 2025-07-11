@@ -76,13 +76,12 @@ _raw_price = raw_price_.loc['US10']
 _price = price_.loc['US10']
 _price_pnl = price_.loc['US10'].diff()
 
-_forecast = forecast_rule.loc['US10']['ewmac32']
-
-_position_target = vol_scalar_.loc['US10']
-_position = position_rule.loc['US10']['ewmac32']
-_gross = gross_rule.loc['US10']['ewmac32']
-_cost = cost_rule.loc['US10']['ewmac32']
-_net = net_rule.loc['US10']['ewmac32']
+_vol_scalar = vol_scalar_.loc['US10']
+_rule_forecast = forecast_rule.loc['US10']['ewmac32']
+_rule_position = position_rule.loc['US10']['ewmac32']
+_rule_gross = gross_rule.loc['US10']['ewmac32']
+_rule_cost = cost_rule.loc['US10']['ewmac32']
+_rule_net = net_rule.loc['US10']['ewmac32']
 
 # print(_net)
 
