@@ -2,7 +2,7 @@ import datetime
 
 import pandas as pd
 
-from refactory.base import calc_fill_cost
+from refactory.base import calc_cost_of_fill
 
 
 def calc_cost(position, price, info, include_slippage=True):
@@ -10,7 +10,7 @@ def calc_cost(position, price, info, include_slippage=True):
     all_fills = calc_all_fills(position, price, rolls_per_year)
 
     all_fills['cost'] = -all_fills.apply(
-        lambda row: calc_fill_cost(row['price'], row['quantity'], info, include_slippage), axis=1)
+        lambda row: calc_cost_of_fill(row['price'], row['quantity'], info, include_slippage), axis=1)
     fill_cost = pd.Series(all_fills['cost'].values, index=all_fills['date']).sort_index()
     raw_costs = fill_cost.groupby(fill_cost.index).sum()
 

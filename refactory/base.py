@@ -22,11 +22,7 @@ def calc_gross_pnl(position, price, point_size):
 
 
 def calc_net_pnl(gross_pnl, daily_costs):
-    # daily_cost_sr = cost_SR / 16
-    # daily_cost = (daily_cost_sr * gross_pnl.std()).item()
-    # net_pnl_rule = gross_pnl + cost_SR
-    net_pnl_rule = gross_pnl.add(daily_costs, fill_value=0)
-    return net_pnl_rule
+    return gross_pnl.add(daily_costs, fill_value=0)
 
 
 def calc_vol_scalar(price, point_size, capital=500000, risk_target=0.16):
@@ -42,18 +38,17 @@ def calc_vol_scalar(price, point_size, capital=500000, risk_target=0.16):
     return position_target
 
 
-# FIXME:待整理，放到前面去
 def combine_forecast(forecast, forecast_weights, forcast_div_mult):
     combined_forecast = ((forecast_weights * forecast).sum(axis=1) * forcast_div_mult).clip(20, -20)
     return combined_forecast
 
 
-def trans_buffered_position(position_raw, vol_scalar, buffer_size=0.10, trade_to_edge=True):
+def trans_buffered_position(position, vol_scalar, buffer_size=0.10, trade_to_edge=True):
     # vol_scalar 的另一种理解是Avg pos of the subsystem level，就是说position 可以在avg pos的10% 区间内浮动
     buffer = vol_scalar * buffer_size
-    top = (position_raw + buffer).ffill().round()
-    bottom = (position_raw - buffer).ffill().round()
-    position = position_raw.ffill().round()
+    top = (position + buffer).ffill().round()
+    bottom = (position - buffer).ffill().round()
+    position = position.ffill().round()
 
     last = 0.0
     buffered_position_list = []
@@ -73,7 +68,7 @@ def adjust_by_buffer(last, current, top, bottom, trade_to_edge=True):
         return last if (bottom <= last <= top) else current  # 如果在buffer内则不调仓
 
 
-def calc_fill_cost(price, quantity, info, include_slippage=True):
+def calc_cost_of_fill(price, quantity, info, include_slippage=True):
     commission_costs = calc_commission(price, quantity, info)
     slippage_costs = calc_slippage(quantity, info) if include_slippage else 0
     total_cost = slippage_costs + commission_costs
@@ -99,23 +94,3 @@ def calc_slippage(quantity, info):
     point_size = info['point_size']
     slippage_ = (abs(quantity) * point_size * slippage)
     return slippage_
-
-# def calc_volatility_scalar1(raw_price, price, block_move_value, capital=500000, risk_target=0.25, vol_mult=1.0):
-#     # raw_price, price = raw_price.align(price, join="inner")
-#     # raw_price.ffill(inplace=True)
-#     # price.ffill(inplace=True)
-#
-#     pnl_vol = vol_mult * calc_mixed_volatility(price.diff(), slow_vol_years=10)
-#     vol_percent = 100.0 * (pnl_vol / raw_price.abs())
-#
-#     block_value = block_move_value * raw_price * 0.01
-#     block_value, vol_percent = block_value.align(vol_percent, join="inner")
-#
-#     currency_vol = block_value * vol_percent
-#
-#     daily_currency_vol_target = capital * (risk_target / 16)
-#     volatility_scalar = daily_currency_vol_target / currency_vol
-#
-#     volatility_scalar.ffill(inplace=True)
-#
-#     return volatility_scalar

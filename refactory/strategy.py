@@ -42,7 +42,6 @@ def c(func, instruments=instruments):
 
 # -------------------------------------------------------------------------------------------------------------------
 
-
 info_ = get_instrument_info().loc[instruments]
 size_ = info_['point_size']
 price_ = m(get_price)
@@ -70,6 +69,7 @@ cost_inst = c(lambda i: calc_cost(position_inst[i], price_.loc[i], info_.loc[i])
 subsystem_turnover_ = {i: calc_subsystem_turnover(position_inst[i], price_.loc[i], size_.loc[i])
                        for i in instruments}
 
+# TODO: 为什么是mean？
 net_inst = pd.DataFrame({inst: gross_inst[inst] + cost_inst[inst].mean() for inst in instruments})
 portfolio_weights = calc_portfolio_weights(net_inst, position_inst)
 print(portfolio_weights)

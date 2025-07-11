@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from refactory.base import calc_fill_cost
+from refactory.base import calc_cost_of_fill
 from refactory.utils import calc_mixed_volatility
 
 
@@ -61,7 +61,7 @@ def calc_cost_per(price, info, notional_blocks_traded):
     blocks = notional_blocks_traded
     # 过去一年的均价
     average_price = float(price[price.index[-1] - pd.DateOffset(years=1):].mean())
-    return calc_fill_cost(average_price, blocks, info)
+    return calc_cost_of_fill(average_price, blocks, info)
 
 
 def calc_ann_vol(price, point_size):
