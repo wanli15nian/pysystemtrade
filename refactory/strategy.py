@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 
 from refactory.base import calc_gross_pnl, calc_net_pnl, calc_position, combine_forecast
 from refactory.base import calc_vol_scalar
@@ -6,7 +7,8 @@ from refactory.cost_actual import calc_cost_actual
 from refactory.cost_estimated import calc_cost_estimated
 from refactory.data_source import get_instrument_info, get_price, get_raw_price
 from refactory.forecast import ewmac, rescale_forecast, floor_vol, price_vol
-from refactory.turnover import calc_turnover, estimate_turnover
+from refactory.turnover import calc_turnover, estimate_turnover, \
+    calc_annual_turnover
 from refactory.weights_forecast import calc_forecast_weights, calc_div_mult_daily
 from refactory.weights_portfolio import calc_portfolio_weights
 
@@ -15,6 +17,7 @@ from refactory.weights_portfolio import calc_portfolio_weights
 
 risk_target = 0.16
 instruments = ["US10", "SOFR", "CORN", "SP500_micro"]
+rules = ['ewmac32', 'ewmac8']
 
 
 def calc_forecasts(price):
@@ -66,7 +69,22 @@ def calc_annual_sr(gross, costs):
     annual_sr = 16 * daily_avg_costs / daily_return_std
     return annual_sr
 
-annual_sr = calc_annual_sr(gross_rule.loc['US10'], cost_rule.loc['US10'])
+def calc_rule_avg_turnover(raw_turnover, rule):
+    raw_turnover_ = raw_turnover.droplevel('instrument')
+    rule_avg_turnover = raw_turnover_.loc[rule].mean()
+    return rule_avg_turnover
+
+raw_annual_sr = calc_annual_sr(gross_rule.loc['US10'], cost_rule.loc['US10'])
+cost_multiplier = 2.0
+raw_turnover = m(lambda i: calc_annual_turnover(forecast_rule.loc[i]))
+rule_avg_turnover = pd.Series((calc_rule_avg_turnover(raw_turnover, rule) for rule in rules), index=rules)
+pooled_turnover_costs = ((raw_annual_sr / raw_turnover.loc['US10']) * rule_avg_turnover)
+annual_sr = pooled_turnover_costs * cost_multiplier
+gross = gross_rule.loc['US10'].replace(0.0, np.nan)
+gross_std = gross.std()
+daily_returns_cost = annual_sr * gross_std / 16
+
+net_returns = pd.DataFrame((gross[rule] + daily_returns_cost[rule]) for rule in rules).transpose()
 
 
 forecast_weights = calc_forecast_weights(net_rule)
