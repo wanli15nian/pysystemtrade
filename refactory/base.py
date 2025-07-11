@@ -28,10 +28,11 @@ def calc_gross_pnl(position, price, point_size):
     return pnl
 
 
-def calc_net_pnl(gross_pnl, cost_SR):
-    daily_cost_sr = cost_SR / 16
-    daily_cost = (daily_cost_sr * gross_pnl.std()).item()
-    net_pnl_rule = gross_pnl + daily_cost
+def calc_net_pnl(gross_pnl, daily_costs):
+    # daily_cost_sr = cost_SR / 16
+    # daily_cost = (daily_cost_sr * gross_pnl.std()).item()
+    # net_pnl_rule = gross_pnl + cost_SR
+    net_pnl_rule = gross_pnl.add(daily_costs, fill_value=0)
     return net_pnl_rule
 
 

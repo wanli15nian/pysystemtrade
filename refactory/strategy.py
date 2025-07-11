@@ -77,9 +77,9 @@ cost_sr_list = (
 # cost_sr_ = pd.DataFrame(cost_sr_list, index=instruments, columns=gross_.columns)
 cost_sr_ = pd.concat(cost_sr_list, keys=instruments, names=['instruments', 'datetime'])
 
-def calc_net_pnl_rules(gross_pnl, cost_SR_dict):
+def calc_net_pnl_rules(gross_pnl, daily_cost_df):
     return pd.DataFrame({
-        column_name: calc_net_pnl(gross_pnl[column_name], cost_SR_dict[column_name])
+        column_name: calc_net_pnl(gross_pnl[column_name], daily_cost_df[column_name])
         for column_name in gross_pnl.columns
     })
 
