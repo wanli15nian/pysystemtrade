@@ -6,10 +6,15 @@ import pandas as pd
 from refactory.utils import optimisation
 
 
-# TODO: stack这种傻办法需要改成直接用multiIndex做
-def calc_portfolio_weights(net_return_raw, positions, target_sr=0.5):
-    net_weekly = net_return_raw.resample('W').sum()
+def calc_portfolio_weights(net_, positions, target_sr=0.5):
+    # FIXME: 应该是按照一个周期(如按周)滚动计算weights，作为未来一个周期的weights
+    weights = calc_instrument_weights(net_, target_sr)
+    position_weights = calc_position_weights(positions, weights)
+    return position_weights
 
+
+def calc_instrument_weights(net_, target_sr=0.5):
+    net_weekly = net_.resample('W').sum()
     std_annual = net_weekly.ewm(span=50000, min_periods=5).std().iloc[-1] * (365.25 / 7.0) ** 0.5
     std_mean = std_annual.mean()
     norm_std = [std_mean] * len(std_annual)
@@ -17,29 +22,8 @@ def calc_portfolio_weights(net_return_raw, positions, target_sr=0.5):
 
     corr_matrix = calc_corr_matrix(net_weekly).values
     shrunk_corr = shrink_corr_matrix(corr_matrix)
-
     weights = optimisation(corr=shrunk_corr, norm_mean=norm_mean, norm_stdev=norm_std)
-
-    positions[(~positions.isna()).sum(axis=1) == 0] = 0
-
-    instruments = net_weekly.columns.to_list()
-    start = net_weekly.index[0]
-    weights_df = pd.DataFrame({asset_name: weight for (asset_name, weight) in zip(instruments, weights)},
-                              index=[start])
-
-    instrument_weights = weights_df.reindex(positions.index, method="ffill")
-    instrument_weights[np.isnan(positions)] = 0.0
-    daily_unsmoothed_instr_weights = instrument_weights.resample('1B').mean()
-    smoothed_instr_weights = daily_unsmoothed_instr_weights.ewm(span=125).mean()
-
-    sum_weights = smoothed_instr_weights.sum(axis=1)
-    sum_weights[(sum_weights == 0.0)] = 0.0001  ## avoid Inf
-    normalised_weights_np = (np.array([(1.0 / sum_weights)] * len(smoothed_instr_weights.columns)).transpose()
-                             * smoothed_instr_weights.values)
-    normalised_weights = pd.DataFrame(normalised_weights_np, columns=smoothed_instr_weights.columns,
-                                      index=smoothed_instr_weights.index)
-
-    return normalised_weights
+    return weights
 
 
 def calc_corr_matrix(net, span=500000, min_periods=10):
@@ -61,3 +45,16 @@ def shrink_corr_matrix(corr_matrix, shrunk_rate=0.5):
 
     shrunk_corr = shrunk_rate * avg_matrix + (1 - shrunk_rate) * corr_matrix
     return shrunk_corr
+
+
+def calc_position_weights(positions, weights):
+    # 有些instrument在一段时间不能交易，需要把权重调成0，再平滑，再做归一化
+    positions[(~positions.isna()).sum(axis=1) == 0] = 0  # 这是什么意思？
+    weights_raw = (pd.DataFrame([weights], columns=positions.columns.to_list(), index=[positions.index[0]])
+                   .reindex(positions.index, method="ffill"))
+    weights_raw[np.isnan(positions)] = 0.0  # 把不能交易的instrument的权重设为0
+    weights_daily_raw = weights_raw.resample('1B').mean()  # 意味着position可以是分钟频率的
+    weights_daily = weights_daily_raw.ewm(span=125).mean()  # 平滑，防止权重突变
+    sum_weights = weights_daily.sum(axis=1).replace(0.0, 0.0001)
+    weights_normalised = weights_daily.div(sum_weights)
+    return weights_normalised
