@@ -62,7 +62,7 @@ net_rule = calc_net_pnl(gross_rule, cost_rule)
 
 print('calculate pnl for instrument and rule')
 
-def calc_annual_sr(gross, costs):
+def calc_raw_annual_sr(gross, costs):
     gross.replace(0.0, pd.NA, inplace=True)
     daily_avg_costs = costs.mean()
     daily_return_std = gross.std()
@@ -74,16 +74,20 @@ def calc_rule_avg_turnover(raw_turnover, rule):
     rule_avg_turnover = raw_turnover_.loc[rule].mean()
     return rule_avg_turnover
 
-raw_annual_sr = calc_annual_sr(gross_rule.loc['US10'], cost_rule.loc['US10'])
 cost_multiplier = 2.0
-raw_turnover = m(lambda i: calc_annual_turnover(forecast_rule.loc[i]))
-rule_avg_turnover = pd.Series((calc_rule_avg_turnover(raw_turnover, rule) for rule in rules), index=rules)
-pooled_turnover_costs = ((raw_annual_sr / raw_turnover.loc['US10']) * rule_avg_turnover)
-annual_sr = pooled_turnover_costs * cost_multiplier
+rule_raw_turnover = m(lambda i: calc_annual_turnover(forecast_rule.loc[i]))
+
+def calc_annual_sr(instr, gross_rule, cost_rule, rule_raw_turnover, cost_multiplier=2):
+    rule_avg_turnover = pd.Series((calc_rule_avg_turnover(rule_raw_turnover, rule) for rule in rules), index=rules)
+    raw_annual_sr = calc_raw_annual_sr(gross_rule.loc[instr], cost_rule.loc[instr])
+    pooled_turnover_costs = ((raw_annual_sr / rule_raw_turnover.loc[instr]) * rule_avg_turnover)
+    annual_sr = pooled_turnover_costs * cost_multiplier
+    return annual_sr
+
+annual_sr = calc_annual_sr('US10', gross_rule, cost_rule, rule_raw_turnover)
 gross = gross_rule.loc['US10'].replace(0.0, np.nan)
 gross_std = gross.std()
 daily_returns_cost = annual_sr * gross_std / 16
-
 net_returns = pd.DataFrame((gross[rule] + daily_returns_cost[rule]) for rule in rules).transpose()
 
 
