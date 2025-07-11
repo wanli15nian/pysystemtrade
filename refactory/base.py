@@ -40,7 +40,7 @@ def calc_volatility_scalar(price, point_size, capital=500000, annual_risk_target
     return position_target
 
 
-def calc_buffered_position(position_raw, vol_scalar, buffer_size=0.10, trade_to_edge=True):
+def trans_buffered_position(position_raw, vol_scalar, buffer_size=0.10, trade_to_edge=True):
     # vol_scalar 的另一种理解是Avg pos of the subsystem level，就是说position 可以在avg pos的10% 区间内浮动
     buffer = vol_scalar * buffer_size
     top = (position_raw + buffer).ffill().round()
@@ -92,6 +92,7 @@ def calc_slippage(quantity, info):
     slippage_ = (abs(quantity) * point_size * slippage)
     return slippage_
 
+
 # def calc_volatility_scalar1(raw_price, price, block_move_value, capital=500000, risk_target=0.25, vol_mult=1.0):
 #     # raw_price, price = raw_price.align(price, join="inner")
 #     # raw_price.ffill(inplace=True)
@@ -111,3 +112,16 @@ def calc_slippage(quantity, info):
 #     volatility_scalar.ffill(inplace=True)
 #
 #     return volatility_scalar
+
+
+# FIXME:待整理，放到前面去
+def combine_forecast(forecast, forecast_weights, forcast_div_mult):
+    combined_forecast = ((forecast_weights * forecast).sum(axis=1) * forcast_div_mult).clip(20, -20)
+    return combined_forecast
+
+
+def calc_position_buffered(combined_forecast, vol_scalar):
+    subsystem_position_raw = vol_scalar * combined_forecast / 10.0
+    subsystem_position_buffered = trans_buffered_position(subsystem_position_raw, vol_scalar, 0.10)
+    position = subsystem_position_buffered.shift(1).ffill()
+    return position

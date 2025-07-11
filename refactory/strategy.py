@@ -1,7 +1,6 @@
 import pandas as pd
 
-from refactory.base import calc_gross_pnl, calc_net_pnl, calc_buffered_position, \
-    calc_position
+from refactory.base import calc_gross_pnl, calc_net_pnl, calc_position, combine_forecast, calc_position_buffered
 from refactory.base import calc_volatility_scalar
 from refactory.combine_forecast import calc_weights_daily, calc_div_mult_daily
 from refactory.cost import calc_cost
@@ -80,21 +79,25 @@ print('calculate pnl for instrument and rule')
 forecast_weights = calc_weights_daily(net_)
 forcast_div_mult = calc_div_mult_daily(forecast_weights, forecast_)
 
+forecast_inst = m(lambda i: combine_forecast(forecast_.loc[i], forecast_weights, forcast_div_mult))
+position_inst = m(lambda i: calc_position_buffered(forecast_inst.loc[i], vol_scalar_.loc[i]))
+gross_inst = m(lambda i: calc_gross_pnl(position_inst.loc[i], price_.loc[i], size_.loc[i]))
+cost_inst = m(lambda i: calc_cost(position_inst.loc[i], price_.loc[i], info_.loc[i]))
+
 subsystem_positions_dict = {}
 gross_dict = {}
 costs_dict = {}
+
 for instrument in instruments:
     info = info_.loc[instrument]
     point_size = size_[instrument]
 
     price = price_.loc[instrument]
     forecast = forecast_.loc[instrument]
-    vol_scalar = calc_volatility_scalar(price, point_size, 10000000, risk_target)
+    vol_scalar = vol_scalar_.loc[instrument]
 
-    combined_forecast = ((forecast_weights * forecast).sum(axis=1) * forcast_div_mult).clip(20, -20)
-    subsystem_position_raw = vol_scalar * combined_forecast / 10.0
-    subsystem_position_buffered = calc_buffered_position(subsystem_position_raw, vol_scalar, 0.10)
-    position = subsystem_position_buffered.shift(1)
+    combined_forecast = combine_forecast(forecast, forecast_weights, forcast_div_mult)
+    position = calc_position_buffered(combined_forecast, vol_scalar)
     gross_pnl = calc_gross_pnl(position, price, point_size)
     normalised_costs = calc_cost(position, price, info)
 
@@ -103,7 +106,7 @@ for instrument in instruments:
     subsystem_positions_dict[instrument] = position
     print('calc_pnl_across_subsytem_for_indiv_instr')
 
-subsystem_positions = pd.DataFrame(subsystem_positions_dict).ffill()
+subsystem_positions = pd.DataFrame(subsystem_positions_dict)
 gross_pnl_df = pd.DataFrame(gross_dict)
 cost_df = pd.DataFrame(costs_dict)
 
