@@ -63,21 +63,15 @@ average_turnover_ = turnover_.apply(np.nanmean)
 turnover_weight = calc_turnover_weights(forecast_)
 weighted_turnover_ = turnover_.apply(lambda x: calc_weighted_turnover(turnover_weight, x))
 
-daily_cost_list = (
-    pd.DataFrame({rule: calc_rule_daily_cost(weighted_turnover_[rule], price_.loc[i], target_.loc[i], info_.loc[i])
-                  for rule in (weighted_turnover_.index.to_list())}
-                 ) for i in instruments)
+daily_cost_list = [
+    pd.DataFrame({r: calc_rule_daily_cost(weighted_turnover_[r], price_.loc[i], target_.loc[i], info_.loc[i])
+                  for r in (weighted_turnover_.index.to_list())})
+    for i in instruments]
 cost_ = pd.concat(daily_cost_list, keys=instruments, names=['instruments', 'datetime'])
 
-
-def calc_net_pnl_rules(gross_pnl, daily_cost_df):
-    return pd.DataFrame({
-        column_name: calc_net_pnl(gross_pnl[column_name], daily_cost_df[column_name])
-        for column_name in gross_pnl.columns
-    })
-
-
-net_list = [calc_net_pnl_rules(gross_.loc[i], cost_.loc[i]) for i in instruments]
+net_list = [pd.DataFrame({r: calc_net_pnl(gross_.loc[i][r], cost_.loc[i][r])
+                          for r in gross_.loc[i].columns})
+            for i in instruments]
 net_ = pd.concat(net_list, keys=instruments, names=['instrument', 'datetime'])
 
 print('calculate pnl for instrument and rule')
