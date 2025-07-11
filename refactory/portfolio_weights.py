@@ -17,11 +17,10 @@ def calc_portfolio_weights(net_return_raw, positions, target_sr=0.5):
     # norm_std = [std_mean] * len(net_std_annual)
     # mean_list = [target_sr * std_mean] * len(net_std_annual)
 
-    corr_matrix_df = calc_corr_matrix(net_weekly)
+    corr_matrix = calc_corr_matrix(net_weekly).values
+    shrunk_corr = shrink_corr_matrix(corr_matrix)
 
-    shrunk_corr_values = shrink_corr_matrix(corr_matrix_df)
-
-    weights = optimisation(corr=shrunk_corr_values, norm_mean=mean_list, norm_stdev=norm_std)
+    weights = optimisation(corr=shrunk_corr, norm_mean=mean_list, norm_stdev=norm_std)
 
     instruments = net_weekly.columns.to_list()
     start = net_weekly.index[0]
@@ -35,20 +34,14 @@ def calc_portfolio_weights(net_return_raw, positions, target_sr=0.5):
     return normalised_weights
 
 
-def shrink_corr_matrix(corr_matrix_df):
-    corr_matrx_values = corr_matrix_df.values
-    new_corr_values = copy(corr_matrx_values)
+def shrink_corr_matrix(corr_matrix):
+    new_corr_values = copy(corr_matrix)
     np.fill_diagonal(new_corr_values, np.nan)
     avg_corr = np.nanmean(new_corr_values)
-    ins = corr_matrix_df.columns
-    n = len(ins)
-    corr_matrix = np.full((n, n), avg_corr)  # Fill entire matrix with avg_corr
-    np.fill_diagonal(corr_matrix, 1.0)  # Set diagonals to 1.0
-    avg_corr_matrix = pd.DataFrame(corr_matrix, index=ins, columns=ins)
-    shrunk_corr_without_columns = (
-            0.5 * avg_corr_matrix.values + (1 - 0.5) * corr_matrx_values)
-    shrunk_corr_values = pd.DataFrame(shrunk_corr_without_columns, columns=ins, index=ins).values
-    return shrunk_corr_values
+    avg_matrix = np.full(corr_matrix.shape, avg_corr)
+    np.fill_diagonal(avg_matrix, 1.0)
+    shrunk_corr = 0.5 * avg_matrix + (1 - 0.5) * corr_matrix
+    return shrunk_corr
 
 
 def calc_corr_matrix(net, span=500000, min_periods=10):
