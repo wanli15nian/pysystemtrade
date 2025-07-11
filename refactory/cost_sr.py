@@ -31,6 +31,7 @@ def calc_rule_daily_cost(turnover_annual, average_turnover, weighted_turnover, p
     cost_sr_annual = 16 * (cost_daily_mean / pnl_vol_daily)
     # 计算平均年夏普成本
     cost_sr = cost_sr_annual * (average_turnover / turnover_annual) * 2
+
     return cost_daily
 
 
