@@ -89,9 +89,9 @@ for instrument in instruments:
 
     price = price_.loc[instrument]
     forecast = forecast_.loc[instrument]
+    vol_scalar = calc_volatility_scalar(price, point_size, 10000000, risk_target)
 
     combined_forecast = ((forecast_weights * forecast).sum(axis=1) * forcast_div_mult).clip(20, -20)
-    vol_scalar = calc_volatility_scalar(price, point_size, 500000, risk_target)
     subsystem_position_raw = vol_scalar * combined_forecast / 10.0
     subsystem_position_buffered = calc_buffered_position(subsystem_position_raw, vol_scalar, 0.10)
     position = subsystem_position_buffered.shift(1)
@@ -130,4 +130,4 @@ _gross = gross_.loc['US10']['ewmac32']
 _cost = cost_.loc['US10']['ewmac32']
 _net = net_.loc['US10']['ewmac32']
 
-print(_net)
+# print(_net)
