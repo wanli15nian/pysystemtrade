@@ -17,7 +17,9 @@ def calc_portfolio_weights(net_return_raw, positions, target_sr=0.5):
     # norm_std = [std_mean] * len(net_std_annual)
     # mean_list = [target_sr * std_mean] * len(net_std_annual)
 
-    shrunk_corr_values = shrink_corr_matrix(net_weekly)
+    corr_matrix_df = calc_corr_matrix(net_weekly)
+
+    shrunk_corr_values = shrink_corr_matrix(corr_matrix_df)
 
     weights = optimisation(corr=shrunk_corr_values, norm_mean=mean_list, norm_stdev=norm_std)
 
@@ -33,8 +35,7 @@ def calc_portfolio_weights(net_return_raw, positions, target_sr=0.5):
     return normalised_weights
 
 
-def shrink_corr_matrix(net_weekly):
-    corr_matrix_df = calc_corr_matrix(net_weekly)
+def shrink_corr_matrix(corr_matrix_df):
     corr_matrx_values = corr_matrix_df.values
     new_corr_values = copy(corr_matrx_values)
     np.fill_diagonal(new_corr_values, np.nan)
