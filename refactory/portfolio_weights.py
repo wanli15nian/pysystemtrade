@@ -56,5 +56,5 @@ def calc_position_weights(positions, weights):
     weights_daily_raw = weights_raw.resample('1B').mean()  # 意味着position可以是分钟频率的
     weights_daily = weights_daily_raw.ewm(span=125).mean()  # 平滑，防止权重突变
     sum_weights = weights_daily.sum(axis=1).replace(0.0, 0.0001)
-    weights_normalised = weights_daily.div(sum_weights)
+    weights_normalised = weights_daily.div(sum_weights, axis=0)
     return weights_normalised
