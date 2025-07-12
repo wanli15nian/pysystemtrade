@@ -13,8 +13,16 @@ def calc_forecast_weights(net_):
 
     # net_weekly = net_.groupby([pd.Grouper(level=1, freq='W'), 'instrument']).sum()
     # net_weekly = net_weekly.droplevel('instrument')
-    net_weekly = net_.droplevel('instrument')
-    net_weekly.sort_index(ascending=True, inplace=True)
+    # net_weekly = net_.droplevel('instrument')
+    # net_weekly.sort_index(ascending=True, inplace=True)
+    # weekly_raw = net_.groupby(level=0).resample('W', level=1).sum()
+    # net_weekly = weekly_raw.unstack(level=0).stack(dropna=False).droplevel('instrument').sort_index(ascending=True)
+    net_weekly = (net_.groupby(level=0)
+                  .resample('W', level=1).sum()
+                  .unstack(level=0)
+                  .stack(dropna=False)
+                  .droplevel('instrument')
+                  .sort_index(ascending=True))
 
     # 计算年权重
     instruments_num = len(net_.index.levels[0])

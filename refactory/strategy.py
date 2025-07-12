@@ -84,20 +84,16 @@ def calc_net_rule_for_forecast_weights(gross, cost_sr):
 # net_rule_fw = m(lambda i: calc_net_rule_for_forecast_weights(gross_rule.loc[i], cost_sr_rule))
 net_rule_fw = m(lambda i: calc_net_rule_for_forecast_weights(gross_rule.loc[i], cost_sr_rule.loc[i]))
 
+# def get_aligned_net_rule_fw(net):
+#     net_weekly = net.groupby(level=0).apply(lambda g: g.droplevel(0).resample('W').sum())
+#     longest_index_instr = net_weekly.groupby(level=0).size().idxmax()
+#     longest_index = net_weekly.loc[longest_index_instr].index
+#     aligned_net_ = net_weekly.groupby(level=0).apply(lambda g: g.droplevel(0).reindex(longest_index))
+#     return aligned_net_
+# net_rule_fw = get_aligned_net_rule_fw(net_rule_fw)
 
-def get_aligned_net_rule_fw(net):
-    net_weekly = net.groupby(level=0).apply(lambda g: g.droplevel(0).resample('W').sum())
-    longest_index_instr = net_weekly.groupby(level=0).size().idxmax()
-    longest_index = net_weekly.loc[longest_index_instr].index
-    aligned_net_ = net_weekly.groupby(level=0).apply(lambda g: g.droplevel(0).reindex(longest_index))
-    return aligned_net_
-
-
-# FIXME: 为什么要对齐成最长的index
-net_rule_fw = get_aligned_net_rule_fw(net_rule_fw)
-
-print(net_rule_fw)
 forecast_weights = calc_forecast_weights(net_rule_fw)
+
 forcast_div_mult = calc_div_mult_daily(forecast_weights, forecast_rule)
 forecast_inst = c(lambda i: combine_forecast(forecast_rule.loc[i], forecast_weights, forcast_div_mult))
 position_inst = c(lambda i: calc_position(forecast_inst[i], vol_scalar_.loc[i], buffer_size=0.10))
