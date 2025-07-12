@@ -15,15 +15,18 @@ def calc_turnover(position, vol_scalar, smooth_days: int = 250) -> float:
     return turnover_yearly
 
 
-def estimate_turnover(forecast_):
-    turnover_func = lambda x: x.reset_index(level='instrument', drop=True).apply(calc_annual_turnover)
-    turnover_ = forecast_.groupby(level='instrument').apply(turnover_func)
-
+def estimate_weighted_turnover(forecast_):
+    turnover_full = estimate_turnover_annual(forecast_)
     forecast_length = forecast_.groupby('instrument').apply(len).to_list()  # 用历史数据的多少来决定每个instrument的权重
     turnover_weight = [l / sum(forecast_length) for l in forecast_length]
+    weighted_turnover = turnover_full.apply(lambda x: calc_weighted_turnover(turnover_weight, x))
+    return weighted_turnover
 
-    weighted_turnover_ = turnover_.apply(lambda x: calc_weighted_turnover(turnover_weight, x))
-    return weighted_turnover_
+
+def estimate_turnover_annual(forecast_):
+    turnover_func = lambda x: x.reset_index(level='instrument', drop=True).apply(calc_annual_turnover)
+    turnover_ = forecast_.groupby(level='instrument').apply(turnover_func)
+    return turnover_
 
 
 def calc_annual_turnover(forecast, forecast_scalling=10.0):

@@ -1,5 +1,5 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
 
 from refactory.base import calc_gross_pnl, calc_net_pnl, calc_position, combine_forecast
 from refactory.base import calc_vol_scalar
@@ -7,8 +7,7 @@ from refactory.cost_actual import calc_cost_actual
 from refactory.cost_estimated import calc_cost_estimated
 from refactory.data_source import get_instrument_info, get_price, get_raw_price
 from refactory.forecast import ewmac, rescale_forecast, floor_vol, price_vol
-from refactory.turnover import calc_turnover, estimate_turnover, \
-    calc_annual_turnover
+from refactory.turnover import calc_turnover, calc_annual_turnover, estimate_weighted_turnover
 from refactory.weights_forecast import calc_forecast_weights, calc_div_mult_daily
 from refactory.weights_portfolio import calc_portfolio_weights
 
@@ -56,11 +55,12 @@ vol_scalar_ = m(lambda i: calc_vol_scalar(price_.loc[i], size_.loc[i], capital=1
 forecast_rule = m(lambda i: calc_forecasts(price_.loc[i]))
 position_rule = m(lambda i: calc_position(forecast_rule.loc[i], vol_scalar_.loc[i]))
 gross_rule = m(lambda i: calc_gross_pnl(position_rule.loc[i], price_.loc[i], size_.loc[i]))
-turnover_estimated = estimate_turnover(forecast_rule)
-cost_rule = m(lambda i: calc_cost_estimated(price_.loc[i], turnover_estimated, vol_scalar_.loc[i], info_.loc[i]))
+turnover_weighted = estimate_weighted_turnover(forecast_rule)
+cost_rule = m(lambda i: calc_cost_estimated(price_.loc[i], turnover_weighted, vol_scalar_.loc[i], info_.loc[i]))
 net_rule = calc_net_pnl(gross_rule, cost_rule)
 
 print('calculate pnl for instrument and rule')
+
 
 def calc_raw_annual_sr(gross, costs):
     gross.replace(0.0, pd.NA, inplace=True)
@@ -69,13 +69,12 @@ def calc_raw_annual_sr(gross, costs):
     annual_sr = 16 * daily_avg_costs / daily_return_std
     return annual_sr
 
+
 def calc_rule_avg_turnover(raw_turnover, rule):
     raw_turnover_ = raw_turnover.droplevel('instrument')
     rule_avg_turnover = raw_turnover_.loc[rule].mean()
     return rule_avg_turnover
 
-cost_multiplier = 2.0
-rule_raw_turnover = m(lambda i: calc_annual_turnover(forecast_rule.loc[i]))
 
 def calc_annual_sr(instr, gross_rule, cost_rule, rule_raw_turnover, cost_multiplier=2):
     rule_avg_turnover = pd.Series((calc_rule_avg_turnover(rule_raw_turnover, rule) for rule in rules), index=rules)
@@ -84,7 +83,7 @@ def calc_annual_sr(instr, gross_rule, cost_rule, rule_raw_turnover, cost_multipl
     annual_sr = pooled_turnover_costs * cost_multiplier
     return annual_sr
 
-annual_sr = calc_annual_sr('US10', gross_rule, cost_rule, rule_raw_turnover, cost_multiplier=2)
+
 def calc_net_rule_for_forecast_weights(instr, gross_rule, annual_sr):
     gross = gross_rule.loc[instr].replace(0.0, np.nan)
     gross_std = gross.std()
@@ -92,7 +91,6 @@ def calc_net_rule_for_forecast_weights(instr, gross_rule, annual_sr):
     net_rule_fw = pd.DataFrame((gross[rule] + daily_returns_cost[rule]) for rule in rules).transpose()
     return net_rule_fw
 
-net_rule_fw = m(lambda i: calc_net_rule_for_forecast_weights(i, gross_rule, annual_sr))
 
 def get_aligned_net_rule_fw(net_rule_fw):
     temp = net_rule_fw.groupby(level=0).apply(lambda g: g.droplevel(0).resample('W').sum())
@@ -101,7 +99,13 @@ def get_aligned_net_rule_fw(net_rule_fw):
     aligned_net_ = temp.groupby(level=0).apply(lambda g: g.droplevel(0).reindex(longest_index))
     return aligned_net_
 
+
+rule_raw_turnover = m(lambda i: calc_annual_turnover(forecast_rule.loc[i]))
+annual_sr = calc_annual_sr('US10', gross_rule, cost_rule, rule_raw_turnover, cost_multiplier=2)
+net_rule_fw = m(lambda i: calc_net_rule_for_forecast_weights(i, gross_rule, annual_sr))
 aligned_net_rule_fw = get_aligned_net_rule_fw(net_rule_fw)
+print(aligned_net_rule_fw)
+
 forecast_weights = calc_forecast_weights(aligned_net_rule_fw)
 forcast_div_mult = calc_div_mult_daily(forecast_weights, forecast_rule)
 forecast_inst = c(lambda i: combine_forecast(forecast_rule.loc[i], forecast_weights, forcast_div_mult))
@@ -114,7 +118,7 @@ subsystem_turnover_ = {i: calc_turnover(position_inst[i], vol_scalar_.loc[i]) fo
 # TODO: 为什么是mean？
 net_inst = pd.DataFrame({inst: gross_inst[inst] + cost_inst[inst].mean() for inst in instruments})
 portfolio_weights = calc_portfolio_weights(net_inst, position_inst)
-print(portfolio_weights)
+# print(portfolio_weights)
 
 print('calculate weightes for portfolio')
 
