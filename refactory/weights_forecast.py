@@ -11,8 +11,10 @@ def calc_forecast_weights(net_):
     # 计算年切分点
     end_list = get_end_list(net_.index.levels[1])
 
-    net_weekly = net_.groupby([pd.Grouper(level=1, freq='W'), 'instrument']).last()
-    net_weekly = net_weekly.droplevel('instrument')
+    # net_weekly = net_.groupby([pd.Grouper(level=1, freq='W'), 'instrument']).sum()
+    # net_weekly = net_weekly.droplevel('instrument')
+    net_weekly = net_.droplevel('instrument')
+    net_weekly.sort_index(ascending=True, inplace=True)
 
     # 计算年权重
     instruments_num = len(net_.index.levels[0])

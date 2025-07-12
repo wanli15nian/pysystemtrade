@@ -84,18 +84,25 @@ def calc_annual_sr(instr, gross_rule, cost_rule, rule_raw_turnover, cost_multipl
     annual_sr = pooled_turnover_costs * cost_multiplier
     return annual_sr
 
-annual_sr = c(lambda i: calc_annual_sr(i, gross_rule, cost_rule, rule_raw_turnover))
-
+annual_sr = calc_annual_sr('US10', gross_rule, cost_rule, rule_raw_turnover, cost_multiplier=2)
 def calc_net_rule_for_forecast_weights(instr, gross_rule, annual_sr):
     gross = gross_rule.loc[instr].replace(0.0, np.nan)
     gross_std = gross.std()
-    daily_returns_cost = annual_sr[instr] * gross_std / 16
+    daily_returns_cost = annual_sr * gross_std / 16
     net_rule_fw = pd.DataFrame((gross[rule] + daily_returns_cost[rule]) for rule in rules).transpose()
     return net_rule_fw
 
 net_rule_fw = m(lambda i: calc_net_rule_for_forecast_weights(i, gross_rule, annual_sr))
 
-forecast_weights = calc_forecast_weights(net_rule)
+def get_aligned_net_rule_fw(net_rule_fw):
+    temp = net_rule_fw.groupby(level=0).apply(lambda g: g.droplevel(0).resample('W').sum())
+    longest_index_instr = temp.groupby(level=0).size().idxmax()
+    longest_index = temp.loc[longest_index_instr].index
+    aligned_net_ = temp.groupby(level=0).apply(lambda g: g.droplevel(0).reindex(longest_index))
+    return aligned_net_
+
+aligned_net_rule_fw = get_aligned_net_rule_fw(net_rule_fw)
+forecast_weights = calc_forecast_weights(aligned_net_rule_fw)
 forcast_div_mult = calc_div_mult_daily(forecast_weights, forecast_rule)
 forecast_inst = c(lambda i: combine_forecast(forecast_rule.loc[i], forecast_weights, forcast_div_mult))
 position_inst = c(lambda i: calc_position(forecast_inst[i], vol_scalar_.loc[i], buffer_size=0.10))
