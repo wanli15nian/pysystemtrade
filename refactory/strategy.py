@@ -105,7 +105,7 @@ subsystem_turnover_ = {i: calc_turnover(position_inst[i], vol_scalar_.loc[i]) fo
 # TODO: 为什么是mean？
 net_inst = pd.DataFrame({inst: gross_inst[inst] + cost_inst[inst].mean() for inst in instruments})
 portfolio_weights = calc_portfolio_weights(net_inst, position_inst)
-# print(portfolio_weights)
+print(portfolio_weights)
 
 print('calculate weightes for portfolio')
 
