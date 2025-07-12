@@ -63,34 +63,18 @@ print('calculate pnl for instrument and rule')
 
 turnover_full = estimate_turnover_annual(forecast_rule)
 turnover_average = turnover_full.mean(axis=0)
-# FIXME:在这里只针对一个instrument计算是不对的
-# instr = 'US10'
-# gross = gross_rule.loc[instr]
-# cost = cost_rule.loc[instr]
-# turnover = turnover_full.loc[instr]
-# cost_sr_rule = calc_cost_sr_rule(gross, cost, turnover, turnover_average)
 cost_sr_rule = m(
     lambda i: calc_cost_sr_rule(gross_rule.loc[i], cost_rule.loc[i], turnover_full.loc[i], turnover_average))
 
 
-def calc_net_rule_for_forecast_weights(gross, cost_sr):
+def calc_net_rule(gross, cost_sr):
     gross = gross.replace(0.0, np.nan)
     vol = gross.std()
     cost_daily = cost_sr * (vol / 16)
-    # net_rule_fw = pd.DataFrame((gross[rule] + cost_daily[rule]) for rule in rules).transpose()
     return gross + cost_daily
 
 
-# net_rule_fw = m(lambda i: calc_net_rule_for_forecast_weights(gross_rule.loc[i], cost_sr_rule))
-net_rule_fw = m(lambda i: calc_net_rule_for_forecast_weights(gross_rule.loc[i], cost_sr_rule.loc[i]))
-
-# def get_aligned_net_rule_fw(net):
-#     net_weekly = net.groupby(level=0).apply(lambda g: g.droplevel(0).resample('W').sum())
-#     longest_index_instr = net_weekly.groupby(level=0).size().idxmax()
-#     longest_index = net_weekly.loc[longest_index_instr].index
-#     aligned_net_ = net_weekly.groupby(level=0).apply(lambda g: g.droplevel(0).reindex(longest_index))
-#     return aligned_net_
-# net_rule_fw = get_aligned_net_rule_fw(net_rule_fw)
+net_rule_fw = m(lambda i: calc_net_rule(gross_rule.loc[i], cost_sr_rule.loc[i]))
 
 forecast_weights = calc_forecast_weights(net_rule_fw)
 
