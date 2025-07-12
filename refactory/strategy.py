@@ -61,39 +61,44 @@ net_rule = calc_net_pnl(gross_rule, cost_rule)
 
 print('calculate pnl for instrument and rule')
 
-def calc_net_rule_for_forecast_weights(instr, gross_rule, annual_sr):
-    gross = gross_rule.loc[instr].replace(0.0, np.nan)
-    gross_std = gross.std()
-    daily_returns_cost = annual_sr * gross_std / 16
-    net_rule_fw = pd.DataFrame((gross[rule] + daily_returns_cost[rule]) for rule in rules).transpose()
-    return net_rule_fw
-
-
-def get_aligned_net_rule_fw(net_rule_fw):
-    temp = net_rule_fw.groupby(level=0).apply(lambda g: g.droplevel(0).resample('W').sum())
-    longest_index_instr = temp.groupby(level=0).size().idxmax()
-    longest_index = temp.loc[longest_index_instr].index
-    aligned_net_ = temp.groupby(level=0).apply(lambda g: g.droplevel(0).reindex(longest_index))
-    return aligned_net_
-
 
 def calc_cost_sr_rule(gorss, cost, turnover, turnover_average):
     gorss.replace(0.0, pd.NA, inplace=True)
-    daily_avg_costs = cost.mean()
-    daily_return_std = gorss.std()
-    raw_annual_sr = 16 * daily_avg_costs / daily_return_std
-    return (raw_annual_sr / turnover) * turnover_average * 2
+    costs_daily = cost.mean()
+    vol_daily = gorss.std()
+    cost_sr_daily = 16 * costs_daily / vol_daily
+    cost_sr_rule = (cost_sr_daily / turnover) * turnover_average * 2
+    return cost_sr_rule
 
 
 turnover_full = estimate_turnover_annual(forecast_rule)
 turnover_average = turnover_full.mean(axis=0)
 
-gorss = gross_rule.loc['US10']
-cost = cost_rule.loc['US10']
-turnover = turnover_full.loc['US10']
-annual_sr = calc_cost_sr_rule(gorss, cost, turnover, turnover_average)
+# FIXME:在这里直接针对一个instrument操作是不对的
+instr = 'US10'
+gross = gross_rule.loc[instr]
+cost = cost_rule.loc[instr]
+turnover = turnover_full.loc[instr]
+cost_sr_rule = calc_cost_sr_rule(gross, cost, turnover, turnover_average)
 
-net_rule_fw = m(lambda i: calc_net_rule_for_forecast_weights(i, gross_rule, annual_sr))
+
+def calc_net_rule_for_forecast_weights(gross, cost_sr):
+    gross = gross.replace(0.0, np.nan)
+    vol = gross.std()
+    cost_daily = cost_sr * (vol / 16)
+    # net_rule_fw = pd.DataFrame((gross[rule] + cost_daily[rule]) for rule in rules).transpose()
+    return gross + cost_daily
+
+
+def get_aligned_net_rule_fw(net):
+    net_weekly = net.groupby(level=0).apply(lambda g: g.droplevel(0).resample('W').sum())
+    longest_index_instr = net_weekly.groupby(level=0).size().idxmax()
+    longest_index = net_weekly.loc[longest_index_instr].index
+    aligned_net_ = net_weekly.groupby(level=0).apply(lambda g: g.droplevel(0).reindex(longest_index))
+    return aligned_net_
+
+
+net_rule_fw = m(lambda i: calc_net_rule_for_forecast_weights(gross_rule.loc[i], cost_sr_rule))
 aligned_net_rule_fw = get_aligned_net_rule_fw(net_rule_fw)
 print(aligned_net_rule_fw)
 
