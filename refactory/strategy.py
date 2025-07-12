@@ -4,7 +4,7 @@ import pandas as pd
 from refactory.base import calc_gross_pnl, calc_net_pnl, calc_position, combine_forecast
 from refactory.base import calc_vol_scalar
 from refactory.cost_actual import calc_cost_actual
-from refactory.cost_estimated import calc_cost_estimated
+from refactory.cost_estimated import calc_cost_estimated, calc_cost_sr_rule
 from refactory.data_source import get_instrument_info, get_price, get_raw_price
 from refactory.forecast import ewmac, rescale_forecast, floor_vol, price_vol
 from refactory.turnover import calc_turnover, estimate_weighted_turnover, estimate_turnover_annual
@@ -61,25 +61,16 @@ net_rule = calc_net_pnl(gross_rule, cost_rule)
 
 print('calculate pnl for instrument and rule')
 
-
-def calc_cost_sr_rule(gorss, cost, turnover, turnover_average):
-    gorss.replace(0.0, pd.NA, inplace=True)
-    costs_daily = cost.mean()
-    vol_daily = gorss.std()
-    cost_sr_daily = 16 * costs_daily / vol_daily
-    cost_sr_rule = (cost_sr_daily / turnover) * turnover_average * 2
-    return cost_sr_rule
-
-
 turnover_full = estimate_turnover_annual(forecast_rule)
 turnover_average = turnover_full.mean(axis=0)
-
-# FIXME:在这里直接针对一个instrument操作是不对的
-instr = 'US10'
-gross = gross_rule.loc[instr]
-cost = cost_rule.loc[instr]
-turnover = turnover_full.loc[instr]
-cost_sr_rule = calc_cost_sr_rule(gross, cost, turnover, turnover_average)
+# FIXME:在这里只针对一个instrument计算是不对的
+# instr = 'US10'
+# gross = gross_rule.loc[instr]
+# cost = cost_rule.loc[instr]
+# turnover = turnover_full.loc[instr]
+# cost_sr_rule = calc_cost_sr_rule(gross, cost, turnover, turnover_average)
+cost_sr_rule = m(
+    lambda i: calc_cost_sr_rule(gross_rule.loc[i], cost_rule.loc[i], turnover_full.loc[i], turnover_average))
 
 
 def calc_net_rule_for_forecast_weights(gross, cost_sr):
@@ -90,6 +81,10 @@ def calc_net_rule_for_forecast_weights(gross, cost_sr):
     return gross + cost_daily
 
 
+# net_rule_fw = m(lambda i: calc_net_rule_for_forecast_weights(gross_rule.loc[i], cost_sr_rule))
+net_rule_fw = m(lambda i: calc_net_rule_for_forecast_weights(gross_rule.loc[i], cost_sr_rule.loc[i]))
+
+
 def get_aligned_net_rule_fw(net):
     net_weekly = net.groupby(level=0).apply(lambda g: g.droplevel(0).resample('W').sum())
     longest_index_instr = net_weekly.groupby(level=0).size().idxmax()
@@ -98,11 +93,11 @@ def get_aligned_net_rule_fw(net):
     return aligned_net_
 
 
-net_rule_fw = m(lambda i: calc_net_rule_for_forecast_weights(gross_rule.loc[i], cost_sr_rule))
-aligned_net_rule_fw = get_aligned_net_rule_fw(net_rule_fw)
-print(aligned_net_rule_fw)
+# FIXME: 为什么要对齐成最长的index
+net_rule_fw = get_aligned_net_rule_fw(net_rule_fw)
 
-forecast_weights = calc_forecast_weights(aligned_net_rule_fw)
+print(net_rule_fw)
+forecast_weights = calc_forecast_weights(net_rule_fw)
 forcast_div_mult = calc_div_mult_daily(forecast_weights, forecast_rule)
 forecast_inst = c(lambda i: combine_forecast(forecast_rule.loc[i], forecast_weights, forcast_div_mult))
 position_inst = c(lambda i: calc_position(forecast_inst[i], vol_scalar_.loc[i], buffer_size=0.10))

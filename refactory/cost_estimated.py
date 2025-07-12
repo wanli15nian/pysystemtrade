@@ -48,7 +48,15 @@ def calc_cost_sr_per(price, info):
     cost_sr_per = average_cost / average_vol
     return cost_sr_per
 
-# FIXME 看看这些东西什么时候会被用上，目前处于无用状态
+
+def calc_cost_sr_rule(gorss, cost, turnover, turnover_average):
+    gorss.replace(0.0, pd.NA, inplace=True)
+    costs_daily = cost.mean()
+    vol_daily = gorss.std()
+    cost_sr_daily = 16 * costs_daily / vol_daily
+    cost_sr_rule = (cost_sr_daily / turnover) * turnover_average * 2
+    return cost_sr_rule
+
 # 计算日均成本
 # point_size = info['point_size']
 # interval_as_year = cost_annual.index.to_series().diff().dt.total_seconds() / (365.25 * 24 * 60 * 60)
