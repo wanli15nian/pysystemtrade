@@ -49,10 +49,10 @@ def calc_cost_sr_per(price, info):
     return cost_sr_per
 
 
-def calc_cost_sr_rule(grOss, cost, turnover, turnover_average):
-    grOss.replace(0.0, pd.NA, inplace=True)
+def calc_cost_sr_rule(gross, cost, turnover, turnover_average):
+    gross.replace(0.0, pd.NA, inplace=True)
     costs_daily = cost.mean()
-    vol_daily = grOss.std()
+    vol_daily = gross.std()
     cost_sr_daily = 16 * costs_daily / vol_daily
     cost_sr_rule = (cost_sr_daily / turnover) * turnover_average * 2
     return cost_sr_rule

@@ -40,6 +40,8 @@ def calc_forecast_weights(net_):
 
 def calc_forecast_weight_yearly(instr_num, pnl, fit_end, span_multiple=50000, min_periods_corr=10,
                                 min_periods_multiple=5):
+    sr_target = 0.5
+    shrinkage_sr = 0.9
     span = instr_num * span_multiple
 
     min_periods = instr_num * min_periods_corr
@@ -58,8 +60,9 @@ def calc_forecast_weight_yearly(instr_num, pnl, fit_end, span_multiple=50000, mi
     # 计算归一化标准差和归一化均值
     mean_std = np.nanmean(std)
     norm_std = [mean_std] * len(std)
-    norm_mean = mean * (mean_std / std)
 
+    norm_mean = sr_target * shrinkage_sr * std + (1 - shrinkage_sr) * mean
+    norm_mean = norm_mean * (mean_std / std)
     weights = optimisation(corr, norm_mean, norm_std)
     return weights
 

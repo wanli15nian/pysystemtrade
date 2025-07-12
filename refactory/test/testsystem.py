@@ -43,5 +43,7 @@ capped_forecast = my_system.forecastScaleCap.get_capped_forecast('US10', 'ewmac3
 gr = my_system.accounts.pandl_for_instrument_forecast('US10', 'ewmac32')
 print(gr.tail(5))
 
-# print(my_system.combForecast.get_forecast_weights("SOFR").mean())
+forecast_weights = my_system.combForecast.get_forecast_weights("US10")
+print(forecast_weights.mean())
+
 # print(my_system.combForecast.get_forecast_diversification_multiplier("SOFR").tail(5))

@@ -179,7 +179,7 @@ forecast_weight_estimate:
    frequency: "W"
    date_method: "expanding"
    rollyears: 20
-   method: handcraft
+   method: shrinkage
    cleaning: True
    equalise_SR: False
    ann_target_SR: 0.5
