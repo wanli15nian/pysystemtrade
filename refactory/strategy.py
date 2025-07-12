@@ -7,7 +7,7 @@ from refactory.cost_actual import calc_cost_actual
 from refactory.cost_estimated import calc_cost_estimated
 from refactory.data_source import get_instrument_info, get_price, get_raw_price
 from refactory.forecast import ewmac, rescale_forecast, floor_vol, price_vol
-from refactory.turnover import calc_turnover, calc_annual_turnover, estimate_weighted_turnover
+from refactory.turnover import calc_turnover, estimate_weighted_turnover, estimate_turnover_annual
 from refactory.weights_forecast import calc_forecast_weights, calc_div_mult_daily
 from refactory.weights_portfolio import calc_portfolio_weights
 
@@ -61,29 +61,6 @@ net_rule = calc_net_pnl(gross_rule, cost_rule)
 
 print('calculate pnl for instrument and rule')
 
-
-def calc_raw_annual_sr(gross, costs):
-    gross.replace(0.0, pd.NA, inplace=True)
-    daily_avg_costs = costs.mean()
-    daily_return_std = gross.std()
-    annual_sr = 16 * daily_avg_costs / daily_return_std
-    return annual_sr
-
-
-def calc_rule_avg_turnover(raw_turnover, rule):
-    raw_turnover_ = raw_turnover.droplevel('instrument')
-    rule_avg_turnover = raw_turnover_.loc[rule].mean()
-    return rule_avg_turnover
-
-
-def calc_annual_sr(instr, gross_rule, cost_rule, rule_raw_turnover, cost_multiplier=2):
-    rule_avg_turnover = pd.Series((calc_rule_avg_turnover(rule_raw_turnover, rule) for rule in rules), index=rules)
-    raw_annual_sr = calc_raw_annual_sr(gross_rule.loc[instr], cost_rule.loc[instr])
-    pooled_turnover_costs = ((raw_annual_sr / rule_raw_turnover.loc[instr]) * rule_avg_turnover)
-    annual_sr = pooled_turnover_costs * cost_multiplier
-    return annual_sr
-
-
 def calc_net_rule_for_forecast_weights(instr, gross_rule, annual_sr):
     gross = gross_rule.loc[instr].replace(0.0, np.nan)
     gross_std = gross.std()
@@ -100,8 +77,22 @@ def get_aligned_net_rule_fw(net_rule_fw):
     return aligned_net_
 
 
-rule_raw_turnover = m(lambda i: calc_annual_turnover(forecast_rule.loc[i]))
-annual_sr = calc_annual_sr('US10', gross_rule, cost_rule, rule_raw_turnover, cost_multiplier=2)
+def calc_cost_sr_rule(gorss, cost, turnover, turnover_average):
+    gorss.replace(0.0, pd.NA, inplace=True)
+    daily_avg_costs = cost.mean()
+    daily_return_std = gorss.std()
+    raw_annual_sr = 16 * daily_avg_costs / daily_return_std
+    return (raw_annual_sr / turnover) * turnover_average * 2
+
+
+turnover_full = estimate_turnover_annual(forecast_rule)
+turnover_average = turnover_full.mean(axis=0)
+
+gorss = gross_rule.loc['US10']
+cost = cost_rule.loc['US10']
+turnover = turnover_full.loc['US10']
+annual_sr = calc_cost_sr_rule(gorss, cost, turnover, turnover_average)
+
 net_rule_fw = m(lambda i: calc_net_rule_for_forecast_weights(i, gross_rule, annual_sr))
 aligned_net_rule_fw = get_aligned_net_rule_fw(net_rule_fw)
 print(aligned_net_rule_fw)
