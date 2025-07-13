@@ -86,7 +86,12 @@ def calc_forecast_corr_multi(forecast_, lookback=250, periods=20):
 
 
 def calc_forecast_corr(forecast_raw, lookback=250, periods=20):
-    forecast_weekly = forecast_raw.resample('W').last()
+    forecast_weekly = (forecast_raw.groupby(level=0)
+                  .resample('W', level=1).last()
+                  .unstack(level=0)
+                  .stack(dropna=False)
+                  .droplevel('instrument')
+                  .sort_index(ascending=True))
     corr_weekly = forecast_weekly.ewm(span=lookback, min_periods=periods, ignore_na=True).corr(pairwise=True)
     return corr_weekly
 
