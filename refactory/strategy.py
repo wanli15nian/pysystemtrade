@@ -64,15 +64,15 @@ turnover_full = estimate_turnover_annual(forecast_rule)
 turnover_average = turnover_full.mean(axis=0)
 
 
-def calc_forecast_weights_(gross, cost_sr):
+def calc_forecast_weights_(gross, cost_sr, index):
     net = calc_net_rule(gross, cost_sr)
-    forecast_weights = calc_forecast_weights(net)
+    forecast_weights = calc_forecast_weights(net, index)
     return forecast_weights
 
 
 cost_sr_rule = m(lambda i: calc_cost_sr_rule(gross_rule.loc[i], cost_rule.loc[i], turnover_full.loc[i],
                                              turnover_average))
-forecast_weights = m(lambda i: calc_forecast_weights_(gross_rule, cost_sr_rule[i]))
+forecast_weights = m(lambda i: calc_forecast_weights_(gross_rule, cost_sr_rule[i], gross_rule.loc[i].index))
 forecast_div_mult = m(lambda i: calc_div_mult_daily(forecast_weights.loc[i], forecast_rule.loc[i]))
 forecast_inst = c(lambda i: combine_forecast(forecast_rule.loc[i], forecast_weights.loc[i], forecast_div_mult.loc[i]))
 position_inst = c(lambda i: calc_position(forecast_inst[i], vol_scalar_.loc[i], buffer_size=0.10))
