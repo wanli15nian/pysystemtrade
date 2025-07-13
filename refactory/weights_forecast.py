@@ -67,28 +67,35 @@ def calc_forecast_weight_yearly(instr_num, pnl, fit_end, span_multiple=50000, mi
     return weights
 
 
-def calc_div_mult_daily(weights_daily, forecast_):
-    end_list = get_end_list(weights_daily.index)
-    corr_weekly = calc_forecast_corr(forecast_)
+def calc_div_mult_daily(weights, forecast):
+    end_list = get_end_list(weights.index)
+    corr_weekly = calc_forecast_corr(forecast)
     multiplier_yearly = pd.Series(
-        [calc_div_mult_yearly(weights_daily, corr_weekly, end) for end in end_list],
+        [calc_div_mult_yearly(weights, corr_weekly, end) for end in end_list],
         index=end_list)
-    multiplier_daily = multiplier_yearly.reindex(weights_daily.index, method="ffill").fillna(1.0).ewm(span=125).mean()
+    multiplier_daily = multiplier_yearly.reindex(weights.index, method="ffill").fillna(1.0).ewm(span=125).mean()
     return multiplier_daily
 
 
-def calc_forecast_corr(forecast_, lookback=250, periods=20):
-    forecast_weekly = forecast_.groupby([pd.Grouper(level=1, freq='W'), 'instrument']).last()
-    forecast_weekly = forecast_weekly.droplevel('instrument')
+def calc_forecast_corr_multi(forecast_, lookback=250, periods=20):
+    forecast_weekly = forecast_.groupby([pd.Grouper(level=1, freq='W'), 'instrument']).last().droplevel('instrument')
     instruments_num = len(forecast_.index.levels[0])
     corr_weekly = forecast_weekly.ewm(span=lookback * instruments_num, min_periods=periods * instruments_num,
                                       ignore_na=True).corr(pairwise=True)
     return corr_weekly
 
 
+def calc_forecast_corr(forecast_raw, lookback=250, periods=20):
+    forecast_weekly = forecast_raw.resample('W').last()
+    corr_weekly = forecast_weekly.ewm(span=lookback, min_periods=periods, ignore_na=True).corr(pairwise=True)
+    return corr_weekly
+
+
 def calc_div_mult_yearly(weights_daily, corr_weekly, end, dm_max=2.5):
     corr_matrix = corr_weekly[corr_weekly.index.get_level_values(0) <= end].tail(
         len(corr_weekly.columns)).values
+    if len(corr_matrix) == 0:
+        return 1.0
     weights = np.array(weights_daily[weights_daily.index <= end].iloc[-1])
     risk = np.sqrt(weights.dot(corr_matrix).dot(weights))
     risk = 1.0 if (np.isnan(risk) or risk < 1e-7) else risk

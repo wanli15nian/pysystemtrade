@@ -6,7 +6,7 @@ from refactory.cost_actual import calc_cost_actual
 from refactory.cost_estimated import calc_cost_estimated, calc_cost_sr_rule
 from refactory.data_source import get_instrument_info, get_price, get_raw_price
 from refactory.forecast import ewmac, rescale_forecast, floor_vol, price_vol
-from refactory.turnover import calc_turnover, estimate_weighted_turnover, estimate_turnover_annual
+from refactory.turnover import estimate_weighted_turnover, estimate_turnover_annual, calc_turnover
 from refactory.weights_forecast import calc_forecast_weights, calc_div_mult_daily
 from refactory.weights_portfolio import calc_portfolio_weights
 
@@ -68,17 +68,17 @@ turnover_average = turnover_full.mean(axis=0)
 #     lambda i: calc_cost_sr_rule(gross_rule.loc[i], cost_rule.loc[i], turnover_full.loc[i], turnover_average))
 
 
-def calc_forecast_weights_(instr, gross_rule, cost_rule, turnover_full, turnover_average):
-    annual_sr = calc_cost_sr_rule(gross_rule.loc[instr], cost_rule.loc[instr], turnover_full.loc[instr],
-                                  turnover_average)
-    net_rule_fw = m(lambda i: calc_net_rule(gross_rule.loc[i], annual_sr))
-    forecast_weights = calc_forecast_weights(net_rule_fw)
+def calc_forecast_weights_(gross, cost_sr):
+    net = calc_net_rule(gross, cost_sr)
+    forecast_weights = calc_forecast_weights(net)
     return forecast_weights
 
 
-forecast_weights = calc_forecast_weights_('US10', gross_rule, cost_rule, turnover_full, turnover_average)
-forcast_div_mult = calc_div_mult_daily(forecast_weights, forecast_rule)
-forecast_inst = c(lambda i: combine_forecast(forecast_rule.loc[i], forecast_weights, forcast_div_mult))
+cost_sr_rule = m(lambda i: calc_cost_sr_rule(gross_rule.loc[i], cost_rule.loc[i], turnover_full.loc[i],
+                                             turnover_average))
+forecast_weights = m(lambda i: calc_forecast_weights_(gross_rule, cost_rule.loc[i]))
+forcast_div_mult = m(lambda i: calc_div_mult_daily(forecast_weights.loc[i], forecast_rule.loc[i]))
+forecast_inst = c(lambda i: combine_forecast(forecast_rule.loc[i], forecast_weights, forcast_div_mult.loc[i]))
 position_inst = c(lambda i: calc_position(forecast_inst[i], vol_scalar_.loc[i], buffer_size=0.10))
 gross_inst = c(lambda i: calc_gross_pnl(position_inst[i], price_.loc[i], size_.loc[i]))
 cost_inst = c(lambda i: calc_cost_actual(position_inst[i], price_.loc[i], info_.loc[i]))
@@ -108,9 +108,7 @@ _rule_net = net_rule.loc['US10']['ewmac32']
 
 # print(_rule_net)
 
-
 # --------------------------------------------------------------------------------------------------------------------
-
 
 #
 # price_list = (get_price(i) for i in instruments)
