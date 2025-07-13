@@ -73,8 +73,8 @@ def calc_forecast_weights_(gross, cost_sr):
 cost_sr_rule = m(lambda i: calc_cost_sr_rule(gross_rule.loc[i], cost_rule.loc[i], turnover_full.loc[i],
                                              turnover_average))
 forecast_weights = m(lambda i: calc_forecast_weights_(gross_rule, cost_sr_rule[i]))
-forcast_div_mult = m(lambda i: calc_div_mult_daily(forecast_weights.loc[i], forecast_rule.loc[i]))
-forecast_inst = c(lambda i: combine_forecast(forecast_rule.loc[i], forecast_weights.loc[i], forcast_div_mult.loc[i]))
+forecast_div_mult = m(lambda i: calc_div_mult_daily(forecast_weights.loc[i], forecast_rule.loc[i]))
+forecast_inst = c(lambda i: combine_forecast(forecast_rule.loc[i], forecast_weights.loc[i], forecast_div_mult.loc[i]))
 position_inst = c(lambda i: calc_position(forecast_inst[i], vol_scalar_.loc[i], buffer_size=0.10))
 gross_inst = c(lambda i: calc_gross_pnl(position_inst[i], price_.loc[i], size_.loc[i]))
 cost_inst = c(lambda i: calc_cost_actual(position_inst[i], price_.loc[i], info_.loc[i]))
