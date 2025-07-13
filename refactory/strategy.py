@@ -1,7 +1,6 @@
-import numpy as np
 import pandas as pd
 
-from refactory.base import calc_gross_pnl, calc_net_pnl, calc_position, combine_forecast
+from refactory.base import calc_gross_pnl, calc_net_pnl, calc_position, combine_forecast, calc_net_rule
 from refactory.base import calc_vol_scalar
 from refactory.cost_actual import calc_cost_actual
 from refactory.cost_estimated import calc_cost_estimated, calc_cost_sr_rule
@@ -65,14 +64,6 @@ turnover_full = estimate_turnover_annual(forecast_rule)
 turnover_average = turnover_full.mean(axis=0)
 cost_sr_rule = m(
     lambda i: calc_cost_sr_rule(gross_rule.loc[i], cost_rule.loc[i], turnover_full.loc[i], turnover_average))
-
-
-def calc_net_rule(gross, cost_sr):
-    gross = gross.replace(0.0, np.nan)
-    vol = gross.std()
-    cost_daily = cost_sr * (vol / 16)
-    return gross + cost_daily
-
 
 net_rule_fw = m(lambda i: calc_net_rule(gross_rule.loc[i], cost_sr_rule.loc[i]))
 
