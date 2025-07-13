@@ -86,6 +86,7 @@ def calc_div_mult_daily(weights, forecast):
     first_corr = pd.Series([np.array([[1.0, 0.99], [0.99, 1.0]])], index=[forecast_weekly.index[0]])
     corr_weekly = pd.concat([first_corr, corr_weekly])
 
+    #FIXME: weights 和 corr_weekly 还没有对齐
     multiplier_yearly = pd.Series(
         [calc_div_mult_yearly(weights, corr_weekly, end) for end in end_list],
         index=end_list)
