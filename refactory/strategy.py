@@ -69,7 +69,7 @@ turnover_average = turnover_full.mean(axis=0)
 
 
 def calc_forecast_weights_(gross, cost_sr):
-    net = calc_net_rule(gross, cost_sr)
+    net = m(lambda i: calc_net_rule(gross.loc[i], cost_sr))
     forecast_weights = calc_forecast_weights(net)
     return forecast_weights
 
