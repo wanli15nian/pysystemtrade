@@ -46,4 +46,5 @@ print(gr.tail(5))
 forecast_weights = my_system.combForecast.get_forecast_weights("US10")
 print(forecast_weights.mean())
 
-# print(my_system.combForecast.get_forecast_diversification_multiplier("SOFR").tail(5))
+forecast_div_mult = my_system.combForecast.get_forecast_diversification_multiplier("US10")
+print(forecast_div_mult.mean())
