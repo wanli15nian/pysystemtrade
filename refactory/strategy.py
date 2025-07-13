@@ -62,13 +62,21 @@ print('calculate pnl for instrument and rule')
 
 turnover_full = estimate_turnover_annual(forecast_rule)
 turnover_average = turnover_full.mean(axis=0)
-cost_sr_rule = m(
-    lambda i: calc_cost_sr_rule(gross_rule.loc[i], cost_rule.loc[i], turnover_full.loc[i], turnover_average))
 
-net_rule_fw = m(lambda i: calc_net_rule(gross_rule.loc[i], cost_sr_rule.loc[i]))
 
-forecast_weights = calc_forecast_weights(net_rule_fw)
+# cost_sr_rule = m(
+#     lambda i: calc_cost_sr_rule(gross_rule.loc[i], cost_rule.loc[i], turnover_full.loc[i], turnover_average))
 
+
+def calc_forecast_weights_(instr, gross_rule, cost_rule, turnover_full, turnover_average):
+    annual_sr = calc_cost_sr_rule(gross_rule.loc[instr], cost_rule.loc[instr], turnover_full.loc[instr],
+                                  turnover_average)
+    net_rule_fw = m(lambda i: calc_net_rule(gross_rule.loc[i], annual_sr))
+    forecast_weights = calc_forecast_weights(net_rule_fw)
+    return forecast_weights
+
+
+forecast_weights = calc_forecast_weights_('US10', gross_rule, cost_rule, turnover_full, turnover_average)
 forcast_div_mult = calc_div_mult_daily(forecast_weights, forecast_rule)
 forecast_inst = c(lambda i: combine_forecast(forecast_rule.loc[i], forecast_weights, forcast_div_mult))
 position_inst = c(lambda i: calc_position(forecast_inst[i], vol_scalar_.loc[i], buffer_size=0.10))
