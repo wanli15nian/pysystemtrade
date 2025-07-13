@@ -68,8 +68,24 @@ def calc_forecast_weight_yearly(instr_num, pnl, fit_end, span_multiple=50000, mi
 
 
 def calc_div_mult_daily(weights, forecast):
-    end_list = get_end_list(weights.index)
-    corr_weekly = calc_forecast_corr(forecast)
+    forecast_weekly = (forecast.groupby(level=0)
+                       .resample('W', level=1).last()
+                       .unstack(level=0)
+                       .stack(dropna=False)
+                       .droplevel('instrument')
+                       .sort_index(ascending=True))
+    end_list = get_end_list(forecast_weekly.index)
+    instrument_number = len(forecast.index.get_level_values(0).unique())
+    lookback = 250 * instrument_number
+    min_periods = 20 * instrument_number
+
+    corr_weekly = pd.Series(
+        [calc_forecast_corr(forecast_weekly, end, lookback, min_periods) for end in end_list],
+        index=end_list
+    )
+    first_corr = pd.Series([np.array([[1.0, 0.99], [0.99, 1.0]])], index=[forecast_weekly.index[0]])
+    corr_weekly = pd.concat([first_corr, corr_weekly])
+
     multiplier_yearly = pd.Series(
         [calc_div_mult_yearly(weights, corr_weekly, end) for end in end_list],
         index=end_list)
@@ -85,18 +101,15 @@ def calc_forecast_corr_multi(forecast_, lookback=250, periods=20):
     return corr_weekly
 
 
-def calc_forecast_corr(forecast_raw, lookback=250, periods=20):
-    forecast_weekly = (forecast_raw.groupby(level=0)
-                  .resample('W', level=1).last()
-                  .unstack(level=0)
-                  .stack(dropna=False)
-                  .droplevel('instrument')
-                  .sort_index(ascending=True))
-    corr_weekly = forecast_weekly.ewm(span=lookback, min_periods=periods, ignore_na=True).corr(pairwise=True)
-    return corr_weekly
+def calc_forecast_corr(forecast, fit_end, lookback=250, periods=20):
+    corr_weekly = forecast.ewm(span=lookback, min_periods=periods, ignore_na=True).corr(pairwise=True)
+    corr_matrix_values = corr_weekly[corr_weekly.index.get_level_values(0) <= fit_end].tail(len(forecast.columns)).values
+    corr = np.clip(corr_matrix_values, a_min=0, a_max=None)
+    return corr
 
 
 def calc_div_mult_yearly(weights_daily, corr_weekly, end, dm_max=2.5):
+    corr_weekly = pd.DataFrame(corr_weekly)
     corr_matrix = corr_weekly[corr_weekly.index.get_level_values(0) <= end].tail(
         len(corr_weekly.columns)).values
     if len(corr_matrix) == 0:
