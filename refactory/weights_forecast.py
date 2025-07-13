@@ -7,7 +7,7 @@ from refactory.base import optimisation
 # TODO：又是日频，又是周频，又是年频，有些乱
 
 
-def calc_forecast_weights(net_):
+def calc_forecast_weights(net_, index):
     # 计算年切分点
     end_list = get_end_list(net_.index.levels[1])
 
@@ -31,8 +31,8 @@ def calc_forecast_weights(net_):
     weights_yearly = pd.concat([initial_weight, weight_yearly_raw], axis=0)
 
     # 把按年的Index ffill成按天的Index
-    universal_index = net_.index.levels[1]
-    weight_df = weights_yearly.reindex(universal_index, method='ffill').fillna(1 / len(weights_yearly.columns))
+    # universal_index = net_.index.levels[1]
+    weight_df = weights_yearly.reindex(index, method='ffill').fillna(1 / len(weights_yearly.columns))
     weights_daily = weight_df.resample('1B').mean().ewm(span=125).mean()
 
     return weights_daily
