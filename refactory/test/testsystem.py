@@ -34,7 +34,7 @@ my_config.use_forecast_div_mult_estimates = True
 my_config.forecast_scalar_estimate["pool_instruments"] = False
 
 
-
+'''
 fc = my_system.forecastScaleCap.get_forecast_scalar("US10", "ewmac32")
 print(fc.tail(5))
 
@@ -48,3 +48,7 @@ print(forecast_weights.mean())
 
 forecast_div_mult = my_system.combForecast.get_forecast_diversification_multiplier("US10")
 print(forecast_div_mult.mean())
+'''
+
+subsystem_position = my_system.positionSize.get_subsystem_position("US10")
+print(subsystem_position.mean())
