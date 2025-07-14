@@ -32,7 +32,8 @@ def calc_forecast_weights(net_, index):
 
     # 把按年的Index ffill成按天的Index
     # universal_index = net_.index.levels[1]
-    weight_df = weights_yearly.reindex(index, method='ffill').fillna(1 / len(weights_yearly.columns))
+    # weight_df = weights_yearly.reindex(index, method='ffill').fillna(1 / len(weights_yearly.columns))
+    weight_df = weights_yearly.reindex(index, method='ffill').shift(1).backfill()
     weights_daily = weight_df.resample('1B').mean().ewm(span=125).mean()
 
     return weights_daily
@@ -90,11 +91,13 @@ def calc_div_mult_daily(weights, forecast):
     # first_corr = np.array([[1.0, 0.99], [0.99, 1.0]])
     # corr_weekly.insert(0, first_corr)
 
-    #FIXME: weights 和 corr_weekly 还没有对齐
     multiplier_yearly = pd.Series(
         [calc_div_mult_yearly(weights, corr_weekly, end) for end in end_list],
         index=end_list)
-    multiplier_daily = multiplier_yearly.reindex(weights.index, method="ffill").fillna(1.0).ewm(span=125).mean()
+
+    # multiplier_daily = multiplier_yearly.reindex(weights.index, method="ffill").fillna(1.0).ewm(span=125).mean()
+    #FIXME: 因为reindex 问题，加一个bfill
+    multiplier_daily = multiplier_yearly.reindex(weights.index, method="ffill").shift(1).bfill().fillna(1.0).ewm(span=125).mean()
     return multiplier_daily
 
 
