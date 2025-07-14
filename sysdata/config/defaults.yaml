@@ -248,7 +248,7 @@ instrument_weight_ewma_span: 125
 #
 instrument_weight_estimate:
    func: sysquant.optimisation.generic_optimiser.genericOptimiser
-   method: handcraft
+   method: shrinkage
    frequency: "W"
    equalise_gross: False
    cost_multiplier: 1.0

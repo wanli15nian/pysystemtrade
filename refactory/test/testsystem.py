@@ -38,7 +38,6 @@ my_config.use_forecast_div_mult_estimates = True
 my_config.forecast_scalar_estimate["pool_instruments"] = False
 my_config.use_instrument_weight_estimates = True
 my_config.use_instrument_div_mult_estimates = True
-my_config.instrument_weight_estimate = dict(method="shrinkage")
 
 
 '''
