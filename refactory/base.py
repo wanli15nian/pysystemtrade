@@ -37,8 +37,8 @@ def calc_vol_scalar(price, point_size, capital=500000, risk_target=0.16):
     return position_target
 
 
-def combine_forecast(forecast, forecast_weights, forcast_div_mult):
-    combined_forecast = ((forecast_weights * forecast).sum(axis=1) * forcast_div_mult).clip(20, -20)
+def combine_forecast(forecast, forecast_weights, forecast_div_mult):
+    combined_forecast = ((forecast_weights * forecast).sum(axis=1) * forecast_div_mult).clip(20, -20)
     return combined_forecast
 
 
