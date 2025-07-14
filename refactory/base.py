@@ -9,6 +9,7 @@ def calc_position(forecast, vol_scalar, buffer_size=0):
     if buffer_size > 0:
         position_raw = trans_buffered_position(position_raw, vol_scalar, 0.10)
     # position = position.ffill()
+    #FIXME: 检查这个shift(1) 是否适用于 subsystem position
     position = position_raw.shift(1)
     return position
 
