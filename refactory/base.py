@@ -47,14 +47,14 @@ def trans_buffered_position(position, vol_scalar, buffer_size=0.10, trade_to_edg
     buffer = vol_scalar * buffer_size
     top = (position + buffer).ffill().round()
     bottom = (position - buffer).ffill().round()
-    position = position.ffill().round()
+    rounded_position = position.ffill().round()
 
     last = 0.0
     buffered_position_list = []
-    for index in range(len(position)):
-        last = adjust_by_buffer(last, position.iloc[index], top.iloc[index], bottom.iloc[index], trade_to_edge)
+    for index in range(len(rounded_position)):
+        last = adjust_by_buffer(last, rounded_position.iloc[index], top.iloc[index], bottom.iloc[index], trade_to_edge)
         buffered_position_list.append(last)
-    buffered_position = pd.Series(buffered_position_list, index=position.index)
+    buffered_position = pd.Series(buffered_position_list, index=rounded_position.index)
     return buffered_position
 
 
