@@ -5,11 +5,11 @@ from scipy.optimize import minimize
 
 def calc_position(forecast, vol_scalar, buffer_size=0):
     aligned_avg = vol_scalar.reindex(forecast.index, method='ffill')
-    position = forecast.mul(aligned_avg, axis=0) / 10
+    position_raw = forecast.mul(aligned_avg, axis=0) / 10
     if buffer_size > 0:
-        position = trans_buffered_position(position, vol_scalar, 0.10)
+        position_raw = trans_buffered_position(position_raw, vol_scalar, 0.10)
     # position = position.ffill()
-    position = position.shift(1)
+    position = position_raw.shift(1)
     return position
 
 
