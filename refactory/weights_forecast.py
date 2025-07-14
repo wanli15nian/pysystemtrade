@@ -86,6 +86,10 @@ def calc_div_mult_daily(weights, forecast):
     first_corr = pd.Series([np.array([[1.0, 0.99], [0.99, 1.0]])], index=[forecast_weekly.index[0]])
     corr_weekly = pd.concat([first_corr, corr_weekly])
 
+    # corr_weekly = [calc_forecast_corr(forecast_weekly, end, lookback, min_periods) for end in end_list]
+    # first_corr = np.array([[1.0, 0.99], [0.99, 1.0]])
+    # corr_weekly.insert(0, first_corr)
+
     #FIXME: weights 和 corr_weekly 还没有对齐
     multiplier_yearly = pd.Series(
         [calc_div_mult_yearly(weights, corr_weekly, end) for end in end_list],
@@ -112,13 +116,19 @@ def calc_forecast_corr(forecast, fit_end, lookback=250, periods=20):
 def calc_div_mult_yearly(weights_daily, corr_weekly, end, dm_max=2.5):
     corr_weekly = pd.DataFrame(corr_weekly)
     corr_matrix = corr_weekly[corr_weekly.index.get_level_values(0) <= end].tail(
-        len(corr_weekly.columns)).values
+        len(corr_weekly.columns)).values[0][0]
     if len(corr_matrix) == 0:
         return 1.0
-    weights = np.array(weights_daily[weights_daily.index <= end].iloc[-1])
-    risk = np.sqrt(weights.dot(corr_matrix).dot(weights))
-    risk = 1.0 if (np.isnan(risk) or risk < 1e-7) else risk
-    return min(1.0 / risk, dm_max)
+    # weights = np.array(weights_daily[weights_daily.index <= end].iloc[-1])
+    filtered = weights_daily[weights_daily.index <= end]
+    if filtered.empty:
+        div_mult = 1.0
+    else:
+        weights = np.array(filtered.iloc[-1])
+        risk = np.sqrt(weights.dot(corr_matrix).dot(weights))
+        risk = 1.0 if (np.isnan(risk) or risk < 1e-7) else risk
+        div_mult = min(1.0 / risk, dm_max)
+    return div_mult
 
 
 def get_end_list(daily_index):
