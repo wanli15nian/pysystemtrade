@@ -30,6 +30,8 @@ def calc_all_fills(position, price, rolls_per_year):
 
     trades = position.diff().dropna()  # 计算持仓变化并去除缺失值
     trades = trades[trades != 0]  # 去除交易量为0的行
+
+    # FIXME: trading_fills 与 源代码对不上，因为Position 并不一致
     prices = price.reindex(trades.index, method="ffill")
     trading_fills = pd.DataFrame({
         'date': trades.index,
@@ -58,8 +60,10 @@ def pseudo_holding_fills(year, rolls_per_year, price, positions):
     df = df[(df['date'] <= last_date_with_positions) & (df['quantity'].abs() > 0)]
     df['price'] = price.asof(df['date']).values
     # df['price'] = df['date'].map(lambda date: get_row_of_series_before_date(price, date))
+    df_sell = df.copy()
+    df_sell['quantity'] = -1 * df_sell['quantity']
 
-    df_fills = pd.concat([df, df]).sort_values(by='date').reset_index(drop=True)
+    df_fills = pd.concat([df, df_sell]).sort_values(by='date').reset_index(drop=True)
 
     return df_fills
 
