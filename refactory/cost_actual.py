@@ -36,7 +36,8 @@ def calc_all_fills(position, price, rolls_per_year):
     trading_fills = pd.DataFrame({
         'date': trades.index,
         'quantity': trades.values,
-        'price': prices.values
+        'price': prices.values,
+        'include_slippage': True
     })
 
     all_fills = pd.concat([trading_fills, holding_fills]).sort_values(by='date').reset_index(drop=True)
@@ -59,9 +60,11 @@ def pseudo_holding_fills(year, rolls_per_year, price, positions):
     last_date_with_positions = price.index[-1]
     df = df[(df['date'] <= last_date_with_positions) & (df['quantity'].abs() > 0)]
     df['price'] = price.asof(df['date']).values
+    df['include_slippage'] = True
     # df['price'] = df['date'].map(lambda date: get_row_of_series_before_date(price, date))
     df_sell = df.copy()
     df_sell['quantity'] = -1 * df_sell['quantity']
+    df_sell['include_slippage'] = False
 
     df_fills = pd.concat([df, df_sell]).sort_values(by='date').reset_index(drop=True)
 
