@@ -56,7 +56,7 @@ def pseudo_holding_fills(year, rolls_per_year, price, positions):
 
     last_date_with_positions = price.index[-1]
     df = df[(df['date'] <= last_date_with_positions) & (df['quantity'].abs() > 0)]
-    df['price'] = price.asof(df['date'])
+    df['price'] = price.asof(df['date']).values
     # df['price'] = df['date'].map(lambda date: get_row_of_series_before_date(price, date))
 
     df_fills = pd.concat([df, df]).sort_values(by='date').reset_index(drop=True)
@@ -67,7 +67,7 @@ def pseudo_holding_fills(year, rolls_per_year, price, positions):
 def generate_equal_dates_within_year(year, rolls_per_year, align_to_start=True):
     days_of_roll = int(365 / rolls_per_year)
     first_date = datetime.datetime(year, 1, 1)
-    if not align_to_start:
+    if align_to_start:
         first_date = first_date + datetime.timedelta(days=int(days_of_roll / 2))
     all_dates = [first_date + (datetime.timedelta(days=days_of_roll) * period_count)
                  for period_count in range(rolls_per_year)]
