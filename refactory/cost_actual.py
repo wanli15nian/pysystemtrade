@@ -15,7 +15,8 @@ def calc_cost_actual(position, price, info, include_slippage=True):
     raw_costs = fill_cost.groupby(fill_cost.index).sum()
 
     daily_price = price.resample("1B").ffill()
-    vol = daily_price.diff().rolling(180, min_periods=3).std()
+    # 注: 第二个ffill() 是必要的，前一个是resample时候的ffill()
+    vol = daily_price.ffill().diff().rolling(180, min_periods=3).std()
     cost_deflator = vol / vol.iloc[-1]
     cost_deflator = cost_deflator.reindex(raw_costs.index, method="ffill")
 
