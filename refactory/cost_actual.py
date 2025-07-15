@@ -5,7 +5,7 @@ import pandas as pd
 from refactory.base import calc_cost_of_fill
 
 
-def calc_cost_actual(position, price, info, include_slippage=True):
+def calc_cost_actual(position, price, info):
     rolls_per_year = int(info['rolls_per_year'])
     all_fills = calc_all_fills(position, price, rolls_per_year)
 

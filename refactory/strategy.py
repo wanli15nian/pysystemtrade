@@ -80,11 +80,12 @@ forecast_inst = m(lambda i: combine_forecast(forecast_rule.loc[i], forecast_weig
 position_inst = m(lambda i: calc_position(forecast_inst[i], vol_scalar_.loc[i], buffer_size=0.10))
 gross_inst = m(lambda i: calc_gross_pnl(position_inst.loc[i], price_.loc[i], size_.loc[i]))
 cost_inst = m(lambda i: calc_cost_actual(position_inst.loc[i], price_.loc[i], info_.loc[i]))
+net_inst = calc_net_pnl(gross_inst, cost_inst)
 
 subsystem_turnover_ = {i: calc_turnover(position_inst.loc[i], vol_scalar_.loc[i]) for i in instruments}
 
 # TODO: 为什么是mean？
-net_inst = pd.DataFrame({inst: gross_inst.loc[inst] + cost_inst.loc[inst].mean() for inst in instruments})
+# net_inst = pd.DataFrame({inst: gross_inst.loc[inst] + cost_inst.loc[inst].mean() for inst in instruments})
 portfolio_weights = calc_portfolio_weights(net_inst, position_inst)
 print(portfolio_weights)
 
