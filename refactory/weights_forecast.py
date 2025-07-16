@@ -7,19 +7,11 @@ from refactory.base import optimisation
 # TODO：又是日频，又是周频，又是年频，有些乱
 
 
-def calc_forecast_weights(net_, index):
+def calc_forecast_weights(net_weekly, index, instruments_num):
     # 计算年切分点
-    end_list = get_end_list(net_.index.levels[1])
-
-    net_weekly = (net_.groupby(level=0)
-                  .resample('W', level=1).sum()
-                  .unstack(level=0)
-                  .stack(dropna=False)
-                  .droplevel('instrument')
-                  .sort_index(ascending=True))
+    end_list = get_end_list(net_weekly.index)
 
     # 计算年权重
-    instruments_num = len(net_.index.levels[0])
     weight_yearly_raw = pd.DataFrame(
         [calc_forecast_weight_yearly(instruments_num, net_weekly, end) for end in end_list],
         index=end_list, columns=net_weekly.columns)

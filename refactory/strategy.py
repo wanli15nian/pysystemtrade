@@ -69,7 +69,14 @@ def calc_forecast_weights_(gross, cost_sr, index):
     # net = calc_net_rule(gross, cost_sr)
     # 注: 需要用m 函数以保证net 的正确计算
     net = m(lambda i: calc_net_rule(gross.loc[i], cost_sr))
-    forecast_weights = calc_forecast_weights(net, index)
+    net_weekly = (net.groupby(level=0)
+                  .resample('W', level=1).sum()
+                  .unstack(level=0)
+                  .stack(dropna=False)
+                  .droplevel('instrument')
+                  .sort_index(ascending=True))
+    instruments_num = len(net.index.levels[0])
+    forecast_weights = calc_forecast_weights(net_weekly, index, instruments_num)
     return forecast_weights
 
 
@@ -93,9 +100,10 @@ cost_sr_inst = c(lambda i: calc_cost_sr(gross_inst_.loc[i], cost_inst_.loc[i], 1
 def calc_portfolio_weights_(gross, cost_sr, index):
     net_daily = m(lambda i: calc_net_rule(gross.loc[i], cost_sr[i]))
     net = (net_daily.unstack(level=0)
-           .resample('W').sum()
-           .T.stack(dropna=False))
-    return net
+           .resample('W').sum())
+    instruments_num = len(net.columns)
+    weights = calc_forecast_weights(net, index, instruments_num)
+    return weights
 
 portfolio_weights = calc_portfolio_weights_(gross_inst_, cost_sr_inst, gross_inst_.index)
 # TODO: 为什么是mean？
