@@ -1,6 +1,7 @@
 import pandas as pd
 
-from refactory.base import calc_gross_pnl, calc_net_pnl, calc_position, combine_forecast, calc_net_rule
+from refactory.base import calc_gross_pnl, calc_net_pnl, calc_position, combine_forecast, calc_net_rule, \
+    unstack_for_optimisation
 from refactory.base import calc_vol_scalar
 from refactory.cost_actual import calc_cost_actual
 from refactory.cost_estimated import calc_cost_estimated, calc_cost_sr_rule
@@ -81,6 +82,9 @@ position_inst = m(lambda i: calc_position(forecast_inst[i], vol_scalar_.loc[i], 
 gross_inst = m(lambda i: calc_gross_pnl(position_inst.loc[i], price_.loc[i], size_.loc[i]))
 cost_inst = m(lambda i: calc_cost_actual(position_inst.loc[i], price_.loc[i], info_.loc[i]))
 net_inst = calc_net_pnl(gross_inst, cost_inst)
+
+gross_inst_ = unstack_for_optimisation(gross_inst)
+cost_inst_ = unstack_for_optimisation(cost_inst)
 
 subsystem_turnover_ = {i: calc_turnover(position_inst.loc[i], vol_scalar_.loc[i]) for i in instruments}
 

@@ -27,6 +27,13 @@ def calc_net_pnl(gross_pnl, daily_costs):
     return net
 
 
+def unstack_for_optimisation(multi_index_df):
+    unstacked = multi_index_df.unstack(level=0)
+    resampled = unstacked.resample('1B').sum()
+    resampled[resampled == 0.0] = pd.NA
+    return resampled
+
+
 def calc_vol_scalar(price, point_size, capital=500000, risk_target=0.16):
     '''
     根据自行设置的risk target 所计算出的单一品种的目标仓位
