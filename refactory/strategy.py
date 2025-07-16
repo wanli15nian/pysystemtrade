@@ -1,6 +1,6 @@
 import pandas as pd
 
-from refactory.base import calc_gross_pnl, calc_net_pnl, calc_position, combine_forecast, calc_net_rule, \
+from refactory.base import calc_gross_pnl, calc_net_pnl, calc_position, combine_forecast, calc_net, \
     unstack_for_optimisation, stack_instr
 from refactory.base import calc_vol_scalar
 from refactory.cost_actual import calc_cost_actual
@@ -8,7 +8,7 @@ from refactory.cost_estimated import calc_cost_estimated, calc_cost_sr
 from refactory.data_source import get_instrument_info, get_price, get_raw_price
 from refactory.forecast import ewmac, rescale_forecast, floor_vol, price_vol
 from refactory.turnover import estimate_weighted_turnover, estimate_turnover_annual, calc_turnover
-from refactory.weights_forecast import calc_forecast_weights, calc_div_mult_daily
+from refactory.weights_forecast import calc_weights, calc_div_mult_daily
 from refactory.weights_portfolio import calc_portfolio_weights
 
 # --------------------------------------------------------------------------------------------------------------------
@@ -67,7 +67,7 @@ turnover_average = turnover_full.mean(axis=0)
 
 def calc_forecast_weights_(gross, cost_sr, index):
     # 注: 需要用m 函数以保证net 的正确计算
-    net = m(lambda i: calc_net_rule(gross.loc[i], cost_sr))
+    net = m(lambda i: calc_net(gross.loc[i], cost_sr))
     net_weekly = stack_instr(net, 'W', 'sum')
     instruments_num = len(net.index.levels[0])
     config = {
@@ -77,7 +77,7 @@ def calc_forecast_weights_(gross, cost_sr, index):
         'multiple_min_periods': instruments_num * 5
 
     }
-    forecast_weights = calc_forecast_weights(net_weekly, index, config)
+    forecast_weights = calc_weights(net_weekly, index, config)
     return forecast_weights
 
 
@@ -89,18 +89,19 @@ forecast_inst = m(lambda i: combine_forecast(forecast_rule.loc[i], forecast_weig
 position_inst = m(lambda i: calc_position(forecast_inst[i], vol_scalar_.loc[i], buffer_size=0.10))
 gross_inst = m(lambda i: calc_gross_pnl(position_inst.loc[i], price_.loc[i], size_.loc[i]))
 cost_inst = m(lambda i: calc_cost_actual(position_inst.loc[i], price_.loc[i], info_.loc[i]))
+
+# 以下为意义不明变量
 net_inst = calc_net_pnl(gross_inst, cost_inst)
+subsystem_turnover_ = pd.DataFrame({i: calc_turnover(forecast_inst.loc[i], vol_scalar_.loc[i]) for i in instruments}, index=[0])
+
 
 gross_inst_ = unstack_for_optimisation(gross_inst)
 cost_inst_ = unstack_for_optimisation(cost_inst)
+cost_sr_inst = {i: calc_cost_sr(gross_inst_.loc[i], cost_inst_.loc[i], 1) for i in instruments}
 
-subsystem_turnover_ = pd.DataFrame({i: calc_turnover(forecast_inst.loc[i], vol_scalar_.loc[i]) for i in instruments}, index=[0])
-
-# cost_sr_inst = c(lambda i: calc_cost_sr(gross_inst_.loc[i], cost_inst_.loc[i], 1))
-cost_sr_inst = {i: calc_cost_sr(gross_inst_.loc[i], cost_inst_.loc[i], 1) for i in instruments }
 
 def calc_portfolio_weights_(gross, cost_sr):
-    net_daily = m(lambda i: calc_net_rule(gross.loc[i], cost_sr[i]))
+    net_daily = m(lambda i: calc_net(gross.loc[i], cost_sr[i]))
     net = (net_daily.unstack(level=0)
            .resample('W').sum())
     index = net_daily.unstack(level=0).index
@@ -110,12 +111,11 @@ def calc_portfolio_weights_(gross, cost_sr):
         'multiple_span': 50000,
         'multiple_min_periods': 5
     }
-    weights = calc_forecast_weights(net, index, config)
+    weights = calc_weights(net, index, config)
     return weights
 
 portfolio_weights = calc_portfolio_weights_(gross_inst_, cost_sr_inst)
-# TODO: 为什么是mean？
-# net_inst = pd.DataFrame({inst: gross_inst.loc[inst] + cost_inst.loc[inst].mean() for inst in instruments})
+
 portfolio_weights = calc_portfolio_weights(net_inst, position_inst)
 print(portfolio_weights)
 

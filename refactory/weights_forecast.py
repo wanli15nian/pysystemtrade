@@ -7,7 +7,7 @@ from refactory.base import optimisation, stack_instr
 # TODO：又是日频，又是周频，又是年频，有些乱
 
 
-def calc_forecast_weights(net_weekly, index, config):
+def calc_weights(net_weekly, index, config):
     # 计算年切分点
     end_list = get_end_list(net_weekly.index)
 

@@ -145,7 +145,7 @@ def calc_mixed_volatility(data, days=35, min_periods=10, slow_vol_years=20,
     return vol
 
 
-def calc_net_rule(gross, cost_sr):
+def calc_net(gross, cost_sr):
     gross = gross.replace(0.0, np.nan)
     vol = gross.std()
     if len(cost_sr) == 1:
