@@ -34,11 +34,12 @@ def calc_forecast_weights(net_weekly, index, config):
 def calc_forecast_weight_yearly(pnl, fit_end, config, floor=True):
     sr_target = 0.5
     shrinkage_sr = 0.9
-    span = config['span']
+    corr_span = config['corr_span']
     corr_min_periods = config['corr_min_periods']
+    multiple_span = config['multiple_span']
     multiple_min_periods = config['multiple_min_periods']
 
-    raw_corr = pnl.ewm(span=span, min_periods=corr_min_periods, ignore_na=True).corr(pairwise=True)
+    raw_corr = pnl.ewm(span=corr_span, min_periods=corr_min_periods, ignore_na=True).corr(pairwise=True)
     corr_matrix_values = raw_corr[raw_corr.index.get_level_values(0) <= fit_end].tail(len(pnl.columns)).values
     if floor:
         corr_matrix_values[corr_matrix_values < 0.0] = 0.0
@@ -46,7 +47,7 @@ def calc_forecast_weight_yearly(pnl, fit_end, config, floor=True):
     corr = np.clip(corr_matrix_values, a_min=0, a_max=None)
 
     # 计算标准差和均值
-    ewm = pnl.ewm(span=span, min_periods=multiple_min_periods)
+    ewm = pnl.ewm(span=multiple_span, min_periods=multiple_min_periods)
     std_daily = ewm.std().asof(fit_end)
     mean_daily = ewm.mean().asof(fit_end)
 

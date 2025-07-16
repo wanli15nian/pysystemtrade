@@ -77,8 +77,9 @@ def calc_forecast_weights_(gross, cost_sr, index):
                   .sort_index(ascending=True))
     instruments_num = len(net.index.levels[0])
     config = {
-        'span': instruments_num * 50000,
+        'corr_span': instruments_num * 50000,
         'corr_min_periods': instruments_num * 10,
+        'multiple_span': instruments_num * 50000,
         'multiple_min_periods': instruments_num * 5
 
     }
@@ -108,9 +109,14 @@ def calc_portfolio_weights_(gross, cost_sr):
     net_daily = m(lambda i: calc_net_rule(gross.loc[i], cost_sr[i]))
     net = (net_daily.unstack(level=0)
            .resample('W').sum())
-    instruments_num = len(net.columns)
     index = net_daily.unstack(level=0).index
-    weights = calc_forecast_weights(net, index, instruments_num)
+    config = {
+        'corr_span': 500000,
+        'corr_min_periods': 10,
+        'multiple_span': 50000,
+        'multiple_min_periods': 5
+    }
+    weights = calc_forecast_weights(net, index, config)
     return weights
 
 portfolio_weights = calc_portfolio_weights_(gross_inst_, cost_sr_inst)
