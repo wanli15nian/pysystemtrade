@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from refactory.base import optimisation
+from refactory.base import optimisation, stack_instr
 
 
 # TODO：又是日频，又是周频，又是年频，有些乱
@@ -65,12 +65,7 @@ def calc_forecast_weight_yearly(pnl, fit_end, config, floor=True):
 
 
 def calc_div_mult_daily(weights, forecast):
-    forecast_weekly = (forecast.groupby(level=0)
-                       .resample('W', level=1).last()
-                       .unstack(level=0)
-                       .stack(dropna=False)
-                       .droplevel('instrument')
-                       .sort_index(ascending=True))
+    forecast_weekly = stack_instr(forecast, 'W', 'last')
     end_list = get_end_list(forecast_weekly.index)
     instrument_number = len(forecast.index.get_level_values(0).unique())
     lookback = 250 * instrument_number

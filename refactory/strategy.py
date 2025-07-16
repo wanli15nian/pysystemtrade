@@ -1,7 +1,7 @@
 import pandas as pd
 
 from refactory.base import calc_gross_pnl, calc_net_pnl, calc_position, combine_forecast, calc_net_rule, \
-    unstack_for_optimisation
+    unstack_for_optimisation, stack_instr
 from refactory.base import calc_vol_scalar
 from refactory.cost_actual import calc_cost_actual
 from refactory.cost_estimated import calc_cost_estimated, calc_cost_sr
@@ -66,15 +66,9 @@ turnover_average = turnover_full.mean(axis=0)
 
 
 def calc_forecast_weights_(gross, cost_sr, index):
-    # net = calc_net_rule(gross, cost_sr)
     # 注: 需要用m 函数以保证net 的正确计算
     net = m(lambda i: calc_net_rule(gross.loc[i], cost_sr))
-    net_weekly = (net.groupby(level=0)
-                  .resample('W', level=1).sum()
-                  .unstack(level=0)
-                  .stack(dropna=False)
-                  .droplevel('instrument')
-                  .sort_index(ascending=True))
+    net_weekly = stack_instr(net, 'W', 'sum')
     instruments_num = len(net.index.levels[0])
     config = {
         'corr_span': instruments_num * 50000,

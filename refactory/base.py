@@ -36,7 +36,7 @@ def unstack_for_optimisation(multi_index_df):
     unstacked = multi_index_df.unstack(level=0)
     resampled = unstacked.resample('1B').sum()
     resampled[resampled == 0.0] = pd.NA
-    resampled = resampled.T.stack(dropna=False).to_frame()
+    resampled = resampled.T.stack(dropna=False).to_frame(name='')
     return resampled
 
 
@@ -153,3 +153,19 @@ def calc_net_rule(gross, cost_sr):
     else:
         cost_daily = cost_sr * (vol / 16)
     return gross + cost_daily
+
+
+def stack_instr(data, freq, method):
+    if method == 'sum':
+        resampled = (data.groupby(level=0)
+                      .resample(freq, level=1).sum())
+    elif method == 'last':
+        resampled = (data.groupby(level=0)
+                     .resample(freq, level=1).last())
+    else:
+        return None
+    stacked = (resampled.unstack(level=0)
+                  .stack(dropna=False)
+                  .droplevel('instrument')
+                  .sort_index(ascending=True))
+    return stacked
