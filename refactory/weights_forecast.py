@@ -7,13 +7,13 @@ from refactory.base import optimisation
 # TODO：又是日频，又是周频，又是年频，有些乱
 
 
-def calc_forecast_weights(net_weekly, index, instruments_num):
+def calc_forecast_weights(net_weekly, index, config):
     # 计算年切分点
     end_list = get_end_list(net_weekly.index)
 
     # 计算年权重
     weight_yearly_raw = pd.DataFrame(
-        [calc_forecast_weight_yearly(instruments_num, net_weekly, end) for end in end_list],
+        [calc_forecast_weight_yearly(net_weekly, end, config) for end in end_list],
         index=end_list, columns=net_weekly.columns)
 
     # 加上最开始的日期，用平均权重
@@ -31,14 +31,14 @@ def calc_forecast_weights(net_weekly, index, instruments_num):
     return weights_daily
 
 
-def calc_forecast_weight_yearly(instr_num, pnl, fit_end, span_multiple=50000, min_periods_corr=10,
-                                min_periods_multiple=5, floor=True):
+def calc_forecast_weight_yearly(pnl, fit_end, config, floor=True):
     sr_target = 0.5
     shrinkage_sr = 0.9
-    span = instr_num * span_multiple
+    span = config['span']
+    corr_min_periods = config['corr_min_periods']
+    multiple_min_periods = config['multiple_min_periods']
 
-    min_periods = instr_num * min_periods_corr
-    raw_corr = pnl.ewm(span=span, min_periods=min_periods, ignore_na=True).corr(pairwise=True)
+    raw_corr = pnl.ewm(span=span, min_periods=corr_min_periods, ignore_na=True).corr(pairwise=True)
     corr_matrix_values = raw_corr[raw_corr.index.get_level_values(0) <= fit_end].tail(len(pnl.columns)).values
     if floor:
         corr_matrix_values[corr_matrix_values < 0.0] = 0.0
@@ -46,7 +46,7 @@ def calc_forecast_weight_yearly(instr_num, pnl, fit_end, span_multiple=50000, mi
     corr = np.clip(corr_matrix_values, a_min=0, a_max=None)
 
     # 计算标准差和均值
-    ewm = pnl.ewm(span=span, min_periods=(instr_num * min_periods_multiple))
+    ewm = pnl.ewm(span=span, min_periods=multiple_min_periods)
     std_daily = ewm.std().asof(fit_end)
     mean_daily = ewm.mean().asof(fit_end)
 

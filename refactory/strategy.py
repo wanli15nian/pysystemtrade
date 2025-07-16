@@ -15,7 +15,7 @@ from refactory.weights_portfolio import calc_portfolio_weights
 
 
 risk_target = 0.16
-instruments = ["US10", "SOFR", "CORN", "SP500_micro"]
+instruments = ["CORN", "SOFR", "SP500_micro", 'US10']
 rules = ['ewmac32', 'ewmac8']
 
 
@@ -76,7 +76,13 @@ def calc_forecast_weights_(gross, cost_sr, index):
                   .droplevel('instrument')
                   .sort_index(ascending=True))
     instruments_num = len(net.index.levels[0])
-    forecast_weights = calc_forecast_weights(net_weekly, index, instruments_num)
+    config = {
+        'span': instruments_num * 50000,
+        'corr_min_periods': instruments_num * 10,
+        'multiple_min_periods': instruments_num * 5
+
+    }
+    forecast_weights = calc_forecast_weights(net_weekly, index, config)
     return forecast_weights
 
 
@@ -95,7 +101,8 @@ cost_inst_ = unstack_for_optimisation(cost_inst)
 
 subsystem_turnover_ = pd.DataFrame({i: calc_turnover(forecast_inst.loc[i], vol_scalar_.loc[i]) for i in instruments}, index=[0])
 
-cost_sr_inst = c(lambda i: calc_cost_sr(gross_inst_.loc[i], cost_inst_.loc[i], 1))
+# cost_sr_inst = c(lambda i: calc_cost_sr(gross_inst_.loc[i], cost_inst_.loc[i], 1))
+cost_sr_inst = {i: calc_cost_sr(gross_inst_.loc[i], cost_inst_.loc[i], 1) for i in instruments }
 
 def calc_portfolio_weights_(gross, cost_sr):
     net_daily = m(lambda i: calc_net_rule(gross.loc[i], cost_sr[i]))
