@@ -36,6 +36,7 @@ def unstack_for_optimisation(multi_index_df):
     unstacked = multi_index_df.unstack(level=0)
     resampled = unstacked.resample('1B').sum()
     resampled[resampled == 0.0] = pd.NA
+    resampled = resampled.T.stack(False)
     return resampled
 
 
@@ -147,5 +148,8 @@ def calc_mixed_volatility(data, days=35, min_periods=10, slow_vol_years=20,
 def calc_net_rule(gross, cost_sr):
     gross = gross.replace(0.0, np.nan)
     vol = gross.std()
-    cost_daily = cost_sr * (vol / 16)
+    if len(cost_sr) == 1:
+        cost_daily = cost_sr[0] * (vol / 16)
+    else:
+        cost_daily = cost_sr * (vol / 16)
     return gross + cost_daily

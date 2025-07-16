@@ -88,7 +88,11 @@ cost_inst_ = unstack_for_optimisation(cost_inst)
 
 subsystem_turnover_ = pd.DataFrame({i: calc_turnover(forecast_inst.loc[i], vol_scalar_.loc[i]) for i in instruments}, index=[0])
 
-cost_sr_inst = m(lambda i: calc_cost_sr(gross_inst_[i], cost_inst_[i], 1))
+cost_sr_inst = c(lambda i: calc_cost_sr(gross_inst_.loc[i], cost_inst_.loc[i], 1))
+
+
+
+portfolio_weights = m(lambda i: calc_forecast_weights_(gross_inst_, cost_sr_inst[i], gross_inst_.loc[i].index))
 # TODO: 为什么是mean？
 # net_inst = pd.DataFrame({inst: gross_inst.loc[inst] + cost_inst.loc[inst].mean() for inst in instruments})
 portfolio_weights = calc_portfolio_weights(net_inst, position_inst)
