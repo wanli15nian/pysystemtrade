@@ -4,7 +4,7 @@ from refactory.base import calc_gross_pnl, calc_net_pnl, calc_position, combine_
     unstack_for_optimisation
 from refactory.base import calc_vol_scalar
 from refactory.cost_actual import calc_cost_actual
-from refactory.cost_estimated import calc_cost_estimated, calc_cost_sr_rule
+from refactory.cost_estimated import calc_cost_estimated, calc_cost_sr
 from refactory.data_source import get_instrument_info, get_price, get_raw_price
 from refactory.forecast import ewmac, rescale_forecast, floor_vol, price_vol
 from refactory.turnover import estimate_weighted_turnover, estimate_turnover_annual, calc_turnover
@@ -73,8 +73,8 @@ def calc_forecast_weights_(gross, cost_sr, index):
     return forecast_weights
 
 
-cost_sr_rule = m(lambda i: calc_cost_sr_rule(gross_rule.loc[i], cost_rule.loc[i], turnover_full.loc[i],
-                                             turnover_average))
+cost_sr_rule = m(lambda i: calc_cost_sr(gross_rule.loc[i], cost_rule.loc[i], 2, turnover_full.loc[i],
+                                        turnover_average))
 forecast_weights = m(lambda i: calc_forecast_weights_(gross_rule, cost_sr_rule[i], gross_rule.loc[i].index))
 forecast_div_mult = m(lambda i: calc_div_mult_daily(forecast_weights.loc[i], forecast_rule))
 forecast_inst = m(lambda i: combine_forecast(forecast_rule.loc[i], forecast_weights.loc[i], forecast_div_mult.loc[i]))
@@ -86,8 +86,9 @@ net_inst = calc_net_pnl(gross_inst, cost_inst)
 gross_inst_ = unstack_for_optimisation(gross_inst)
 cost_inst_ = unstack_for_optimisation(cost_inst)
 
-subsystem_turnover_ = {i: calc_turnover(forecast_inst.loc[i], vol_scalar_.loc[i]) for i in instruments}
+subsystem_turnover_ = pd.DataFrame({i: calc_turnover(forecast_inst.loc[i], vol_scalar_.loc[i]) for i in instruments}, index=[0])
 
+cost_sr_inst = m(lambda i: calc_cost_sr(gross_inst_[i], cost_inst_[i], 1))
 # TODO: 为什么是mean？
 # net_inst = pd.DataFrame({inst: gross_inst.loc[inst] + cost_inst.loc[inst].mean() for inst in instruments})
 portfolio_weights = calc_portfolio_weights(net_inst, position_inst)

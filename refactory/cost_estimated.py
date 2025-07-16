@@ -49,13 +49,16 @@ def calc_cost_sr_per(price, info):
     return cost_sr_per
 
 
-def calc_cost_sr_rule(gross, cost, turnover, turnover_average):
+def calc_cost_sr(gross, cost, cost_multiplier, turnover=None, turnover_average=None):
     gross.replace(0.0, pd.NA, inplace=True)
     costs_daily = cost.mean()
     vol_daily = gross.std()
     cost_sr_daily = 16 * costs_daily / vol_daily
-    cost_sr_rule = (cost_sr_daily / turnover) * turnover_average * 2
-    return cost_sr_rule
+    if turnover is None:
+        cost_sr = pd.Series(cost_sr_daily * cost_multiplier)
+        return cost_sr
+    cost_sr = (cost_sr_daily / turnover) * turnover_average * cost_multiplier  # cost multiplier == 2
+    return cost_sr
 
 # 计算日均成本
 # point_size = info['point_size']
