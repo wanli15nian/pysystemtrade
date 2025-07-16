@@ -86,7 +86,7 @@ net_inst = calc_net_pnl(gross_inst, cost_inst)
 gross_inst_ = unstack_for_optimisation(gross_inst)
 cost_inst_ = unstack_for_optimisation(cost_inst)
 
-subsystem_turnover_ = {i: calc_turnover(position_inst.loc[i], vol_scalar_.loc[i]) for i in instruments}
+subsystem_turnover_ = {i: calc_turnover(forecast_inst.loc[i], vol_scalar_.loc[i]) for i in instruments}
 
 # TODO: 为什么是mean？
 # net_inst = pd.DataFrame({inst: gross_inst.loc[inst] + cost_inst.loc[inst].mean() for inst in instruments})

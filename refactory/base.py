@@ -4,14 +4,19 @@ from scipy.optimize import minimize
 
 
 def calc_position(forecast, vol_scalar, buffer_size=0):
-    aligned_avg = vol_scalar.reindex(forecast.index, method='ffill')
-    position_raw = forecast.mul(aligned_avg, axis=0) / 10
+    position_raw = calc_raw_position(forecast, vol_scalar)
     if buffer_size > 0:
         position_raw = trans_buffered_position(position_raw, vol_scalar, 0.10)
     # position = position.ffill()
     #FIXME: 检查这个shift(1) 是否适用于 subsystem position
     position = position_raw.shift(1)
     return position
+
+
+def calc_raw_position(forecast, vol_scalar):
+    aligned_avg = vol_scalar.reindex(forecast.index, method='ffill')
+    position_raw = forecast.mul(aligned_avg, axis=0) / 10
+    return position_raw
 
 
 def calc_gross_pnl(position, price, point_size):

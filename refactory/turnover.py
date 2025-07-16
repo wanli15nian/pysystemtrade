@@ -1,8 +1,11 @@
 import numpy as np
 import pandas as pd
 
+from refactory.base import calc_raw_position
 
-def calc_turnover(position, vol_scalar, smooth_days: int = 250) -> float:
+
+def calc_turnover(forecast, vol_scalar, smooth_days: int = 250) -> float:
+    position = calc_raw_position(forecast, vol_scalar)
     position_daily = position.resample("1B").last()
     if isinstance(vol_scalar, float) or isinstance(vol_scalar, int):
         scalar_daily = pd.Series(np.full(position_daily.shape[0], float(vol_scalar)), position_daily.index)
