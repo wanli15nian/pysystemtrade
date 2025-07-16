@@ -97,15 +97,16 @@ subsystem_turnover_ = pd.DataFrame({i: calc_turnover(forecast_inst.loc[i], vol_s
 
 cost_sr_inst = c(lambda i: calc_cost_sr(gross_inst_.loc[i], cost_inst_.loc[i], 1))
 
-def calc_portfolio_weights_(gross, cost_sr, index):
+def calc_portfolio_weights_(gross, cost_sr):
     net_daily = m(lambda i: calc_net_rule(gross.loc[i], cost_sr[i]))
     net = (net_daily.unstack(level=0)
            .resample('W').sum())
     instruments_num = len(net.columns)
+    index = net_daily.unstack(level=0).index
     weights = calc_forecast_weights(net, index, instruments_num)
     return weights
 
-portfolio_weights = calc_portfolio_weights_(gross_inst_, cost_sr_inst, gross_inst_.index)
+portfolio_weights = calc_portfolio_weights_(gross_inst_, cost_sr_inst)
 # TODO: 为什么是mean？
 # net_inst = pd.DataFrame({inst: gross_inst.loc[inst] + cost_inst.loc[inst].mean() for inst in instruments})
 portfolio_weights = calc_portfolio_weights(net_inst, position_inst)
