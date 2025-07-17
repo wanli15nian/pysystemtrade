@@ -255,7 +255,7 @@ instrument_weight_estimate:
    apply_cost_weight: False
    date_method: "expanding"
    rollyears: 20
-   cleaning: True
+   cleaning: False
    equalise_SR: False
    ann_target_SR: 0.5
    equalise_vols: True
