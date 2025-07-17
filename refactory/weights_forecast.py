@@ -1,3 +1,5 @@
+from copy import copy
+
 import numpy as np
 import pandas as pd
 
@@ -38,6 +40,7 @@ def calc_forecast_weight_yearly(pnl, fit_end, config, floor=True):
     corr_min_periods = config['corr_min_periods']
     multiple_span = config['multiple_span']
     multiple_min_periods = config['multiple_min_periods']
+    shrinkage_corr = config['shrinkage_corr']
     all_assets = pnl.columns.to_series()
 
     raw_corr = pnl.ewm(span=corr_span, min_periods=corr_min_periods, ignore_na=True).corr(pairwise=True)
@@ -67,14 +70,36 @@ def calc_forecast_weight_yearly(pnl, fit_end, config, floor=True):
     elif len(assets) != len(all_assets):
         corr, mean, std = prepare_valid_param(assets, corr, std, mean)
 
+    shrunk_corr = shrink_corr_to_average(corr, shrinkage_corr)
+
+
     # 计算归一化标准差和归一化均值
     mean_std = np.nanmean(std)
     norm_std = [mean_std] * len(std)
 
     norm_mean = sr_target * shrinkage_sr * std + (1 - shrinkage_sr) * mean
     norm_mean = norm_mean * (mean_std / std)
-    weights = optimisation(corr, norm_mean, norm_std)
+    weights = optimisation(shrunk_corr, norm_mean, norm_std)
     return weights
+
+
+def shrink_corr_to_average(raw_corr, shrinkage_corr=1.0):
+
+    raw_corr_ = copy(np.array(raw_corr))
+    size = len(raw_corr_)
+    np.fill_diagonal(raw_corr_, np.nan)
+
+    if np.all(np.isnan(raw_corr_)):
+        return np.nan
+    average_corr = np.nanmean(raw_corr_)
+
+    dummy_matrix = np.full((size, size), average_corr)
+    np.fill_diagonal(dummy_matrix, 1.0)
+
+    shrunk_corr = shrinkage_corr * dummy_matrix + (1 - shrinkage_corr) * np.array(raw_corr)
+
+    return shrunk_corr
+
 
 
 def prepare_valid_param(assets_with_data, corr_raw, std_raw, mean_raw):
