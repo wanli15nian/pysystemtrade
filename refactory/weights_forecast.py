@@ -9,7 +9,7 @@ from refactory.base import optimisation, stack_instr
 # TODO：又是日频，又是周频，又是年频，有些乱
 
 
-def calc_weights(net_weekly, index, config):
+def calc_weights(net_weekly, data_for_reindex, config):
     # 计算年切分点
     end_list = get_end_list(net_weekly.index)
 
@@ -22,12 +22,27 @@ def calc_weights(net_weekly, index, config):
     weights_yearly = add_initial_weight(net_weekly, weight_yearly_raw)
 
     # 把按年的Index ffill成按天的Index
-    # universal_index = net_.index.levels[1]
-    # weight_df = weights_yearly.reindex(index, method='ffill').fillna(1 / len(weights_yearly.columns))
-    weight_df = weights_yearly.reindex(index, method='ffill').shift(1).backfill()
-    weights_daily = weight_df.resample('1B').mean().ewm(span=125).mean()
-
+    # weight_df = weights_yearly.reindex(data_for_reindex.index, method='ffill').shift(1).backfill()
+    weight_df = fix_weights_to_target_index(weights_yearly, data_for_reindex)
+    unsummed_weights = weight_df.resample('1B').mean().ewm(span=125).mean()
+    weights_daily = weights_sum_to_one(unsummed_weights)
     return weights_daily
+
+
+def weights_sum_to_one(weights):
+    sum_weights = weights.sum(axis=1).replace(0.0, 0.0001)
+    normalised_weights = weights.div(sum_weights, axis=0)
+    return normalised_weights
+
+
+def fix_weights_to_target_index(weights, data):
+    data_ffill = data.ffill()
+    data_ffill_ = ~data_ffill.isna()
+    data_ffill[data_ffill_.sum(axis=1) == 0] = 0
+
+    resampled_weights = weights.reindex(data_ffill.index, method='ffill')
+    resampled_weights[np.isnan(data_ffill)] = 0.0
+    return resampled_weights
 
 
 def add_initial_weight(net_weekly, weight_yearly_raw):

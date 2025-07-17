@@ -65,7 +65,7 @@ turnover_full = estimate_turnover_annual(forecast_rule)
 turnover_average = turnover_full.mean(axis=0)
 
 
-def calc_forecast_weights_(gross, cost_sr, index):
+def calc_forecast_weights_(gross, cost_sr, instrument_gross):
     # 注: 需要用m 函数以保证net 的正确计算
     net = m(lambda i: calc_net(gross.loc[i], cost_sr))
     net_weekly = stack_instr(net, 'W', 'sum')
@@ -81,13 +81,13 @@ def calc_forecast_weights_(gross, cost_sr, index):
         'equalise_vol': True
 
     }
-    forecast_weights = calc_weights(net_weekly, index, config)
+    forecast_weights = calc_weights(net_weekly, instrument_gross, config)
     return forecast_weights
 
 
 cost_sr_rule = m(lambda i: calc_cost_sr(gross_rule.loc[i], cost_rule.loc[i], 2, turnover_full.loc[i],
                                         turnover_average))
-forecast_weights = m(lambda i: calc_forecast_weights_(gross_rule, cost_sr_rule[i], gross_rule.loc[i].index))
+forecast_weights = m(lambda i: calc_forecast_weights_(gross_rule, cost_sr_rule[i], gross_rule.loc[i]))
 forecast_div_mult = m(lambda i: calc_div_mult_daily(forecast_weights.loc[i], forecast_rule))
 forecast_inst = m(lambda i: combine_forecast(forecast_rule.loc[i], forecast_weights.loc[i], forecast_div_mult.loc[i]))
 position_inst_raw = m(lambda i: calc_raw_position(forecast_inst[i], vol_scalar_.loc[i]))
@@ -105,11 +105,12 @@ cost_inst_ = unstack_for_optimisation(cost_inst)
 cost_sr_inst = {i: calc_cost_sr(gross_inst_.loc[i], cost_inst_.loc[i], 1) for i in instruments}
 
 
-def calc_portfolio_weights_(gross, cost_sr):
+def calc_portfolio_weights_(gross, cost_sr, subsystem_position):
     net_daily = m(lambda i: calc_net(gross.loc[i], cost_sr[i]))
     net = (net_daily.unstack(level=0)
            .resample('W').sum())
     index = net_daily.unstack(level=0).index
+    subsystem_position = subsystem_position.unstack().T.ffill()
     config = {
         'corr_span': 500000,
         'corr_min_periods': 10,
@@ -120,10 +121,10 @@ def calc_portfolio_weights_(gross, cost_sr):
         'sr_target': 0.5,
         'equalise_vol': True
     }
-    weights = calc_weights(net, index, config)
+    weights = calc_weights(net, subsystem_position, config)
     return weights
 
-portfolio_weights = calc_portfolio_weights_(gross_inst_, cost_sr_inst)
+portfolio_weights = calc_portfolio_weights_(gross_inst_, cost_sr_inst, position_inst_raw)
 
 print(portfolio_weights)
 
