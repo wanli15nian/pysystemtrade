@@ -38,6 +38,7 @@ def calc_forecast_weight_yearly(pnl, fit_end, config, floor=True):
     corr_min_periods = config['corr_min_periods']
     multiple_span = config['multiple_span']
     multiple_min_periods = config['multiple_min_periods']
+    all_assets = pnl.columns.to_series()
 
     raw_corr = pnl.ewm(span=corr_span, min_periods=corr_min_periods, ignore_na=True).corr(pairwise=True)
     corr_matrix_values = raw_corr[raw_corr.index.get_level_values(0) <= fit_end].tail(len(pnl.columns)).values
@@ -56,6 +57,7 @@ def calc_forecast_weight_yearly(pnl, fit_end, config, floor=True):
     mean = mean_daily * (365.25 / 7.0)
 
     assets_no_data = assets_with_no_data(corr, std, mean)
+    assets = all_assets[~all_assets.isin(assets_no_data)]
 
     # 计算归一化标准差和归一化均值
     mean_std = np.nanmean(std)
@@ -69,10 +71,11 @@ def calc_forecast_weight_yearly(pnl, fit_end, config, floor=True):
 
 def assets_with_no_data(corr, std, mean):
     corr_check = (~pd.DataFrame(corr, index=std.index, columns=std.index).isna()).sum() < 2
-    mean_check = (mean != np.nan)
-    std_check = (std != np.nan)
-    compiled = corr_check + mean_check + std_check
-    return compiled.index
+    mean_check = (mean == np.nan)
+    std_check = (std == np.nan)
+    compiled = corr_check | mean_check | std_check
+    compiled = compiled[compiled]
+    return compiled.index.to_series()
 
 
 
