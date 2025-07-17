@@ -59,6 +59,10 @@ def calc_forecast_weight_yearly(pnl, fit_end, config, floor=True):
     assets_no_data = assets_with_no_data(corr, std, mean)
     assets = all_assets[~all_assets.isin(assets_no_data)]
 
+    if assets.empty:
+        weights = []
+        return weights
+
     # 计算归一化标准差和归一化均值
     mean_std = np.nanmean(std)
     norm_std = [mean_std] * len(std)
