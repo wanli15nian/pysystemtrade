@@ -120,7 +120,7 @@ def optimisation(corr, norm_mean, norm_stdev):
         stdev = weights.dot(sigma).dot(weights.transpose()) ** 0.5
         sr = -estimated_returns / stdev
         return sr
-
+    corr = np.array(corr)
     number = len(corr)
     mus = np.array(norm_mean, ndmin=2).transpose()  # mus 没问题
     sigma = np.diag(norm_stdev).dot(corr).dot(np.diag(norm_stdev))

@@ -45,7 +45,8 @@ def calc_forecast_weight_yearly(pnl, fit_end, config, floor=True):
     if floor:
         corr_matrix_values[corr_matrix_values < 0.0] = 0.0
         np.fill_diagonal(corr_matrix_values, 1.0)
-    corr = np.clip(corr_matrix_values, a_min=0, a_max=None)
+    corr_array = np.clip(corr_matrix_values, a_min=0, a_max=None)
+    corr = pd.DataFrame(corr_array, index=all_assets, columns=all_assets)
 
     # 计算标准差和均值
     ewm = pnl.ewm(span=multiple_span, min_periods=multiple_min_periods)
@@ -63,6 +64,9 @@ def calc_forecast_weight_yearly(pnl, fit_end, config, floor=True):
         weights = []
         return weights
 
+    elif len(assets) != len(all_assets):
+        corr, mean, std = prepare_valid_param(assets, corr, std, mean)
+
     # 计算归一化标准差和归一化均值
     mean_std = np.nanmean(std)
     norm_std = [mean_std] * len(std)
@@ -73,8 +77,16 @@ def calc_forecast_weight_yearly(pnl, fit_end, config, floor=True):
     return weights
 
 
+def prepare_valid_param(assets_with_data, corr_raw, std_raw, mean_raw):
+    std = std_raw[assets_with_data]
+    mean = mean_raw[assets_with_data]
+    corr = corr_raw[assets_with_data].loc[assets_with_data]
+    return corr, mean, std
+
+
+
 def assets_with_no_data(corr, std, mean):
-    corr_check = (~pd.DataFrame(corr, index=std.index, columns=std.index).isna()).sum() < 2
+    corr_check = (~corr.isna()).sum() < 2
     mean_check = (mean == np.nan)
     std_check = (std == np.nan)
     compiled = corr_check | mean_check | std_check
