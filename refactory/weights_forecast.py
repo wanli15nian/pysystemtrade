@@ -41,6 +41,7 @@ def calc_forecast_weight_yearly(pnl, fit_end, config, floor=True):
     shrinkage_corr = config['shrinkage_corr']
     shrinkage_sr = config['shrinkage_sr']
     sr_target = config['sr_target']
+    equalise_vol = config['equalise_vol']
     all_assets = pnl.columns.to_series()
 
     raw_corr = pnl.ewm(span=corr_span, min_periods=corr_min_periods, ignore_na=True).corr(pairwise=True)
@@ -49,7 +50,7 @@ def calc_forecast_weight_yearly(pnl, fit_end, config, floor=True):
         corr_matrix_values[corr_matrix_values < 0.0] = 0.0
         np.fill_diagonal(corr_matrix_values, 1.0)
     corr_array = np.clip(corr_matrix_values, a_min=0, a_max=None)
-    corr = pd.DataFrame(corr_array, index=all_assets, columns=all_assets)
+    corr_unshrunk = pd.DataFrame(corr_array, index=all_assets, columns=all_assets)
 
     # 计算标准差和均值
     ewm = pnl.ewm(span=multiple_span, min_periods=multiple_min_periods)
@@ -58,9 +59,9 @@ def calc_forecast_weight_yearly(pnl, fit_end, config, floor=True):
 
     # 年化处理
     std = std_daily * ((365.25 / 7.0) ** 0.5)
-    mean = mean_daily * (365.25 / 7.0)
+    mean_unshrunk = mean_daily * (365.25 / 7.0)
 
-    assets_no_data = assets_with_no_data(corr, std, mean)
+    assets_no_data = assets_with_no_data(corr_unshrunk, std, mean_unshrunk)
     assets = all_assets[~all_assets.isin(assets_no_data)]
 
     if assets.empty:
@@ -68,21 +69,24 @@ def calc_forecast_weight_yearly(pnl, fit_end, config, floor=True):
         return weights
 
     elif len(assets) != len(all_assets):
-        corr, mean, std = prepare_valid_param(assets, corr, std, mean)
+        corr_unshrunk, mean, std = prepare_valid_param(assets, corr_unshrunk, std, mean_unshrunk)
 
-    shrunk_corr = shrink_corr_to_average(corr, shrinkage_corr)
-    shrunk_mean = shrink_mean_to_average(mean, std, shrinkage_sr, sr_target)
-
+    corr = shrink_corr_to_average(corr_unshrunk, shrinkage_corr)
+    mean = shrink_mean_to_average(mean_unshrunk, std, shrinkage_sr, sr_target)
     # 计算归一化标准差和归一化均值
-    norm_std = [np.nanmean(std)] * len(std)
-    weights = optimisation(shrunk_corr, shrunk_mean, norm_std)
+
+    if equalise_vol:
+        std_mean = np.nanmean(std)
+        norm_mean = mean * (std_mean / std)
+        norm_std = [std_mean] * len(std)
+        mean, std = norm_mean, norm_std
+
+    weights = optimisation(corr, mean, std)
     return weights
 
 
 def shrink_mean_to_average(mean, std, shrinkage_sr, sr_target):
-    mean_std = np.nanmean(std)
     norm_mean = sr_target * shrinkage_sr * std + (1 - shrinkage_sr) * mean
-    norm_mean = norm_mean * (mean_std / std)
     return norm_mean
 
 
