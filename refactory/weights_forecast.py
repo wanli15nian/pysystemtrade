@@ -34,13 +34,13 @@ def calc_weights(net_weekly, index, config):
 
 
 def calc_forecast_weight_yearly(pnl, fit_end, config, floor=True):
-    sr_target = 0.5
-    shrinkage_sr = 0.9
     corr_span = config['corr_span']
     corr_min_periods = config['corr_min_periods']
     multiple_span = config['multiple_span']
     multiple_min_periods = config['multiple_min_periods']
     shrinkage_corr = config['shrinkage_corr']
+    shrinkage_sr = config['shrinkage_sr']
+    sr_target = config['sr_target']
     all_assets = pnl.columns.to_series()
 
     raw_corr = pnl.ewm(span=corr_span, min_periods=corr_min_periods, ignore_na=True).corr(pairwise=True)
@@ -71,16 +71,19 @@ def calc_forecast_weight_yearly(pnl, fit_end, config, floor=True):
         corr, mean, std = prepare_valid_param(assets, corr, std, mean)
 
     shrunk_corr = shrink_corr_to_average(corr, shrinkage_corr)
-
+    shrunk_mean = shrink_mean_to_average(mean, std, shrinkage_sr, sr_target)
 
     # 计算归一化标准差和归一化均值
-    mean_std = np.nanmean(std)
-    norm_std = [mean_std] * len(std)
+    norm_std = [np.nanmean(std)] * len(std)
+    weights = optimisation(shrunk_corr, shrunk_mean, norm_std)
+    return weights
 
+
+def shrink_mean_to_average(mean, std, shrinkage_sr, sr_target):
+    mean_std = np.nanmean(std)
     norm_mean = sr_target * shrinkage_sr * std + (1 - shrinkage_sr) * mean
     norm_mean = norm_mean * (mean_std / std)
-    weights = optimisation(shrunk_corr, norm_mean, norm_std)
-    return weights
+    return norm_mean
 
 
 def shrink_corr_to_average(raw_corr, shrinkage_corr=1.0):

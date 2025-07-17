@@ -75,7 +75,9 @@ def calc_forecast_weights_(gross, cost_sr, index):
         'corr_min_periods': instruments_num * 10,
         'multiple_span': instruments_num * 50000,
         'multiple_min_periods': instruments_num * 5,
-        'shrinkage_corr': 0.5
+        'shrinkage_corr': 0.5,
+        'shrinkage_sr': 0.9,
+        'sr_target': 0.5
 
     }
     forecast_weights = calc_weights(net_weekly, index, config)
