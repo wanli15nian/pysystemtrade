@@ -109,7 +109,6 @@ def calc_portfolio_weights_(gross, cost_sr, subsystem_position):
     net_daily = m(lambda i: calc_net(gross.loc[i], cost_sr[i]))
     net = (net_daily.unstack(level=0)
            .resample('W').sum())
-    index = net_daily.unstack(level=0).index
     subsystem_position = subsystem_position.unstack().T.ffill()
     config = {
         'corr_span': 500000,

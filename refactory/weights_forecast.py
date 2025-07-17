@@ -15,7 +15,7 @@ def calc_weights(net_weekly, data_for_reindex, config):
 
     # 计算年权重
     weight_yearly_raw = pd.DataFrame(
-        [calc_forecast_weight_yearly(net_weekly, end, config) for end in end_list],
+        [calc_weight_yearly(net_weekly, end, config) for end in end_list],
         index=end_list, columns=net_weekly.columns)
 
     # 加上最开始的日期，用平均权重
@@ -53,7 +53,7 @@ def add_initial_weight(net_weekly, weight_yearly_raw):
     return weights_yearly
 
 
-def calc_forecast_weight_yearly(pnl, fit_end, config, floor=True):
+def calc_weight_yearly(pnl, fit_end, config, floor=True):
     corr_span = config['corr_span']
     corr_min_periods = config['corr_min_periods']
     multiple_span = config['multiple_span']
