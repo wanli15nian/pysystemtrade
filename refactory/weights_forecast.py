@@ -19,10 +19,7 @@ def calc_weights(net_weekly, index, config):
         index=end_list, columns=net_weekly.columns)
 
     # 加上最开始的日期，用平均权重
-    initial_date = net_weekly.index[0]
-    rules = weight_yearly_raw.columns
-    initial_weight = pd.DataFrame({rule: 1 / len(rules) for rule in rules}, index=[initial_date])
-    weights_yearly = pd.concat([initial_weight, weight_yearly_raw], axis=0)
+    weights_yearly = add_initial_weight(net_weekly, weight_yearly_raw)
 
     # 把按年的Index ffill成按天的Index
     # universal_index = net_.index.levels[1]
@@ -31,6 +28,14 @@ def calc_weights(net_weekly, index, config):
     weights_daily = weight_df.resample('1B').mean().ewm(span=125).mean()
 
     return weights_daily
+
+
+def add_initial_weight(net_weekly, weight_yearly_raw):
+    initial_date = net_weekly.index[0]
+    rules = weight_yearly_raw.columns
+    initial_weight = pd.DataFrame({rule: 1 / len(rules) for rule in rules}, index=[initial_date])
+    weights_yearly = pd.concat([initial_weight, weight_yearly_raw], axis=0)
+    return weights_yearly
 
 
 def calc_forecast_weight_yearly(pnl, fit_end, config, floor=True):
@@ -69,7 +74,7 @@ def calc_forecast_weight_yearly(pnl, fit_end, config, floor=True):
         return weights
 
     elif len(assets) != len(all_assets):
-        corr_unshrunk, mean, std = prepare_valid_param(assets, corr_unshrunk, std, mean_unshrunk)
+        corr_unshrunk, mean_unshrunk, std = prepare_valid_param(assets, corr_unshrunk, std, mean_unshrunk)
 
     corr = shrink_corr_to_average(corr_unshrunk, shrinkage_corr)
     mean = shrink_mean_to_average(mean_unshrunk, std, shrinkage_sr, sr_target)
@@ -86,8 +91,8 @@ def calc_forecast_weight_yearly(pnl, fit_end, config, floor=True):
 
 
 def shrink_mean_to_average(mean, std, shrinkage_sr, sr_target):
-    norm_mean = sr_target * shrinkage_sr * std + (1 - shrinkage_sr) * mean
-    return norm_mean
+    mean_shrunk = sr_target * shrinkage_sr * std + (1 - shrinkage_sr) * mean
+    return mean_shrunk
 
 
 def shrink_corr_to_average(raw_corr, shrinkage_corr=1.0):

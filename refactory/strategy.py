@@ -1,7 +1,7 @@
 import pandas as pd
 
 from refactory.base import calc_gross_pnl, calc_net_pnl, calc_position, combine_forecast, calc_net, \
-    unstack_for_optimisation, stack_instr
+    unstack_for_optimisation, stack_instr, calc_raw_position
 from refactory.base import calc_vol_scalar
 from refactory.cost_actual import calc_cost_actual
 from refactory.cost_estimated import calc_cost_estimated, calc_cost_sr
@@ -90,6 +90,7 @@ cost_sr_rule = m(lambda i: calc_cost_sr(gross_rule.loc[i], cost_rule.loc[i], 2, 
 forecast_weights = m(lambda i: calc_forecast_weights_(gross_rule, cost_sr_rule[i], gross_rule.loc[i].index))
 forecast_div_mult = m(lambda i: calc_div_mult_daily(forecast_weights.loc[i], forecast_rule))
 forecast_inst = m(lambda i: combine_forecast(forecast_rule.loc[i], forecast_weights.loc[i], forecast_div_mult.loc[i]))
+position_inst_raw = m(lambda i: calc_raw_position(forecast_inst[i], vol_scalar_.loc[i]))
 position_inst = m(lambda i: calc_position(forecast_inst[i], vol_scalar_.loc[i], buffer_size=0.10))
 gross_inst = m(lambda i: calc_gross_pnl(position_inst.loc[i], price_.loc[i], size_.loc[i]))
 cost_inst = m(lambda i: calc_cost_actual(position_inst.loc[i], price_.loc[i], info_.loc[i]))
@@ -113,7 +114,11 @@ def calc_portfolio_weights_(gross, cost_sr):
         'corr_span': 500000,
         'corr_min_periods': 10,
         'multiple_span': 50000,
-        'multiple_min_periods': 5
+        'multiple_min_periods': 5,
+        'shrinkage_corr': 0.5,
+        'shrinkage_sr': 0.9,
+        'sr_target': 0.5,
+        'equalise_vol': True
     }
     weights = calc_weights(net, index, config)
     return weights
