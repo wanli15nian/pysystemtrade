@@ -36,7 +36,7 @@ def unstack_for_optimisation(multi_index_df):
     unstacked = multi_index_df.unstack(level=0)
     resampled = unstacked.resample('1B').sum()
     resampled[resampled == 0.0] = pd.NA
-    resampled = resampled.T.stack(dropna=False).to_frame(name='')
+    resampled = resampled.T.stack(dropna=False)
     return resampled
 
 

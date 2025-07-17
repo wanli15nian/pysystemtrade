@@ -54,6 +54,9 @@ def calc_forecast_weight_yearly(pnl, fit_end, config, floor=True):
     # 年化处理
     std = std_daily * ((365.25 / 7.0) ** 0.5)
     mean = mean_daily * (365.25 / 7.0)
+
+    assets_no_data = assets_with_no_data(corr, std, mean)
+
     # 计算归一化标准差和归一化均值
     mean_std = np.nanmean(std)
     norm_std = [mean_std] * len(std)
@@ -62,6 +65,16 @@ def calc_forecast_weight_yearly(pnl, fit_end, config, floor=True):
     norm_mean = norm_mean * (mean_std / std)
     weights = optimisation(corr, norm_mean, norm_std)
     return weights
+
+
+def assets_with_no_data(corr, std, mean):
+    corr_check = (~pd.DataFrame(corr, index=std.index, columns=std.index).isna()).sum() < 2
+    mean_check = (mean != np.nan)
+    std_check = (std != np.nan)
+    compiled = corr_check + mean_check + std_check
+    return compiled.index
+
+
 
 
 def calc_div_mult_daily(weights, forecast):
