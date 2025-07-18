@@ -34,16 +34,15 @@ def calc_weighted_turnover(weights, turnovers, total=1.0):
     return np.nansum(w1 * t)
 
 
-def calc_turnover(forecast, vol_scalar, smooth_days: int = 250) -> float:
-    # FIXME:应该直接用position来计算turnover？
-    position = calc_raw_position(forecast, vol_scalar)
-    position_daily = position.resample("1B").last()
-    if isinstance(vol_scalar, float) or isinstance(vol_scalar, int):
-        scalar_daily = pd.Series(np.full(position_daily.shape[0], float(vol_scalar)), position_daily.index)
-    else:
-        scalar_daily = vol_scalar.reindex(position_daily.index, method="ffill")
-        scalar_daily = scalar_daily.ewm(smooth_days, min_periods=2).mean()
-    position_normalised = position_daily / scalar_daily.ffill()
-    turnover_daily = position_normalised.diff().abs().mean()
-    turnover_yearly = turnover_daily * 256
-    return turnover_yearly
+# def calc_turnover(forecast, vol_scalar, smooth_days: int = 250) -> float:
+#     position = calc_raw_position(forecast, vol_scalar)
+#     position_daily = position.resample("1B").last()
+#     if isinstance(vol_scalar, float) or isinstance(vol_scalar, int):
+#         scalar_daily = pd.Series(np.full(position_daily.shape[0], float(vol_scalar)), position_daily.index)
+#     else:
+#         scalar_daily = vol_scalar.reindex(position_daily.index, method="ffill")
+#         scalar_daily = scalar_daily.ewm(smooth_days, min_periods=2).mean()
+#     position_normalised = position_daily / scalar_daily.ffill()
+#     turnover_daily = position_normalised.diff().abs().mean()
+#     turnover_yearly = turnover_daily * 256
+#     return turnover_yearly

@@ -7,8 +7,7 @@ from refactory.cost_actual import calc_cost_actual
 from refactory.cost_estimated import calc_cost_estimated
 from refactory.data_source import get_instrument_info, get_price, get_raw_price
 from refactory.forecast import ewmac, rescale_forecast, floor_vol, price_vol
-from refactory.turnover import estimate_turnover_all, calc_turnover, \
-    estimate_weighted_turnover
+from refactory.turnover import estimate_turnover_all, estimate_weighted_turnover
 from refactory.weights_forecast import calc_weights, calc_div_mult_daily
 
 # --------------------------------------------------------------------------------------------------------------------
@@ -90,7 +89,7 @@ cost_inst = m(lambda i: calc_cost_actual(position_inst.loc[i], price.loc[i], inf
 
 # 以下为意义不明变量
 # net_inst = calc_net_pnl(gross_inst, cost_inst)
-subsystem_turnover_ = pd.Series({i: calc_turnover(forecast_inst.loc[i], vol_scalar.loc[i]) for i in instruments})
+# subsystem_turnover_ = pd.Series({i: calc_turnover(forecast_inst.loc[i], vol_scalar.loc[i]) for i in instruments})
 
 gross_inst_ = unstack_for_optimisation(gross_inst)
 cost_inst_ = unstack_for_optimisation(cost_inst)
