@@ -34,6 +34,7 @@ def m(func, instruments=instruments):
                      keys=instruments,
                      names=['instrument', 'datetime'])
 
+
 # -------------------------------------------------------------------------------------------------------------------
 
 info = get_instrument_info().loc[instruments]
@@ -56,6 +57,18 @@ cost_rule = m(lambda i: calc_cost_estimated(price.loc[i], turnover_weighted, vol
 print('calculate pnl for instrument and rule')
 
 
+def cal_cost_sr_all():
+    turnover_all = estimate_turnover_annual(forecast_rule)
+    turnover_average = turnover_all.mean(axis=0)
+    cost_sr_rule_func = lambda i: calc_cost_sr(gross_rule.loc[i], cost_rule.loc[i], 2, turnover_all.loc[i],
+                                               turnover_average)
+    cost_sr_rule = pd.DataFrame({i1: cost_sr_rule_func(i1) for i1 in instruments}).transpose()
+    return cost_sr_rule
+
+
+cost_sr_rule = cal_cost_sr_all()
+
+
 def calc_forecast_weights_(gross, cost_sr, instrument_gross):
     # 注: 需要用m 函数以保证net 的正确计算
     net = m(lambda i: calc_net(gross.loc[i], cost_sr))
@@ -74,12 +87,6 @@ def calc_forecast_weights_(gross, cost_sr, instrument_gross):
     forecast_weights = calc_weights(net_weekly, instrument_gross, config)
     return forecast_weights
 
-
-turnover_full = estimate_turnover_annual(forecast_rule)
-turnover_average = turnover_full.mean(axis=0)
-
-cost_sr_rule_func = lambda i: calc_cost_sr(gross_rule.loc[i], cost_rule.loc[i], 2, turnover_full.loc[i], turnover_average)
-cost_sr_rule = pd.DataFrame({i1: cost_sr_rule_func(i1) for i1 in instruments}).transpose()
 
 forecast_weights = m(lambda i: calc_forecast_weights_(gross_rule, cost_sr_rule.loc[i], gross_rule.loc[i]))
 forecast_div_mult = m(lambda i: calc_div_mult_daily(forecast_weights.loc[i], forecast_rule))
