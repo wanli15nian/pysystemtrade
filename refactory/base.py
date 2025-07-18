@@ -10,10 +10,11 @@ def calc_vol_scalar(price, point_size, capital=1000000, risk_target=0.16):
     整体账户每天能接受的cash vol为 capital * risk_target
     每个contract能提供的cash vol为pnl_vol * point_size
     '''
-    pnl_vol = calc_mixed_volatility(price.diff(), slow_vol_years=10)  # ret_vol 不是百分比，而是绝对值
+    # TODO: price有空值的时候,会导致空值前后的价格无用，有问题。但ffill会导致0出现，降低实际波动率。应该dropna再计算波动率？
+    pnl_vol = calc_mixed_volatility(price.diff(), slow_vol_years=10)
     risk_target = risk_target / (256 ** 0.5)
-    position_target = (capital * risk_target) / (pnl_vol * point_size)
-    return position_target
+    vol_scalar = (capital * risk_target) / (pnl_vol * point_size)
+    return vol_scalar
 
 
 def calc_position(forecast, vol_scalar, buffer_size=0):
