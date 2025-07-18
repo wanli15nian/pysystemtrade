@@ -172,6 +172,7 @@ def stack_instr(data, freq, method):
 
 
 def calc_cost_sr(gross, cost, cost_multiplier=1, turnover=None, turnover_average=None):
+    # TODO:把这个拆成两个函数，不要用开关控制
     gross.replace(0.0, pd.NA, inplace=True)
     vol_daily = gross.std()
     costs_daily = cost.mean()
