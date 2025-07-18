@@ -20,7 +20,8 @@ def calc_vol_scalar(price, point_size, capital=1000000, risk_target=0.16):
 def calc_position(forecast, vol_scalar, buffer_size=0):
     position_raw = calc_raw_position(forecast, vol_scalar)
     if buffer_size > 0:
-        position_raw = trans_buffered_position(position_raw, vol_scalar, 0.10)
+        # 判断position_raw是否是dataframe，如果是对于每一列应用函数
+        position_raw = buffer_position(position_raw, vol_scalar, buffer_size)
     # position = position.ffill()
     # FIXME: 检查这个shift(1) 是否适用于 subsystem position
     position = position_raw.shift(1)
@@ -51,7 +52,7 @@ def combine_forecast(forecast, forecast_weights, forecast_div_mult):
     return combined_forecast
 
 
-def trans_buffered_position(position, vol_scalar, buffer_size=0.10, trade_to_edge=True):
+def buffer_position(position, vol_scalar, buffer_size=0.10, trade_to_edge=True):
     # vol_scalar 的另一种理解是Avg pos of the subsystem level，就是说position 可以在avg pos的10% 区间内浮动
     buffer = vol_scalar * buffer_size
     top = (position + buffer).ffill().round()
