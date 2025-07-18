@@ -5,6 +5,7 @@ from refactory.base import calc_raw_position
 
 
 def calc_turnover(forecast, vol_scalar, smooth_days: int = 250) -> float:
+    # FIXME:应该直接用position来计算turnover？
     position = calc_raw_position(forecast, vol_scalar)
     position_daily = position.resample("1B").last()
     if isinstance(vol_scalar, float) or isinstance(vol_scalar, int):

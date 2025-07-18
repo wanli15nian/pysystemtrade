@@ -20,14 +20,16 @@ def calc_vol_scalar(price, point_size, capital=1000000, risk_target=0.16):
 def calc_position(forecast, vol_scalar, buffer_size=0):
     position_raw = calc_raw_position(forecast, vol_scalar)
     if buffer_size > 0:
-        # 判断position_raw是否是dataframe
         if isinstance(position_raw, pd.DataFrame):
-            # 对于每一列应用函数
             position_raw = position_raw.apply(lambda x: buffer_position(x, vol_scalar, buffer_size))
         else:
             position_raw = buffer_position(position_raw, vol_scalar, buffer_size)
     position = position_raw.shift(1)
     return position
+
+
+def calc_raw_position(forecast, vol_scalar):
+    return forecast.mul(vol_scalar, axis=0) / 10
 
 
 def buffer_position(position, vol_scalar, buffer_size=0.10, trade_to_edge=True):
@@ -44,12 +46,6 @@ def buffer_position(position, vol_scalar, buffer_size=0.10, trade_to_edge=True):
         buffered_position_list.append(last)
     buffered_position = pd.Series(buffered_position_list, index=rounded_position.index)
     return buffered_position
-
-
-def calc_raw_position(forecast, vol_scalar):
-    aligned_avg = vol_scalar.reindex(forecast.index, method='ffill')
-    position_raw = forecast.mul(aligned_avg, axis=0) / 10
-    return position_raw
 
 
 def calc_gross_pnl(position, price, point_size):
