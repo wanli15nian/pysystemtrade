@@ -147,12 +147,21 @@ def calc_net(gross, cost_sr):
     return gross + cost_daily
 
 
+# def unstack_for_optimisation(multi_index_df):
+#     unstacked = multi_index_df.unstack(level=0)
+#     resampled = unstacked.resample('1B').sum()
+#     resampled[resampled == 0.0] = pd.NA
+#     resampled = resampled.T.stack(dropna=False)
+#     return resampled
+
 def unstack_for_optimisation(multi_index_df):
-    unstacked = multi_index_df.unstack(level=0)
-    resampled = unstacked.resample('1B').sum()
-    resampled[resampled == 0.0] = pd.NA
-    resampled = resampled.T.stack(dropna=False)
-    return resampled
+    return (
+        multi_index_df.unstack(level=0)
+        .resample('1B').sum()
+        .replace(0.0, pd.NA)
+        .T
+        .stack(dropna=False)
+    )
 
 
 def stack_instr(data, freq, method):

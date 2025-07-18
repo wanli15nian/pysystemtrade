@@ -6,9 +6,6 @@ import pandas as pd
 from refactory.base import optimisation, stack_instr
 
 
-# TODO：又是日频，又是周频，又是年频，有些乱
-
-
 def calc_weights(net_weekly, data_for_reindex, config):
     # 计算年切分点
     end_list = get_end_list(net_weekly.index)
@@ -37,7 +34,8 @@ def weights_sum_to_one(weights):
 
 def fix_weights_to_target_index(weights, data):
     data_ffill = data.ffill()
-    data_ffill[(~data_ffill.isna()).sum(axis=1) == 0] = 0
+    # data_ffill[(~data_ffill.isna()).sum(axis=1) == 0] = 0
+    data_ffill[data_ffill.isna().any(axis=1)] = 0
     resampled_weights = weights.reindex(data_ffill.index, method='ffill')
     resampled_weights[np.isnan(data_ffill)] = 0.0
     return resampled_weights
