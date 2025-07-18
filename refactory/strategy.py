@@ -42,19 +42,19 @@ def c(func, instruments=instruments):
 
 # -------------------------------------------------------------------------------------------------------------------
 
-info_ = get_instrument_info().loc[instruments]
-size_ = info_['point_size']
-price_ = m(get_price)
-raw_price_ = m(get_raw_price)
+info = get_instrument_info().loc[instruments]
+size = info['point_size']
+price = m(get_price)
+raw_price = m(get_raw_price)
 
 print('get price and info')
 
-vol_scalar_ = m(lambda i: calc_vol_scalar(price_.loc[i], size_.loc[i], capital=1000000, risk_target=risk_target))
-forecast_rule = m(lambda i: calc_forecasts(price_.loc[i]))
-position_rule = m(lambda i: calc_position(forecast_rule.loc[i], vol_scalar_.loc[i]))
-gross_rule = m(lambda i: calc_gross_pnl(position_rule.loc[i], price_.loc[i], size_.loc[i]))
+vol_scalar = m(lambda i: calc_vol_scalar(price.loc[i], size.loc[i], capital=1000000, risk_target=risk_target))
+forecast_rule = m(lambda i: calc_forecasts(price.loc[i]))
+position_rule = m(lambda i: calc_position(forecast_rule.loc[i], vol_scalar.loc[i]))
+gross_rule = m(lambda i: calc_gross_pnl(position_rule.loc[i], price.loc[i], size.loc[i]))
 turnover_weighted = estimate_weighted_turnover(forecast_rule)
-cost_rule = m(lambda i: calc_cost_estimated(price_.loc[i], turnover_weighted, vol_scalar_.loc[i], info_.loc[i]))
+cost_rule = m(lambda i: calc_cost_estimated(price.loc[i], turnover_weighted, vol_scalar.loc[i], info.loc[i]))
 net_rule = calc_net_pnl(gross_rule, cost_rule)
 
 print('calculate pnl for instrument and rule')
@@ -88,14 +88,14 @@ cost_sr_rule = m(lambda i: calc_cost_sr(gross_rule.loc[i], cost_rule.loc[i], 2, 
 forecast_weights = m(lambda i: calc_forecast_weights_(gross_rule, cost_sr_rule[i], gross_rule.loc[i]))
 forecast_div_mult = m(lambda i: calc_div_mult_daily(forecast_weights.loc[i], forecast_rule))
 forecast_inst = m(lambda i: combine_forecast(forecast_rule.loc[i], forecast_weights.loc[i], forecast_div_mult.loc[i]))
-position_inst_raw = m(lambda i: calc_raw_position(forecast_inst[i], vol_scalar_.loc[i]))
-position_inst = m(lambda i: calc_position(forecast_inst[i], vol_scalar_.loc[i], buffer_size=0.10))
-gross_inst = m(lambda i: calc_gross_pnl(position_inst.loc[i], price_.loc[i], size_.loc[i]))
-cost_inst = m(lambda i: calc_cost_actual(position_inst.loc[i], price_.loc[i], info_.loc[i]))
+position_inst_raw = m(lambda i: calc_raw_position(forecast_inst[i], vol_scalar.loc[i]))
+position_inst = m(lambda i: calc_position(forecast_inst[i], vol_scalar.loc[i], buffer_size=0.10))
+gross_inst = m(lambda i: calc_gross_pnl(position_inst.loc[i], price.loc[i], size.loc[i]))
+cost_inst = m(lambda i: calc_cost_actual(position_inst.loc[i], price.loc[i], info.loc[i]))
 
 # 以下为意义不明变量
 net_inst = calc_net_pnl(gross_inst, cost_inst)
-subsystem_turnover_ = pd.DataFrame({i: calc_turnover(forecast_inst.loc[i], vol_scalar_.loc[i]) for i in instruments},
+subsystem_turnover_ = pd.DataFrame({i: calc_turnover(forecast_inst.loc[i], vol_scalar.loc[i]) for i in instruments},
                                    index=[0])
 
 gross_inst_ = unstack_for_optimisation(gross_inst)
@@ -130,12 +130,12 @@ print('calculate weightes for portfolio')
 
 # --------------------------------------------------------------------------------------------------------------------
 
-_info = info_.loc['US10']
-_raw_price = raw_price_.loc['US10']
-_price = price_.loc['US10']
-_price_pnl = price_.loc['US10'].diff()
+_info = info.loc['US10']
+_raw_price = raw_price.loc['US10']
+_price = price.loc['US10']
+_price_pnl = price.loc['US10'].diff()
 
-_vol_scalar = vol_scalar_.loc['US10']
+_vol_scalar = vol_scalar.loc['US10']
 _rule_forecast = forecast_rule.loc['US10']['ewmac32']
 _rule_position = position_rule.loc['US10']['ewmac32']
 _rule_gross = gross_rule.loc['US10']['ewmac32']
