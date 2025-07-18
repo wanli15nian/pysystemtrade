@@ -4,24 +4,24 @@ import pandas as pd
 from refactory.base import calc_raw_position
 
 
-def estimate_weighted_turnover(forecast_):
-    turnover_full = estimate_turnover_annual(forecast_)
-    forecast_length = forecast_.groupby('instrument').apply(len).to_list()  # 用历史数据的多少来决定每个instrument的权重
+def estimate_weighted_turnover(forecast_all):
+    turnover_all = estimate_turnover_annual(forecast_all)
+    forecast_length = forecast_all.groupby('instrument').apply(len).to_list()  # 用历史数据的多少来决定每个instrument的权重
     turnover_weight = [l / sum(forecast_length) for l in forecast_length]
-    weighted_turnover = turnover_full.apply(lambda x: calc_weighted_turnover(turnover_weight, x))
+    weighted_turnover = turnover_all.apply(lambda x: calc_weighted_turnover(turnover_weight, x))
     return weighted_turnover
 
 
-def estimate_turnover_annual(forecast_):
+def estimate_turnover_annual(forecast_full):
     turnover_func = lambda x: x.reset_index(level='instrument', drop=True).apply(calc_annual_turnover)
-    turnover_ = forecast_.groupby(level='instrument').apply(turnover_func)
-    return turnover_
+    turnover_all = forecast_full.groupby(level='instrument').apply(turnover_func)
+    return turnover_all
 
 
-def calc_annual_turnover(forecast, forecast_scalling=10.0):
+def calc_annual_turnover(forecast, forecast_scaling=10.0):
     # 其实turnover应该是和position相关的，只是系统假设position和forecast成绝对正比
     forecast = forecast.resample("1B").last()
-    proportion = forecast / forecast_scalling
+    proportion = forecast / forecast_scaling
     turnover_daily = proportion.diff().abs().mean()
     turnover_annual = turnover_daily * 256
     return turnover_annual

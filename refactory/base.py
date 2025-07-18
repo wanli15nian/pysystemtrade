@@ -28,8 +28,8 @@ def calc_position(forecast, vol_scalar, buffer_size=0):
     return position
 
 
-def calc_raw_position(forecast, vol_scalar):
-    return forecast.mul(vol_scalar, axis=0) / 10
+def calc_raw_position(forecast, vol_scalar, forecast_scaling=10):
+    return forecast.mul(vol_scalar, axis=0) / forecast_scaling
 
 
 def buffer_position(position, vol_scalar, buffer_size=0.10, trade_to_edge=True):
