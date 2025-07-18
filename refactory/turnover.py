@@ -4,21 +4,6 @@ import pandas as pd
 from refactory.base import calc_raw_position
 
 
-def calc_turnover(forecast, vol_scalar, smooth_days: int = 250) -> float:
-    # FIXME:应该直接用position来计算turnover？
-    position = calc_raw_position(forecast, vol_scalar)
-    position_daily = position.resample("1B").last()
-    if isinstance(vol_scalar, float) or isinstance(vol_scalar, int):
-        scalar_daily = pd.Series(np.full(position_daily.shape[0], float(vol_scalar)), position_daily.index)
-    else:
-        scalar_daily = vol_scalar.reindex(position_daily.index, method="ffill")
-        scalar_daily = scalar_daily.ewm(smooth_days, min_periods=2).mean()
-    position_normalised = position_daily / scalar_daily.ffill()
-    turnover_daily = position_normalised.diff().abs().mean()
-    turnover_yearly = turnover_daily * 256
-    return turnover_yearly
-
-
 def estimate_weighted_turnover(forecast_):
     turnover_full = estimate_turnover_annual(forecast_)
     forecast_length = forecast_.groupby('instrument').apply(len).to_list()  # 用历史数据的多少来决定每个instrument的权重
@@ -48,3 +33,18 @@ def calc_weighted_turnover(weights, turnovers, total=1.0):
     w[np.isnan(w * t)] = 0.0  # 应该是考虑到万一有的turnover没有的情况，对应也就不给weight
     w1 = w * total / np.nansum(w)
     return np.nansum(w1 * t)
+
+
+def calc_turnover(forecast, vol_scalar, smooth_days: int = 250) -> float:
+    # FIXME:应该直接用position来计算turnover？
+    position = calc_raw_position(forecast, vol_scalar)
+    position_daily = position.resample("1B").last()
+    if isinstance(vol_scalar, float) or isinstance(vol_scalar, int):
+        scalar_daily = pd.Series(np.full(position_daily.shape[0], float(vol_scalar)), position_daily.index)
+    else:
+        scalar_daily = vol_scalar.reindex(position_daily.index, method="ffill")
+        scalar_daily = scalar_daily.ewm(smooth_days, min_periods=2).mean()
+    position_normalised = position_daily / scalar_daily.ffill()
+    turnover_daily = position_normalised.diff().abs().mean()
+    turnover_yearly = turnover_daily * 256
+    return turnover_yearly
