@@ -7,7 +7,7 @@ from refactory.cost_actual import calc_cost_actual
 from refactory.cost_estimated import calc_cost_estimated
 from refactory.data_source import get_instrument_info, get_price, get_raw_price
 from refactory.forecast import ewmac, rescale_forecast, floor_vol, price_vol
-from refactory.turnover import estimate_turnover_annual, calc_turnover, \
+from refactory.turnover import estimate_turnover_all, calc_turnover, \
     estimate_weighted_turnover
 from refactory.weights_forecast import calc_weights, calc_div_mult_daily
 
@@ -52,7 +52,7 @@ position_rule = m(lambda i: calc_position(forecast_rule.loc[i], vol_scalar.loc[i
 gross_rule = m(lambda i: calc_gross_pnl(position_rule.loc[i], price.loc[i], size.loc[i]))
 print('calculate gross for instrument and rule')
 
-turnover_all = estimate_turnover_annual(forecast_rule)
+turnover_all = estimate_turnover_all(forecast_rule)
 turnover_weighted = estimate_weighted_turnover(turnover_all, forecast_rule)
 # FIXME:这里应该传raw_price吧？
 cost_rule = m(lambda i: calc_cost_estimated(price.loc[i], turnover_weighted, vol_scalar.loc[i], info.loc[i]))

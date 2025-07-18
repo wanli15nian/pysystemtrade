@@ -80,17 +80,3 @@ def generate_equal_dates_within_year(year, rolls_per_year, align_to_start=True):
     all_dates = [first_date + (datetime.timedelta(days=days_of_roll) * period_count)
                  for period_count in range(rolls_per_year)]
     return all_dates
-
-#
-#
-# def get_row_of_series_before_date(data_series, relevant_date):
-#     if relevant_date == np.nan:
-#         data_at_date = data_series.values[-1]
-#     else:
-#         matching_index_size = data_series.index[data_series.index < relevant_date].size
-#         if matching_index_size == 0:
-#             index_point = None
-#         else:
-#             index_point = matching_index_size - 1
-#         data_at_date = data_series.values[index_point]
-#     return data_at_date
