@@ -4,17 +4,17 @@ from refactory.base import calc_cost_of_fill, calc_mixed_volatility
 
 
 def calc_cost_estimated(price, turnover, vol_scalar, info):
-    return pd.DataFrame({r: estimate_cost(price, turnover[r], vol_scalar, info)
+    return pd.DataFrame({r: estimate_daily_cost(price, turnover[r], vol_scalar, info)
                          for r in (turnover.index.to_list())})
 
 
-def estimate_cost(price, turnover, vol_scalar, info):
+def estimate_daily_cost(price, turnover, vol_scalar, info):
     # 计算年夏普成本
     cost_sr_annual = get_cost_sr_annual(turnover, price, info)
     vol_annual = calc_mixed_volatility(price.diff(), slow_vol_years=10) * 16
     cost_annual = (-cost_sr_annual * vol_annual * vol_scalar).ffill()
     # 计算日成本
-    vol_scalar = vol_scalar.shift(1)  # TODO：这个shift是必要的吗？
+    vol_scalar = vol_scalar.shift(1)
     cost_annual = (cost_annual.reindex(vol_scalar.index)
                    [~vol_scalar.isna()]
                    .reindex(price.index, method='ffill'))
@@ -25,8 +25,7 @@ def estimate_cost(price, turnover, vol_scalar, info):
 
 
 def get_cost_sr_annual(turnover, price, info):
-    # A股股票必须是100股的整数倍，notional_blocks这个参数是这个100的意思吗？
-    # 总成本 = 交易成本 + 移仓换月成本，都是以SR计算的。
+    # 总成本 = 移仓换月成本 + 交易成本，都是以SR计算的。
     cost_sr_per = calc_cost_sr_per(price, info)
     rolls_per_year = int(info['rolls_per_year'])
     holding_cost = rolls_per_year * 2.0 * cost_sr_per
@@ -36,7 +35,7 @@ def get_cost_sr_annual(turnover, price, info):
 
 
 def calc_cost_sr_per(price, info):
-    # TODO：这个应该是滚动计算的吧？不能只用当前最近一年的。
+    # TODO：这个应该不能只用当前最近一年的，是滚动计算的吧？是因为估算就简单处理一下？
     point_size = info['point_size']
     average_price = price[price.index[-1] - pd.DateOffset(years=1):].mean()  # 过去一年的均价
     average_cost = calc_cost_of_fill(average_price, info, 1)
@@ -49,24 +48,13 @@ def calc_cost_sr_per(price, info):
     return cost_sr_per
 
 
-def calc_cost_sr(gross, cost, cost_multiplier, turnover=None, turnover_average=None):
+def calc_cost_sr(gross, cost, cost_multiplier=1, turnover=None, turnover_average=None):
     gross.replace(0.0, pd.NA, inplace=True)
-    costs_daily = cost.mean()
     vol_daily = gross.std()
+    costs_daily = cost.mean()
     cost_sr_daily = 16 * costs_daily / vol_daily
     if turnover is None:
         cost_sr = pd.Series(cost_sr_daily * cost_multiplier)
         return cost_sr
     cost_sr = (cost_sr_daily / turnover) * turnover_average * cost_multiplier  # cost multiplier == 2
     return cost_sr
-
-# 计算日均成本
-# point_size = info['point_size']
-# interval_as_year = cost_annual.index.to_series().diff().dt.total_seconds() / (365.25 * 24 * 60 * 60)
-# cost_daily = cost_annual * interval_as_year * point_size
-# cost_daily_mean = cost_daily.mean()
-# # 计算年夏普成本
-# pnl_vol_daily = pnl.std()
-# cost_sr_annual = 16 * (cost_daily_mean / pnl_vol_daily)
-# # 计算平均年夏普成本
-# cost_sr = cost_sr_annual * (average_turnover / turnover_annual) * 2

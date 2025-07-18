@@ -54,6 +54,7 @@ forecast_rule = m(lambda i: calc_forecasts(price.loc[i]))
 position_rule = m(lambda i: calc_position(forecast_rule.loc[i], vol_scalar.loc[i]))
 gross_rule = m(lambda i: calc_gross_pnl(position_rule.loc[i], price.loc[i], size.loc[i]))
 turnover_weighted = estimate_weighted_turnover(forecast_rule)
+# FIXME:这里应该传raw_price吧？
 cost_rule = m(lambda i: calc_cost_estimated(price.loc[i], turnover_weighted, vol_scalar.loc[i], info.loc[i]))
 net_rule = calc_net_pnl(gross_rule, cost_rule)
 
@@ -130,16 +131,15 @@ print('calculate weightes for portfolio')
 
 # --------------------------------------------------------------------------------------------------------------------
 
-_info = info.loc['US10']
-_raw_price = raw_price.loc['US10']
-_price = price.loc['US10']
-_price_pnl = price.loc['US10'].diff()
-
-_vol_scalar = vol_scalar.loc['US10']
-_rule_forecast = forecast_rule.loc['US10']['ewmac32']
-_rule_position = position_rule.loc['US10']['ewmac32']
-_rule_gross = gross_rule.loc['US10']['ewmac32']
-_rule_cost = cost_rule.loc['US10']['ewmac32']
-_rule_net = net_rule.loc['US10']['ewmac32']
-
+# _info = info.loc['US10']
+# _raw_price = raw_price.loc['US10']
+# _price = price.loc['US10']
+# _price_pnl = price.loc['US10'].diff()
+#
+# _vol_scalar = vol_scalar.loc['US10']
+# _rule_forecast = forecast_rule.loc['US10']['ewmac32']
+# _rule_position = position_rule.loc['US10']['ewmac32']
+# _rule_gross = gross_rule.loc['US10']['ewmac32']
+# _rule_cost = cost_rule.loc['US10']['ewmac32']
+# _rule_net = net_rule.loc['US10']['ewmac32']
 # print(_rule_net)
