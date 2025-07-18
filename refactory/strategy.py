@@ -1,7 +1,7 @@
 import pandas as pd
 
 from refactory.base import calc_gross_pnl, calc_position, combine_forecast, calc_net, \
-    unstack_for_optimisation, stack_instr, calc_raw_position, calc_cost_sr
+    unstack_for_optimisation, stack_instr, calc_raw_position, calc_cost_sr1
 from refactory.base import calc_vol_scalar
 from refactory.cost_actual import calc_cost_actual
 from refactory.cost_estimated import calc_cost_estimated
@@ -57,16 +57,16 @@ cost_rule = m(lambda i: calc_cost_estimated(price.loc[i], turnover_weighted, vol
 print('calculate pnl for instrument and rule')
 
 
-def cal_cost_sr_all():
+def cal_cost_sr_all(forecast_rule):
     turnover_all = estimate_turnover_annual(forecast_rule)
     turnover_average = turnover_all.mean(axis=0)
-    cost_sr_rule_func = lambda i: calc_cost_sr(gross_rule.loc[i], cost_rule.loc[i], 2, turnover_all.loc[i],
-                                               turnover_average)
+    cost_sr_rule_func = lambda i: calc_cost_sr1(gross_rule.loc[i], cost_rule.loc[i], 2, turnover_all.loc[i],
+                                                turnover_average)
     cost_sr_rule = pd.DataFrame({i1: cost_sr_rule_func(i1) for i1 in instruments}).transpose()
     return cost_sr_rule
 
 
-cost_sr_rule = cal_cost_sr_all()
+cost_sr_rule = cal_cost_sr_all(forecast_rule)
 
 
 def calc_forecast_weights_(gross, cost_sr, instrument_gross):
@@ -104,7 +104,7 @@ subsystem_turnover_ = pd.DataFrame({i: calc_turnover(forecast_inst.loc[i], vol_s
 
 gross_inst_ = unstack_for_optimisation(gross_inst)
 cost_inst_ = unstack_for_optimisation(cost_inst)
-cost_sr_inst = {i: calc_cost_sr(gross_inst_.loc[i], cost_inst_.loc[i], 1) for i in instruments}
+cost_sr_inst = {i: pd.Series(calc_cost_sr1(gross_inst_.loc[i], cost_inst_.loc[i], 1)) for i in instruments}
 
 
 def calc_portfolio_weights_(gross, cost_sr, subsystem_position):
