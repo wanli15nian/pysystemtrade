@@ -98,7 +98,7 @@ cost_inst_ = unstack_for_optimisation(cost_inst)
 cost_sr_inst = pd.Series({i: calc_cost_sr(gross_inst_.loc[i], cost_inst_.loc[i], 1) for i in instruments})
 
 
-def calc_portfolio_weights_(gross, cost_sr, subsystem_position):
+def calc_instrument_weights(gross, cost_sr, subsystem_position):
     net_daily = m(lambda i: calc_net(gross.loc[i], cost_sr[i]))
     net = (net_daily.unstack(level=0)
            .resample('W').sum())
@@ -117,7 +117,7 @@ def calc_portfolio_weights_(gross, cost_sr, subsystem_position):
     return weights
 
 
-portfolio_weights = calc_portfolio_weights_(gross_inst_, cost_sr_inst, position_inst_raw)
+portfolio_weights = calc_instrument_weights(gross_inst_, cost_sr_inst, position_inst_raw)
 
 print(portfolio_weights)
 
