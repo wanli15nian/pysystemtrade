@@ -37,9 +37,7 @@ def weights_sum_to_one(weights):
 
 def fix_weights_to_target_index(weights, data):
     data_ffill = data.ffill()
-    data_ffill_ = ~data_ffill.isna()
-    data_ffill[data_ffill_.sum(axis=1) == 0] = 0
-
+    data_ffill[(~data_ffill.isna()).sum(axis=1) == 0] = 0
     resampled_weights = weights.reindex(data_ffill.index, method='ffill')
     resampled_weights[np.isnan(data_ffill)] = 0.0
     return resampled_weights
@@ -111,7 +109,6 @@ def shrink_mean_to_average(mean, std, shrinkage_sr, sr_target):
 
 
 def shrink_corr_to_average(raw_corr, shrinkage_corr=1.0):
-
     raw_corr_ = copy(np.array(raw_corr))
     size = len(raw_corr_)
     np.fill_diagonal(raw_corr_, np.nan)
@@ -128,13 +125,11 @@ def shrink_corr_to_average(raw_corr, shrinkage_corr=1.0):
     return shrunk_corr
 
 
-
 def prepare_valid_param(assets_with_data, corr_raw, std_raw, mean_raw):
     std = std_raw[assets_with_data]
     mean = mean_raw[assets_with_data]
     corr = corr_raw[assets_with_data].loc[assets_with_data]
     return corr, mean, std
-
 
 
 def assets_with_no_data(corr, std, mean):
@@ -144,8 +139,6 @@ def assets_with_no_data(corr, std, mean):
     compiled = corr_check | mean_check | std_check
     compiled = compiled[compiled]
     return compiled.index.to_series()
-
-
 
 
 def calc_div_mult_daily(weights, forecast):
@@ -171,8 +164,9 @@ def calc_div_mult_daily(weights, forecast):
         index=end_list)
 
     # multiplier_daily = multiplier_yearly.reindex(weights.index, method="ffill").fillna(1.0).ewm(span=125).mean()
-    #FIXME: 因为reindex 问题，加一个bfill
-    multiplier_daily = multiplier_yearly.reindex(weights.index, method="ffill").shift(1).bfill().fillna(1.0).ewm(span=125).mean()
+    # FIXME: 因为reindex 问题，加一个bfill
+    multiplier_daily = multiplier_yearly.reindex(weights.index, method="ffill").shift(1).bfill().fillna(1.0).ewm(
+        span=125).mean()
     return multiplier_daily
 
 
@@ -186,7 +180,8 @@ def calc_forecast_corr_multi(forecast_, lookback=250, periods=20):
 
 def calc_forecast_corr(forecast, fit_end, lookback=250, periods=20):
     corr_weekly = forecast.ewm(span=lookback, min_periods=periods, ignore_na=True).corr(pairwise=True)
-    corr_matrix_values = corr_weekly[corr_weekly.index.get_level_values(0) <= fit_end].tail(len(forecast.columns)).values
+    corr_matrix_values = corr_weekly[corr_weekly.index.get_level_values(0) <= fit_end].tail(
+        len(forecast.columns)).values
     corr = np.clip(corr_matrix_values, a_min=0, a_max=None)
     return corr
 

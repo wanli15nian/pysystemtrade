@@ -171,12 +171,6 @@ def stack_instr(data, freq, method):
     return stacked
 
 
-def calc_cost_sr1(gross, cost, cost_multiplier=1, turnover=None, turnover_average=None):
-    cost_sr = calc_cost_sr(gross, cost, cost_multiplier)
-    cost_sr = cost_sr * (turnover_average / turnover)
-    return cost_sr
-
-
 def calc_cost_sr(gross, cost, cost_multiplier=1):
     gross.replace(0.0, pd.NA, inplace=True)
     vol_daily = gross.std()
@@ -184,3 +178,12 @@ def calc_cost_sr(gross, cost, cost_multiplier=1):
     cost_sr_daily = 16 * costs_daily / vol_daily
     cost_sr = cost_sr_daily * cost_multiplier
     return cost_sr
+
+
+# def calc_cost_sr1(gross, cost, cost_multiplier=1, turnover=None, turnover_average=None):
+#     cost_sr = calc_cost_sr(gross, cost, cost_multiplier)
+#     cost_sr = cost_sr * (turnover_average / turnover)
+#     return cost_sr
+def normalize_cost_sr(cost_sr_raw, turnover):
+    turnover_average = turnover.mean(axis=0)
+    return cost_sr_raw * (turnover_average / turnover)
