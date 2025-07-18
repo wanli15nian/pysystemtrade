@@ -19,34 +19,20 @@ def calc_weights(net_weekly, data_for_reindex, config):
     weights_yearly = add_initial_weight(net_weekly, weight_yearly_raw)
 
     # 把按年的Index ffill成按天的Index
-    # weight_df = weights_yearly.reindex(data_for_reindex.index, method='ffill').shift(1).backfill()
-    weight_df = fix_weights_to_target_index(weights_yearly, data_for_reindex)
-    unsummed_weights = weight_df.resample('1B').mean().ewm(span=125).mean()
-    weights_daily = weights_sum_to_one(unsummed_weights)
+    data_ffill = data_for_reindex.ffill()
+    data_ffill[data_ffill.isna().any(axis=1)] = 0
+    resampled_weights = weights_yearly.reindex(data_ffill.index, method='ffill')
+    resampled_weights[np.isnan(data_ffill)] = 0.0
+
+    unsummed_weights = resampled_weights.resample('1B').mean().ewm(span=125).mean()
+    sum_weights = unsummed_weights.sum(axis=1).replace(0.0, 0.0001)
+    weights_daily = unsummed_weights.div(sum_weights, axis=0)
     return weights_daily
 
 
-def weights_sum_to_one(weights):
-    sum_weights = weights.sum(axis=1).replace(0.0, 0.0001)
-    normalised_weights = weights.div(sum_weights, axis=0)
-    return normalised_weights
-
-
-def fix_weights_to_target_index(weights, data):
-    data_ffill = data.ffill()
-    # data_ffill[(~data_ffill.isna()).sum(axis=1) == 0] = 0
-    data_ffill[data_ffill.isna().any(axis=1)] = 0
-    resampled_weights = weights.reindex(data_ffill.index, method='ffill')
-    resampled_weights[np.isnan(data_ffill)] = 0.0
-    return resampled_weights
-
-
-def add_initial_weight(net_weekly, weight_yearly_raw):
-    initial_date = net_weekly.index[0]
-    rules = weight_yearly_raw.columns
-    initial_weight = pd.DataFrame({rule: 1 / len(rules) for rule in rules}, index=[initial_date])
-    weights_yearly = pd.concat([initial_weight, weight_yearly_raw], axis=0)
-    return weights_yearly
+def add_initial_weight(net_weekly, weight_annual):
+    weight_annual.loc[net_weekly.index[0]] = 1 / len(weight_annual.columns)
+    return weight_annual.sort_index()
 
 
 def calc_weight_yearly(pnl, fit_end, config, floor=True):

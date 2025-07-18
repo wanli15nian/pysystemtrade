@@ -55,12 +55,6 @@ def calc_gross_pnl(position, price, point_size):
     return pnl_in_points * point_size
 
 
-# def calc_net_pnl(gross_pnl, daily_costs):
-#     raw_net = gross_pnl.add(daily_costs, fill_value=0)
-#     net = raw_net.groupby(level=0).resample('B', level=1).sum()
-#     return net
-
-
 def combine_forecast(forecast, forecast_weights, forecast_div_mult):
     combined_forecast = ((forecast_weights * forecast).sum(axis=1) * forecast_div_mult).clip(20, -20)
     return combined_forecast
@@ -99,8 +93,7 @@ def calc_slippage(quantity, info):
     # 交易滑点，现在只考虑一个点，以后可以加上参数控制滑几个点
     slippage = info['spread_cost']
     point_size = info['point_size']
-    slippage_ = (abs(quantity) * point_size * slippage)
-    return slippage_
+    return abs(quantity) * point_size * slippage
 
 
 def optimisation(corr, norm_mean, norm_stdev):
@@ -143,13 +136,6 @@ def calc_net(gross, cost_sr):
     return gross + cost_daily
 
 
-# def unstack_for_optimisation(multi_index_df):
-#     unstacked = multi_index_df.unstack(level=0)
-#     resampled = unstacked.resample('1B').sum()
-#     resampled[resampled == 0.0] = pd.NA
-#     resampled = resampled.T.stack(dropna=False)
-#     return resampled
-
 def unstack_for_optimisation(multi_index_df):
     return (
         multi_index_df.unstack(level=0)
@@ -185,10 +171,16 @@ def calc_cost_sr(gross, cost, cost_multiplier=1):
     return cost_sr
 
 
+def normalize_cost_sr(cost_sr_raw, turnover):
+    turnover_average = turnover.mean(axis=0)
+    return cost_sr_raw * (turnover_average / turnover)
+
+# def calc_net_pnl(gross_pnl, daily_costs):
+#     raw_net = gross_pnl.add(daily_costs, fill_value=0)
+#     net = raw_net.groupby(level=0).resample('B', level=1).sum()
+#     return net
+
 # def calc_cost_sr1(gross, cost, cost_multiplier=1, turnover=None, turnover_average=None):
 #     cost_sr = calc_cost_sr(gross, cost, cost_multiplier)
 #     cost_sr = cost_sr * (turnover_average / turnover)
 #     return cost_sr
-def normalize_cost_sr(cost_sr_raw, turnover):
-    turnover_average = turnover.mean(axis=0)
-    return cost_sr_raw * (turnover_average / turnover)

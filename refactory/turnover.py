@@ -1,7 +1,4 @@
 import numpy as np
-import pandas as pd
-
-from refactory.base import calc_raw_position
 
 
 def estimate_turnover_all(forecast_all):
@@ -12,6 +9,7 @@ def estimate_turnover_all(forecast_all):
 
 def calc_annual_turnover(forecast, forecast_scaling=10.0):
     # 其实turnover应该是和position相关的，只是系统假设position和forecast成绝对正比
+    # FIXME:如果forecast是分钟频率的，turnover会少算很多
     forecast = forecast.resample("1B").last()
     proportion = forecast / forecast_scaling
     turnover_daily = proportion.diff().abs().mean()
@@ -32,7 +30,6 @@ def calc_weighted_turnover(weights, turnovers, total=1.0):
     w[np.isnan(w * t)] = 0.0  # 应该是考虑到万一有的turnover没有的情况，对应也就不给weight
     w1 = w * total / np.nansum(w)
     return np.nansum(w1 * t)
-
 
 # def calc_turnover(forecast, vol_scalar, smooth_days: int = 250) -> float:
 #     position = calc_raw_position(forecast, vol_scalar)
