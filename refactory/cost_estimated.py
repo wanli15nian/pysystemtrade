@@ -46,15 +46,3 @@ def calc_cost_sr_per(price, info):
 
     cost_sr_per = average_cost / average_vol
     return cost_sr_per
-
-
-def calc_cost_sr(gross, cost, cost_multiplier=1, turnover=None, turnover_average=None):
-    gross.replace(0.0, pd.NA, inplace=True)
-    vol_daily = gross.std()
-    costs_daily = cost.mean()
-    cost_sr_daily = 16 * costs_daily / vol_daily
-    if turnover is None:
-        cost_sr = pd.Series(cost_sr_daily * cost_multiplier)
-        return cost_sr
-    cost_sr = (cost_sr_daily / turnover) * turnover_average * cost_multiplier  # cost multiplier == 2
-    return cost_sr
