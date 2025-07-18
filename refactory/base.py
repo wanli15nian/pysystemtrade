@@ -55,10 +55,10 @@ def calc_gross_pnl(position, price, point_size):
     return pnl_in_points * point_size
 
 
-def calc_net_pnl(gross_pnl, daily_costs):
-    raw_net = gross_pnl.add(daily_costs, fill_value=0)
-    net = raw_net.groupby(level=0).resample('B', level=1).sum()
-    return net
+# def calc_net_pnl(gross_pnl, daily_costs):
+#     raw_net = gross_pnl.add(daily_costs, fill_value=0)
+#     net = raw_net.groupby(level=0).resample('B', level=1).sum()
+#     return net
 
 
 def combine_forecast(forecast, forecast_weights, forecast_div_mult):

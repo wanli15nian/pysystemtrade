@@ -1,6 +1,6 @@
 import pandas as pd
 
-from refactory.base import calc_gross_pnl, calc_net_pnl, calc_position, combine_forecast, calc_net, \
+from refactory.base import calc_gross_pnl, calc_position, combine_forecast, calc_net, \
     unstack_for_optimisation, stack_instr, calc_raw_position, calc_cost_sr
 from refactory.base import calc_vol_scalar
 from refactory.cost_actual import calc_cost_actual
@@ -34,12 +34,6 @@ def m(func, instruments=instruments):
                      keys=instruments,
                      names=['instrument', 'datetime'])
 
-
-def c(func, instruments=instruments):
-    # 横向组装。每个instrument拼成一列
-    return pd.DataFrame({i: func(i) for i in instruments})
-
-
 # -------------------------------------------------------------------------------------------------------------------
 
 info = get_instrument_info().loc[instruments]
@@ -49,6 +43,7 @@ raw_price = m(get_raw_price)
 
 print('get price and info')
 
+# TODO:考虑把rule后缀改为r，用rule容易有歧义，同样instrument后缀改为i
 vol_scalar = m(lambda i: calc_vol_scalar(price.loc[i], size.loc[i], capital=1000000, risk_target=risk_target))
 forecast_rule = m(lambda i: calc_forecasts(price.loc[i]))
 position_rule = m(lambda i: calc_position(forecast_rule.loc[i], vol_scalar.loc[i]))
@@ -56,12 +51,9 @@ gross_rule = m(lambda i: calc_gross_pnl(position_rule.loc[i], price.loc[i], size
 turnover_weighted = estimate_weighted_turnover(forecast_rule)
 # FIXME:这里应该传raw_price吧？
 cost_rule = m(lambda i: calc_cost_estimated(price.loc[i], turnover_weighted, vol_scalar.loc[i], info.loc[i]))
-net_rule = calc_net_pnl(gross_rule, cost_rule)
+# net_rule = calc_net_pnl(gross_rule, cost_rule)
 
 print('calculate pnl for instrument and rule')
-
-turnover_full = estimate_turnover_annual(forecast_rule)
-turnover_average = turnover_full.mean(axis=0)
 
 
 def calc_forecast_weights_(gross, cost_sr, instrument_gross):
@@ -78,24 +70,28 @@ def calc_forecast_weights_(gross, cost_sr, instrument_gross):
         'shrinkage_sr': 0.9,
         'sr_target': 0.5,
         'equalise_vol': True
-
     }
     forecast_weights = calc_weights(net_weekly, instrument_gross, config)
     return forecast_weights
 
 
-cost_sr_rule = m(lambda i: calc_cost_sr(gross_rule.loc[i], cost_rule.loc[i], 2, turnover_full.loc[i],
-                                        turnover_average))
-forecast_weights = m(lambda i: calc_forecast_weights_(gross_rule, cost_sr_rule[i], gross_rule.loc[i]))
+turnover_full = estimate_turnover_annual(forecast_rule)
+turnover_average = turnover_full.mean(axis=0)
+
+cost_sr_rule_func = lambda i: calc_cost_sr(gross_rule.loc[i], cost_rule.loc[i], 2, turnover_full.loc[i], turnover_average)
+cost_sr_rule = pd.DataFrame({i1: cost_sr_rule_func(i1) for i1 in instruments}).transpose()
+
+forecast_weights = m(lambda i: calc_forecast_weights_(gross_rule, cost_sr_rule.loc[i], gross_rule.loc[i]))
 forecast_div_mult = m(lambda i: calc_div_mult_daily(forecast_weights.loc[i], forecast_rule))
 forecast_inst = m(lambda i: combine_forecast(forecast_rule.loc[i], forecast_weights.loc[i], forecast_div_mult.loc[i]))
+# TODO: buffer操作后的position，会把没上市的品种的权重从na变为0，position的na该如何约定？
 position_inst_raw = m(lambda i: calc_raw_position(forecast_inst[i], vol_scalar.loc[i]))
 position_inst = m(lambda i: calc_position(forecast_inst[i], vol_scalar.loc[i], buffer_size=0.10))
 gross_inst = m(lambda i: calc_gross_pnl(position_inst.loc[i], price.loc[i], size.loc[i]))
 cost_inst = m(lambda i: calc_cost_actual(position_inst.loc[i], price.loc[i], info.loc[i]))
 
 # 以下为意义不明变量
-net_inst = calc_net_pnl(gross_inst, cost_inst)
+# net_inst = calc_net_pnl(gross_inst, cost_inst)
 subsystem_turnover_ = pd.DataFrame({i: calc_turnover(forecast_inst.loc[i], vol_scalar.loc[i]) for i in instruments},
                                    index=[0])
 
