@@ -95,7 +95,7 @@ subsystem_turnover_ = pd.DataFrame({i: calc_turnover(forecast_inst.loc[i], vol_s
 
 gross_inst_ = unstack_for_optimisation(gross_inst)
 cost_inst_ = unstack_for_optimisation(cost_inst)
-cost_sr_inst = {i: pd.Series(calc_cost_sr(gross_inst_.loc[i], cost_inst_.loc[i], 1)) for i in instruments}
+cost_sr_inst = pd.Series({i: calc_cost_sr(gross_inst_.loc[i], cost_inst_.loc[i], 1) for i in instruments})
 
 
 def calc_portfolio_weights_(gross, cost_sr, subsystem_position):
