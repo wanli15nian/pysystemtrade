@@ -173,9 +173,6 @@ def stack_instr(data, freq, method):
 
 def calc_cost_sr1(gross, cost, cost_multiplier=1, turnover=None, turnover_average=None):
     cost_sr = calc_cost_sr(gross, cost, cost_multiplier)
-    if turnover is None:
-        cost_sr = pd.Series(cost_sr)
-        return cost_sr
     cost_sr = cost_sr * (turnover_average / turnover)
     return cost_sr
 
