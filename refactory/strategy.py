@@ -1,7 +1,7 @@
 import pandas as pd
 
 from refactory.base import calc_gross_pnl, calc_position, combine_forecast, calc_net, \
-    unstack_for_optimisation, stack_instr, calc_raw_position, calc_cost_sr1, calc_cost_sr
+    unstack_for_optimisation, stack_instr, calc_raw_position, calc_cost_sr
 from refactory.base import calc_vol_scalar
 from refactory.cost_actual import calc_cost_actual
 from refactory.cost_estimated import calc_cost_estimated
@@ -57,8 +57,7 @@ cost_rule = m(lambda i: calc_cost_estimated(price.loc[i], turnover_weighted, vol
 print('calculate pnl for instrument and rule')
 
 
-def cal_cost_sr_all(forecast_rule):
-    turnover_all = estimate_turnover_annual(forecast_rule)
+def cal_cost_sr_all(turnover_all):
     turnover_average = turnover_all.mean(axis=0)
     cost_sr_raw = pd.DataFrame(
         {i: calc_cost_sr(gross_rule.loc[i], cost_rule.loc[i], 2) for i in instruments}).transpose()
@@ -66,7 +65,8 @@ def cal_cost_sr_all(forecast_rule):
     return cast_sr_normal
 
 
-cost_sr_rule = cal_cost_sr_all(forecast_rule)
+turnover_all = estimate_turnover_annual(forecast_rule)
+cost_sr_rule = cal_cost_sr_all(turnover_all)
 
 
 def calc_forecast_weights_(gross, cost_sr, instrument_gross):
