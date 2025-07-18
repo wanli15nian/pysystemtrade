@@ -139,12 +139,7 @@ def calc_mixed_volatility(data, days=35, min_periods=10, slow_vol_years=20,
 
 def calc_net(gross, cost_sr):
     gross = gross.replace(0.0, np.nan)
-    vol = gross.std()
-    # if len(cost_sr) == 1:
-    #     cost_daily = cost_sr[0] * (vol / 16)
-    # else:
-    #     cost_daily = cost_sr * (vol / 16)
-    cost_daily = cost_sr * (vol / 16)
+    cost_daily = cost_sr * (gross.std() / 16)
     return gross + cost_daily
 
 

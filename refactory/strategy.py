@@ -90,8 +90,7 @@ cost_inst = m(lambda i: calc_cost_actual(position_inst.loc[i], price.loc[i], inf
 
 # 以下为意义不明变量
 # net_inst = calc_net_pnl(gross_inst, cost_inst)
-subsystem_turnover_ = pd.DataFrame({i: calc_turnover(forecast_inst.loc[i], vol_scalar.loc[i]) for i in instruments},
-                                   index=[0])
+subsystem_turnover_ = pd.Series({i: calc_turnover(forecast_inst.loc[i], vol_scalar.loc[i]) for i in instruments})
 
 gross_inst_ = unstack_for_optimisation(gross_inst)
 cost_inst_ = unstack_for_optimisation(cost_inst)
