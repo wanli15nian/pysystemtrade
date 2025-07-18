@@ -20,12 +20,30 @@ def calc_vol_scalar(price, point_size, capital=1000000, risk_target=0.16):
 def calc_position(forecast, vol_scalar, buffer_size=0):
     position_raw = calc_raw_position(forecast, vol_scalar)
     if buffer_size > 0:
-        # 判断position_raw是否是dataframe，如果是对于每一列应用函数
-        position_raw = buffer_position(position_raw, vol_scalar, buffer_size)
-    # position = position.ffill()
-    # FIXME: 检查这个shift(1) 是否适用于 subsystem position
+        # 判断position_raw是否是dataframe
+        if isinstance(position_raw, pd.DataFrame):
+            # 对于每一列应用函数
+            position_raw = position_raw.apply(lambda x: buffer_position(x, vol_scalar, buffer_size))
+        else:
+            position_raw = buffer_position(position_raw, vol_scalar, buffer_size)
     position = position_raw.shift(1)
     return position
+
+
+def buffer_position(position, vol_scalar, buffer_size=0.10, trade_to_edge=True):
+    # vol_scalar 的另一种理解是Avg pos of the subsystem level，就是说position 可以在avg pos的10% 区间内浮动
+    buffer = vol_scalar * buffer_size
+    top = (position + buffer).ffill().round()
+    bottom = (position - buffer).ffill().round()
+    rounded_position = position.ffill().round()
+
+    last = 0.0
+    buffered_position_list = []
+    for index in range(len(rounded_position)):
+        last = adjust_by_buffer(last, rounded_position.iloc[index], top.iloc[index], bottom.iloc[index], trade_to_edge)
+        buffered_position_list.append(last)
+    buffered_position = pd.Series(buffered_position_list, index=rounded_position.index)
+    return buffered_position
 
 
 def calc_raw_position(forecast, vol_scalar):
@@ -50,22 +68,6 @@ def calc_net_pnl(gross_pnl, daily_costs):
 def combine_forecast(forecast, forecast_weights, forecast_div_mult):
     combined_forecast = ((forecast_weights * forecast).sum(axis=1) * forecast_div_mult).clip(20, -20)
     return combined_forecast
-
-
-def buffer_position(position, vol_scalar, buffer_size=0.10, trade_to_edge=True):
-    # vol_scalar 的另一种理解是Avg pos of the subsystem level，就是说position 可以在avg pos的10% 区间内浮动
-    buffer = vol_scalar * buffer_size
-    top = (position + buffer).ffill().round()
-    bottom = (position - buffer).ffill().round()
-    rounded_position = position.ffill().round()
-
-    last = 0.0
-    buffered_position_list = []
-    for index in range(len(rounded_position)):
-        last = adjust_by_buffer(last, rounded_position.iloc[index], top.iloc[index], bottom.iloc[index], trade_to_edge)
-        buffered_position_list.append(last)
-    buffered_position = pd.Series(buffered_position_list, index=rounded_position.index)
-    return buffered_position
 
 
 def adjust_by_buffer(last, current, top, bottom, trade_to_edge=True):
