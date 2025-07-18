@@ -37,20 +37,20 @@ def buffer_position(position, vol_scalar, buffer_size=0.10, trade_to_edge=True):
     buffer = vol_scalar * buffer_size
     top = (position + buffer).ffill().round()
     bottom = (position - buffer).ffill().round()
-    rounded_position = position.ffill().round()
+    rounded = position.ffill().round()
 
     last = 0.0
-    buffered_position_list = []
-    for index in range(len(rounded_position)):
-        last = adjust_by_buffer(last, rounded_position.iloc[index], top.iloc[index], bottom.iloc[index], trade_to_edge)
-        buffered_position_list.append(last)
-    buffered_position = pd.Series(buffered_position_list, index=rounded_position.index)
-    return buffered_position
+    buffered_list = []
+    for index in range(len(rounded)):
+        last = adjust_by_buffer(last, rounded.iloc[index], top.iloc[index], bottom.iloc[index], trade_to_edge)
+        buffered_list.append(last)
+    buffered = pd.Series(buffered_list, index=rounded.index)
+    return buffered
 
 
 def calc_gross_pnl(position, price, point_size):
     # FIXME 源代码确实是shift 了两次，没看出来为什么
-    position = position.shift(1).ffill()
+    position = position.shift(1)
     pnl_in_points = position.mul(price.ffill().diff(), axis=0).fillna(0)
     return pnl_in_points * point_size
 
