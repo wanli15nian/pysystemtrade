@@ -87,20 +87,16 @@ position_inst = m(lambda i: calc_position(forecast_inst[i], vol_scalar.loc[i], b
 gross_inst = m(lambda i: calc_gross_pnl(position_inst.loc[i], price.loc[i], size.loc[i]))
 cost_inst = m(lambda i: calc_cost_actual(position_inst.loc[i], price.loc[i], info.loc[i]))
 
+
 # 以下为意义不明变量
 # net_inst = calc_net_pnl(gross_inst, cost_inst)
 # subsystem_turnover_ = pd.Series({i: calc_turnover(forecast_inst.loc[i], vol_scalar.loc[i]) for i in instruments})
 
-gross_inst_ = unstack_for_optimisation(gross_inst)
-cost_inst_ = unstack_for_optimisation(cost_inst)
-cost_sr_inst = pd.Series({i: calc_cost_sr(gross_inst_.loc[i], cost_inst_.loc[i], 1) for i in instruments})
-
-
-def calc_instrument_weights(gross, cost_sr, subsystem_position):
+def calc_instrument_weights1(gross, cost_sr, subsystem_position):
     net_daily = m(lambda i: calc_net(gross.loc[i], cost_sr[i]))
     net = (net_daily.unstack(level=0)
            .resample('W').sum())
-    subsystem_position = subsystem_position.unstack().T.ffill()
+    subsystem_position1 = subsystem_position.unstack().T.ffill()
     config = {
         'corr_span': 500000,
         'corr_min_periods': 10,
@@ -111,11 +107,32 @@ def calc_instrument_weights(gross, cost_sr, subsystem_position):
         'sr_target': 0.5,
         'equalise_vol': True
     }
-    weights = calc_weights(net, subsystem_position, config)
+    weights = calc_weights(net, subsystem_position1, config)
     return weights
 
 
-portfolio_weights = calc_instrument_weights(gross_inst_, cost_sr_inst, position_inst_raw)
+def calc_instrument_weights(gross_inst, cost_inst):
+    gross_inst_ = unstack_for_optimisation(gross_inst)
+    cost_inst_ = unstack_for_optimisation(cost_inst)
+    cost_sr_inst = pd.Series({i: calc_cost_sr(gross_inst_.loc[i], cost_inst_.loc[i], 1) for i in instruments})
+    net_daily = m(lambda i: calc_net(gross_inst_.loc[i], cost_sr_inst[i]))
+    net = (net_daily.unstack(level=0)
+           .resample('W').sum())
+    position_unstacked = position_inst_raw.unstack().T.ffill()
+    config = {
+        'corr_span': 500000,
+        'corr_min_periods': 10,
+        'multiple_span': 50000,
+        'multiple_min_periods': 5,
+        'shrinkage_corr': 0.5,
+        'shrinkage_sr': 0.9,
+        'sr_target': 0.5,
+        'equalise_vol': True
+    }
+    return calc_weights(net, position_unstacked, config)
+
+
+portfolio_weights = calc_instrument_weights(gross_inst, cost_inst, position_inst_raw)
 
 print(portfolio_weights)
 
