@@ -3,6 +3,19 @@ import pandas as pd
 from scipy.optimize import minimize
 
 
+# FIXME:原始价格序列中空值表示当天无交易？在最开始把价格序列ffill可能不行？ 后面算波动率时填充的价格会影响波动率计算，其他的呢？
+def calc_vol_scalar(price, point_size, capital=1000000, risk_target=0.16):
+    '''
+    根据设置的risk target 计算出的单一品种的标准仓位，即forecast为均值10时的仓位，单位是手。
+    整体账户每天能接受的cash vol为 capital * risk_target
+    每个contract能提供的cash vol为pnl_vol * point_size
+    '''
+    pnl_vol = calc_mixed_volatility(price.diff(), slow_vol_years=10)  # ret_vol 不是百分比，而是绝对值
+    risk_target = risk_target / (256 ** 0.5)
+    position_target = (capital * risk_target) / (pnl_vol * point_size)
+    return position_target
+
+
 def calc_position(forecast, vol_scalar, buffer_size=0):
     position_raw = calc_raw_position(forecast, vol_scalar)
     if buffer_size > 0:
@@ -30,19 +43,6 @@ def calc_net_pnl(gross_pnl, daily_costs):
     raw_net = gross_pnl.add(daily_costs, fill_value=0)
     net = raw_net.groupby(level=0).resample('B', level=1).sum()
     return net
-
-
-def calc_vol_scalar(price, point_size, capital=500000, risk_target=0.16):
-    '''
-    根据自行设置的risk target 所计算出的单一品种的目标仓位
-    每个contract 能提供的cash vol 为ret_volatility * point_size (每手2500单位，每个单位的vol 为ret_volatility)
-    '''
-    # TODO: 加上下面这句结果会不一样，price为空值的时候意味什么？
-    # price = price.ffill()
-    pnl_vol = calc_mixed_volatility(price.diff(), slow_vol_years=10)  # ret_vol 不是百分比，而是绝对值
-    risk_target = risk_target / (256 ** 0.5)
-    position_target = (capital * risk_target) / (pnl_vol * point_size)
-    return position_target
 
 
 def combine_forecast(forecast, forecast_weights, forecast_div_mult):
