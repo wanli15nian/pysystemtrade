@@ -111,7 +111,7 @@ def calc_instrument_weights1(gross, cost_sr, subsystem_position):
     return weights
 
 
-def calc_instrument_weights(gross_inst, cost_inst):
+def calc_instrument_weights(gross_inst, cost_inst, position_inst_raw):
     gross_inst_ = unstack_for_optimisation(gross_inst)
     cost_inst_ = unstack_for_optimisation(cost_inst)
     cost_sr_inst = pd.Series({i: calc_cost_sr(gross_inst_.loc[i], cost_inst_.loc[i], 1) for i in instruments})
