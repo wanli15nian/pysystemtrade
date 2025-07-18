@@ -8,7 +8,7 @@ def calc_position(forecast, vol_scalar, buffer_size=0):
     if buffer_size > 0:
         position_raw = trans_buffered_position(position_raw, vol_scalar, 0.10)
     # position = position.ffill()
-    #FIXME: 检查这个shift(1) 是否适用于 subsystem position
+    # FIXME: 检查这个shift(1) 是否适用于 subsystem position
     position = position_raw.shift(1)
     return position
 
@@ -30,14 +30,6 @@ def calc_net_pnl(gross_pnl, daily_costs):
     raw_net = gross_pnl.add(daily_costs, fill_value=0)
     net = raw_net.groupby(level=0).resample('B', level=1).sum()
     return net
-
-
-def unstack_for_optimisation(multi_index_df):
-    unstacked = multi_index_df.unstack(level=0)
-    resampled = unstacked.resample('1B').sum()
-    resampled[resampled == 0.0] = pd.NA
-    resampled = resampled.T.stack(dropna=False)
-    return resampled
 
 
 def calc_vol_scalar(price, point_size, capital=500000, risk_target=0.16):
@@ -120,6 +112,7 @@ def optimisation(corr, norm_mean, norm_stdev):
         stdev = weights.dot(sigma).dot(weights.transpose()) ** 0.5
         sr = -estimated_returns / stdev
         return sr
+
     number = len(corr)
     mus = np.array(norm_mean, ndmin=2).transpose()  # mus 没问题
     sigma = np.diag(norm_stdev).dot(corr).dot(np.diag(norm_stdev))
@@ -154,17 +147,25 @@ def calc_net(gross, cost_sr):
     return gross + cost_daily
 
 
+def unstack_for_optimisation(multi_index_df):
+    unstacked = multi_index_df.unstack(level=0)
+    resampled = unstacked.resample('1B').sum()
+    resampled[resampled == 0.0] = pd.NA
+    resampled = resampled.T.stack(dropna=False)
+    return resampled
+
+
 def stack_instr(data, freq, method):
     if method == 'sum':
         resampled = (data.groupby(level=0)
-                      .resample(freq, level=1).sum())
+                     .resample(freq, level=1).sum())
     elif method == 'last':
         resampled = (data.groupby(level=0)
                      .resample(freq, level=1).last())
     else:
         return None
     stacked = (resampled.unstack(level=0)
-                  .stack(dropna=False)
-                  .droplevel('instrument')
-                  .sort_index(ascending=True))
+               .stack(dropna=False)
+               .droplevel('instrument')
+               .sort_index(ascending=True))
     return stacked

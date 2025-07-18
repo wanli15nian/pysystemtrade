@@ -9,14 +9,12 @@ from refactory.data_source import get_instrument_info, get_price, get_raw_price
 from refactory.forecast import ewmac, rescale_forecast, floor_vol, price_vol
 from refactory.turnover import estimate_weighted_turnover, estimate_turnover_annual, calc_turnover
 from refactory.weights_forecast import calc_weights, calc_div_mult_daily
-from refactory.weights_portfolio import calc_portfolio_weights
 
 # --------------------------------------------------------------------------------------------------------------------
 
 
 risk_target = 0.16
 instruments = ["CORN", "SOFR", "SP500_micro", 'US10']
-rules = ['ewmac32', 'ewmac8']
 
 
 def calc_forecasts(price):
@@ -97,8 +95,8 @@ cost_inst = m(lambda i: calc_cost_actual(position_inst.loc[i], price_.loc[i], in
 
 # 以下为意义不明变量
 net_inst = calc_net_pnl(gross_inst, cost_inst)
-subsystem_turnover_ = pd.DataFrame({i: calc_turnover(forecast_inst.loc[i], vol_scalar_.loc[i]) for i in instruments}, index=[0])
-
+subsystem_turnover_ = pd.DataFrame({i: calc_turnover(forecast_inst.loc[i], vol_scalar_.loc[i]) for i in instruments},
+                                   index=[0])
 
 gross_inst_ = unstack_for_optimisation(gross_inst)
 cost_inst_ = unstack_for_optimisation(cost_inst)
@@ -122,6 +120,7 @@ def calc_portfolio_weights_(gross, cost_sr, subsystem_position):
     }
     weights = calc_weights(net, subsystem_position, config)
     return weights
+
 
 portfolio_weights = calc_portfolio_weights_(gross_inst_, cost_sr_inst, position_inst_raw)
 
