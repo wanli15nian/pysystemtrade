@@ -54,10 +54,14 @@ print(forecast_weights.mean())
 
 forecast_div_mult = my_system.combForecast.get_forecast_diversification_multiplier("US10")
 print(forecast_div_mult.mean())
-'''
+
 
 subsystem_position = my_system.positionSize.get_subsystem_position("US10")
 print(subsystem_position.mean())
+'''
 
 instrument_weights = my_system.portfolio.get_instrument_weights()
 print(instrument_weights.mean())
+
+instrument_div_multiplier = my_system.portfolio.get_instrument_diversification_multiplier()
+print(instrument_div_multiplier)
