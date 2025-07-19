@@ -18,7 +18,7 @@ def unstack_for_optimisation(multi_index_df):
     )
 
 
-def combine_multi(func, instruments):
+def bundle(func, instruments):
     # 纵向组装。将func返回的dataset组装成muliIndex的dataset
     return pd.concat((func(i) for i in instruments),
                      keys=instruments,

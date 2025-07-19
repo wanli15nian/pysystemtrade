@@ -3,14 +3,58 @@ from copy import copy
 import numpy as np
 import pandas as pd
 
-from refactory.base import optimisation
-from refactory.utils import align_time
+from refactory.base import optimisation, calc_net, calc_cost_sr
+from refactory.utils import align_time, bundle, unstack_for_optimisation
 
 
-def calc_weights(net_weekly, data_for_reindex, config):
+def calc_forecast_weights_(gross, cost_sr, instrument):
+    instruments = gross.index.levels[0]
+    net_daily = bundle(lambda i: calc_net(gross.loc[i], cost_sr), instruments=instruments)
+    net_weekly = net_daily.groupby(level=0).resample('W', level=1).sum()
+    net_weekly = align_time(net_weekly)
+
+    instruments_num = len(net_daily.index.levels[0])
+    config = {
+        'corr_span': instruments_num * 50000,
+        'corr_min_periods': instruments_num * 10,
+        'multiple_span': instruments_num * 50000,
+        'multiple_min_periods': instruments_num * 5,
+        'shrinkage_corr': 0.5,
+        'shrinkage_sr': 0.9,
+        'sr_target': 0.5,
+        'equalise_vol': True
+    }
     weights_yearly = calc_weights_yearly(net_weekly, config)
-    idx_daily = data_for_reindex.index
-    return to_daily_weights(weights_yearly, idx_daily)
+
+    idx_daily = gross.loc[instrument].index
+    weights_daily = to_daily_weights(weights_yearly, idx_daily)
+    return weights_daily
+
+
+def calc_instrument_weights(gross_inst, cost_inst):
+    instruments = gross_inst.index.levels[0]
+    gross_inst_ = unstack_for_optimisation(gross_inst)
+    cost_inst_ = unstack_for_optimisation(cost_inst)
+    cost_sr_inst = pd.Series({i: calc_cost_sr(gross_inst_.loc[i], cost_inst_.loc[i], 1) for i in instruments})
+    net_daily = bundle(lambda i: calc_net(gross_inst_.loc[i], cost_sr_inst[i]), instruments=instruments)
+    net = (net_daily.unstack(level=0)
+           .resample('W').sum())
+
+    config = {
+        'corr_span': 500000,
+        'corr_min_periods': 10,
+        'multiple_span': 50000,
+        'multiple_min_periods': 5,
+        'shrinkage_corr': 0.5,
+        'shrinkage_sr': 0.9,
+        'sr_target': 0.5,
+        'equalise_vol': True
+    }
+    weights_yearly = calc_weights_yearly(net, config)
+
+    idx_daily = gross_inst.unstack(level=0).index
+    weights_daily = to_daily_weights(weights_yearly, idx_daily)
+    return weights_daily
 
 
 def calc_weights_yearly(net_weekly, config):

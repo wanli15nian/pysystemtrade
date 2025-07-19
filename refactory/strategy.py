@@ -1,15 +1,16 @@
 import pandas as pd
 
-from refactory.base import calc_gross_pnl, calc_position, combine_forecast, calc_net, \
-    calc_raw_position, calc_cost_sr, normalize_cost_sr
+from refactory.base import calc_gross_pnl, calc_position, combine_forecast, calc_raw_position, calc_cost_sr, \
+    normalize_cost_sr
 from refactory.base import calc_vol_scalar
 from refactory.cost_actual import calc_cost_actual
 from refactory.cost_estimated import calc_cost_estimated
 from refactory.data_source import get_instrument_info, get_price, get_raw_price
 from refactory.forecast import ewmac, rescale_forecast, floor_vol, price_vol
 from refactory.turnover import estimate_turnover_all, estimate_weighted_turnover
-from refactory.utils import align_time, unstack_for_optimisation, combine_multi
-from refactory.weights_forecast import calc_div_mult_daily, to_daily_weights, calc_weights_yearly
+from refactory.utils import bundle
+from refactory.weights import calc_div_mult_daily, calc_forecast_weights_, \
+    calc_instrument_weights
 
 # --------------------------------------------------------------------------------------------------------------------
 
@@ -29,7 +30,7 @@ def calc_forecasts(price):
 
 # -------------------------------------------------------------------------------------------------------------------
 
-m = lambda func: combine_multi(func, instruments=instruments)
+m = lambda func: bundle(func, instruments=instruments)
 
 info = get_instrument_info().loc[instruments]
 size = info['point_size']
@@ -46,61 +47,13 @@ position_rule = m(lambda i: calc_position(forecast_rule.loc[i], vol_scalar.loc[i
 gross_rule = m(lambda i: calc_gross_pnl(position_rule.loc[i], price.loc[i], size.loc[i]))
 print('calculate gross for instrument and rule')
 
+# TODO:下面这几行可以整理成一个函数
 turnover_all = estimate_turnover_all(forecast_rule)
 turnover_weighted = estimate_weighted_turnover(turnover_all, forecast_rule)
 # FIXME:这里应该传raw_price吧？
 cost_rule = m(lambda i: calc_cost_estimated(price.loc[i], turnover_weighted, vol_scalar.loc[i], info.loc[i]))
 cost_sr_rule = pd.DataFrame({i: calc_cost_sr(gross_rule.loc[i], cost_rule.loc[i], 2) for i in instruments}).transpose()
 cost_sr_rule = normalize_cost_sr(cost_sr_rule, turnover_all)
-
-
-def calc_forecast_weights_(gross, cost_sr, instrument):
-    net_daily = m(lambda i: calc_net(gross.loc[i], cost_sr))
-    net_weekly = net_daily.groupby(level=0).resample('W', level=1).sum()
-    net_weekly = align_time(net_weekly)
-
-    instruments_num = len(net_daily.index.levels[0])
-    config = {
-        'corr_span': instruments_num * 50000,
-        'corr_min_periods': instruments_num * 10,
-        'multiple_span': instruments_num * 50000,
-        'multiple_min_periods': instruments_num * 5,
-        'shrinkage_corr': 0.5,
-        'shrinkage_sr': 0.9,
-        'sr_target': 0.5,
-        'equalise_vol': True
-    }
-    weights_yearly = calc_weights_yearly(net_weekly, config)
-
-    idx_daily = gross_rule.loc[instrument].index
-    weights_daily = to_daily_weights(weights_yearly, idx_daily)
-    return weights_daily
-
-
-def calc_instrument_weights(gross_inst, cost_inst):
-    gross_inst_ = unstack_for_optimisation(gross_inst)
-    cost_inst_ = unstack_for_optimisation(cost_inst)
-    cost_sr_inst = pd.Series({i: calc_cost_sr(gross_inst_.loc[i], cost_inst_.loc[i], 1) for i in instruments})
-    net_daily = m(lambda i: calc_net(gross_inst_.loc[i], cost_sr_inst[i]))
-    net = (net_daily.unstack(level=0)
-           .resample('W').sum())
-
-    config = {
-        'corr_span': 500000,
-        'corr_min_periods': 10,
-        'multiple_span': 50000,
-        'multiple_min_periods': 5,
-        'shrinkage_corr': 0.5,
-        'shrinkage_sr': 0.9,
-        'sr_target': 0.5,
-        'equalise_vol': True
-    }
-    weights_yearly = calc_weights_yearly(net, config)
-
-    idx_daily = gross_inst.unstack(level=0).index
-    weights_daily = to_daily_weights(weights_yearly, idx_daily)
-    return weights_daily
-
 
 forecast_weights = m(lambda i: calc_forecast_weights_(gross_rule, cost_sr_rule.loc[i], i))
 forecast_div_mult = m(lambda i: calc_div_mult_daily(forecast_weights.loc[i], forecast_rule))
