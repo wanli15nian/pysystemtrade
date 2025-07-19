@@ -1,7 +1,7 @@
 import pandas as pd
 
 from refactory.base import calc_gross_pnl, calc_position, combine_forecast, calc_raw_position, calc_cost_sr, \
-    normalize_cost_sr
+    normalize_cost_sr, calc_net
 from refactory.base import calc_vol_scalar
 from refactory.cost_actual import calc_cost_actual
 from refactory.cost_estimated import calc_cost_estimated
@@ -9,7 +9,7 @@ from refactory.data_source import get_instrument_info, get_price, get_raw_price
 from refactory.forecast import ewmac, rescale_forecast, floor_vol, price_vol
 from refactory.turnover import estimate_turnover_all, estimate_weighted_turnover
 from refactory.utils import bundle
-from refactory.weights import calc_div_mult_daily, calc_forecast_weights_, \
+from refactory.weights import calc_div_mult_daily, calc_forecast_weights, \
     calc_instrument_weights
 
 # --------------------------------------------------------------------------------------------------------------------
@@ -55,7 +55,7 @@ cost_rule = m(lambda i: calc_cost_estimated(price.loc[i], turnover_weighted, vol
 cost_sr_rule = pd.DataFrame({i: calc_cost_sr(gross_rule.loc[i], cost_rule.loc[i], 2) for i in instruments}).transpose()
 cost_sr_rule = normalize_cost_sr(cost_sr_rule, turnover_all)
 
-forecast_weights = m(lambda i: calc_forecast_weights_(gross_rule, cost_sr_rule.loc[i], i))
+forecast_weights = m(lambda i: calc_forecast_weights(gross_rule, cost_sr_rule.loc[i], i))
 forecast_div_mult = m(lambda i: calc_div_mult_daily(forecast_weights.loc[i], forecast_rule))
 forecast_inst = m(lambda i: combine_forecast(forecast_rule.loc[i], forecast_weights.loc[i], forecast_div_mult.loc[i]))
 # TODO: buffer操作后的position，会把没上市的品种的权重从na变为0，position的na该如何约定？
@@ -64,7 +64,10 @@ position_inst = m(lambda i: calc_position(forecast_inst[i], vol_scalar.loc[i], b
 
 gross_inst = m(lambda i: calc_gross_pnl(position_inst.loc[i], price.loc[i], size.loc[i]))
 cost_inst = m(lambda i: calc_cost_actual(position_inst.loc[i], price.loc[i], info.loc[i]))
-portfolio_weights = calc_instrument_weights(gross_inst, cost_inst)
+cost_sr_inst = pd.Series({i: calc_cost_sr(gross_inst.loc[i], cost_inst.loc[i], 1) for i in instruments})
+net_daily_inst = m(lambda i: calc_net(gross_inst.loc[i], cost_sr_inst[i]))
+
+portfolio_weights = calc_instrument_weights(net_daily_inst)
 
 # 以下为意义不明变量
 # net_inst = calc_net_pnl(gross_inst, cost_inst)
