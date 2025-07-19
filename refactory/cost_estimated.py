@@ -1,6 +1,23 @@
 import pandas as pd
 
-from refactory.base import calc_cost_of_fill, calc_mixed_volatility
+from refactory.base import calc_cost_of_fill, calc_mixed_volatility, calc_cost_sr, normalize_cost_sr
+from refactory.turnover import estimate_turnover_all, estimate_weighted_turnover
+from refactory.utils import bundle
+
+
+def calc_cost_sr_all(forecast_rule, gross_rule, vol_scalar, price, info):
+    turnover_all = estimate_turnover_all(forecast_rule)
+    turnover_weighted = estimate_weighted_turnover(turnover_all, forecast_rule)
+
+    instruments = gross_rule.index.levels[0]
+    # FIXME:这里应该传raw_price吧？
+    cost_rule = bundle(lambda i: calc_cost_estimated(price.loc[i], turnover_weighted, vol_scalar.loc[i], info.loc[i]),
+                       instruments=instruments)
+
+    cost_sr_rule = pd.DataFrame(
+        {i: calc_cost_sr(gross_rule.loc[i], cost_rule.loc[i], 2) for i in instruments}).transpose()
+    cost_sr_rule = normalize_cost_sr(cost_sr_rule, turnover_all)
+    return cost_sr_rule
 
 
 def calc_cost_estimated(price, turnover, vol_scalar, info):

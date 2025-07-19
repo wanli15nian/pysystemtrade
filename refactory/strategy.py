@@ -1,13 +1,12 @@
 import pandas as pd
 
 from refactory.base import calc_gross_pnl, calc_position, combine_forecast, calc_cost_sr, \
-    normalize_cost_sr, calc_net
+    calc_net
 from refactory.base import calc_vol_scalar
 from refactory.cost_actual import calc_cost_actual
-from refactory.cost_estimated import calc_cost_estimated
+from refactory.cost_estimated import calc_cost_sr_all
 from refactory.data_source import get_instrument_info, get_price, get_raw_price
 from refactory.forecast import ewmac, rescale_forecast, floor_vol, price_vol
-from refactory.turnover import estimate_turnover_all, estimate_weighted_turnover
 from refactory.utils import bundle
 from refactory.weights import calc_div_mult_daily, calc_forecast_weights, \
     calc_instrument_weights
@@ -43,14 +42,7 @@ vol_scalar = m(lambda i: calc_vol_scalar(price.loc[i], size.loc[i], capital=1000
 forecast_rule = m(lambda i: calc_forecasts(price.loc[i]))
 position_rule = m(lambda i: calc_position(forecast_rule.loc[i], vol_scalar.loc[i]))
 gross_rule = m(lambda i: calc_gross_pnl(position_rule.loc[i], price.loc[i], size.loc[i]))
-
-# TODO:下面这几行可以整理成一个函数
-turnover_all = estimate_turnover_all(forecast_rule)
-turnover_weighted = estimate_weighted_turnover(turnover_all, forecast_rule)
-# FIXME:这里应该传raw_price吧？
-cost_rule = m(lambda i: calc_cost_estimated(price.loc[i], turnover_weighted, vol_scalar.loc[i], info.loc[i]))
-cost_sr_rule = pd.DataFrame({i: calc_cost_sr(gross_rule.loc[i], cost_rule.loc[i], 2) for i in instruments}).transpose()
-cost_sr_rule = normalize_cost_sr(cost_sr_rule, turnover_all)
+cost_sr_rule = calc_cost_sr_all(forecast_rule, gross_rule, vol_scalar, price, info)
 
 print('rule level finished')
 
