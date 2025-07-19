@@ -146,11 +146,6 @@ def calc_cost_sr(gross, cost, cost_multiplier=1):
     cost_sr = cost_sr_daily * cost_multiplier
     return cost_sr
 
-
-def normalize_cost_sr(cost_sr_raw, turnover):
-    turnover_average = turnover.mean(axis=0)
-    return cost_sr_raw * (turnover_average / turnover)
-
 # def calc_net_pnl(gross_pnl, daily_costs):
 #     raw_net = gross_pnl.add(daily_costs, fill_value=0)
 #     net = raw_net.groupby(level=0).resample('B', level=1).sum()
