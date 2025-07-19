@@ -78,31 +78,16 @@ def calc_forecast_weights_(gross, cost_sr, instrument_gross):
     return forecast_weights
 
 
-forecast_weights = m(lambda i: calc_forecast_weights_(gross_rule, cost_sr_rule.loc[i], gross_rule.loc[i]))
-forecast_div_mult = m(lambda i: calc_div_mult_daily(forecast_weights.loc[i], forecast_rule))
-forecast_inst = m(lambda i: combine_forecast(forecast_rule.loc[i], forecast_weights.loc[i], forecast_div_mult.loc[i]))
-# TODO: buffer操作后的position，会把没上市的品种的权重从na变为0，position的na该如何约定？
-position_inst_raw = m(lambda i: calc_raw_position(forecast_inst[i], vol_scalar.loc[i]))
-position_inst = m(lambda i: calc_position(forecast_inst[i], vol_scalar.loc[i], buffer_size=0.10))
-
-
-gross_inst = m(lambda i: calc_gross_pnl(position_inst.loc[i], price.loc[i], size.loc[i]))
-cost_inst = m(lambda i: calc_cost_actual(position_inst.loc[i], price.loc[i], info.loc[i]))
-
-
-# 以下为意义不明变量
-# net_inst = calc_net_pnl(gross_inst, cost_inst)
-# subsystem_turnover_ = pd.Series({i: calc_turnover(forecast_inst.loc[i], vol_scalar.loc[i]) for i in instruments})
-
-
-def calc_instrument_weights(gross_inst, cost_inst, position_inst_raw):
+def calc_instrument_weights(gross_inst, cost_inst):
     gross_inst_ = unstack_for_optimisation(gross_inst)
     cost_inst_ = unstack_for_optimisation(cost_inst)
     cost_sr_inst = pd.Series({i: calc_cost_sr(gross_inst_.loc[i], cost_inst_.loc[i], 1) for i in instruments})
     net_daily = m(lambda i: calc_net(gross_inst_.loc[i], cost_sr_inst[i]))
     net = (net_daily.unstack(level=0)
            .resample('W').sum())
-    position_unstacked = position_inst_raw.unstack().T.ffill()
+    # position_unstacked = position_inst_raw.unstack().T.ffill()
+    position_unstacked = gross_inst.unstack(level=0)
+
     config = {
         'corr_span': 500000,
         'corr_min_periods': 10,
@@ -116,8 +101,22 @@ def calc_instrument_weights(gross_inst, cost_inst, position_inst_raw):
     return calc_weights(net, position_unstacked, config)
 
 
-portfolio_weights = calc_instrument_weights(gross_inst, cost_inst, position_inst_raw)
+forecast_weights = m(lambda i: calc_forecast_weights_(gross_rule, cost_sr_rule.loc[i], gross_rule.loc[i]))
+forecast_div_mult = m(lambda i: calc_div_mult_daily(forecast_weights.loc[i], forecast_rule))
+forecast_inst = m(lambda i: combine_forecast(forecast_rule.loc[i], forecast_weights.loc[i], forecast_div_mult.loc[i]))
+# TODO: buffer操作后的position，会把没上市的品种的权重从na变为0，position的na该如何约定？
+position_inst_raw = m(lambda i: calc_raw_position(forecast_inst[i], vol_scalar.loc[i]))
+position_inst = m(lambda i: calc_position(forecast_inst[i], vol_scalar.loc[i], buffer_size=0.10))
 
+gross_inst = m(lambda i: calc_gross_pnl(position_inst.loc[i], price.loc[i], size.loc[i]))
+cost_inst = m(lambda i: calc_cost_actual(position_inst.loc[i], price.loc[i], info.loc[i]))
+
+# 以下为意义不明变量
+# net_inst = calc_net_pnl(gross_inst, cost_inst)
+# subsystem_turnover_ = pd.Series({i: calc_turnover(forecast_inst.loc[i], vol_scalar.loc[i]) for i in instruments})
+
+
+portfolio_weights = calc_instrument_weights(gross_inst, cost_inst)
 
 print(position_inst)
 

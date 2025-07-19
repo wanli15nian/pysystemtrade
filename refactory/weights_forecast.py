@@ -7,33 +7,30 @@ from refactory.base import optimisation, stack_instr
 
 
 def calc_weights(net_weekly, data_for_reindex, config):
+    weights_yearly = calc_weights_yearly(net_weekly, config)
+    idx_daily = data_for_reindex.index
+    return to_daily_weights(weights_yearly, idx_daily)
+
+
+def calc_weights_yearly(net_weekly, config):
     # 计算年切分点
-    end_list = get_end_list(net_weekly.index)
-
+    year_end_list = get_end_list(net_weekly.index)
     # 计算年权重
-    weight_yearly_raw = pd.DataFrame(
-        [calc_weight_yearly(net_weekly, end, config) for end in end_list],
-        index=end_list, columns=net_weekly.columns)
-
+    weights_yearly = pd.DataFrame(
+        [calc_weight_yearly(net_weekly, end, config) for end in year_end_list],
+        index=year_end_list, columns=net_weekly.columns)
     # 加上最开始的日期，用平均权重
-    weights_yearly = add_initial_weight(net_weekly, weight_yearly_raw)
+    weights_yearly.loc[net_weekly.index[0]] = 1 / len(weights_yearly.columns)
+    weights_yearly = weights_yearly.sort_index()
+    return weights_yearly
 
-    # 把按年的Index ffill成按天的Index
-    # idx = data_for_reindex.ffill()
-    # idx[idx.isna().any(axis=1)] = 0
-    daily_idx = data_for_reindex.index
-    dailly = weights_yearly.reindex(daily_idx, method='ffill')
-    # dailly[np.isnan(idx)] = 0.0
 
+def to_daily_weights(weights_yearly, idx_daily):
+    dailly = weights_yearly.reindex(idx_daily, method='ffill')
     smooth_daily = dailly.resample('1B').mean().ewm(span=125).mean()
-    sum_weights = smooth_daily.sum(axis=1).replace(0.0, 0.0001)
-    weights_daily = smooth_daily.div(sum_weights, axis=0)
+    sum_daily = smooth_daily.sum(axis=1).replace(0.0, 0.0001)
+    weights_daily = smooth_daily.div(sum_daily, axis=0)
     return weights_daily
-
-
-def add_initial_weight(net_weekly, weight_annual):
-    weight_annual.loc[net_weekly.index[0]] = 1 / len(weight_annual.columns)
-    return weight_annual.sort_index()
 
 
 def calc_weight_yearly(pnl, fit_end, config, floor=True):
