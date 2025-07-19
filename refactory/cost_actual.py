@@ -7,8 +7,10 @@ from refactory.base import calc_cost_of_fill
 
 def calc_cost_actual(position, price, info):
     rolls_per_year = int(info['rolls_per_year'])
+    # FIXME:这里传的应该是raw_price吧？
     all_fills = calc_all_fills(position, price, rolls_per_year)
 
+    # TODO:这段代码可以简化
     all_fills['cost'] = -all_fills.apply(
         lambda row: calc_cost_of_fill(row['price'], info, row['quantity'], row['include_slippage']), axis=1)
     fill_cost = pd.Series(all_fills['cost'].values, index=all_fills['date']).sort_index()
@@ -62,7 +64,6 @@ def pseudo_holding_fills(year, rolls_per_year, price, positions):
     df = df[(df['date'] <= last_date_with_positions) & (df['quantity'].abs() > 0)]
     df['price'] = price.asof(df['date']).values
     df['include_slippage'] = True
-    # df['price'] = df['date'].map(lambda date: get_row_of_series_before_date(price, date))
     df_sell = df.copy()
     df_sell['quantity'] = -1 * df_sell['quantity']
     df_sell['include_slippage'] = False

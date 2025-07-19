@@ -1,21 +1,11 @@
 import pandas as pd
 
 
-def align_time(raw):
-    return (raw.unstack(level=0)
+def align_time(df_multi):
+    return (df_multi.unstack(level=0)
             .stack(dropna=False)
             .droplevel('instrument')
             .sort_index(ascending=True))
-
-
-def unstack_for_optimisation(multi_index_df):
-    return (
-        multi_index_df.unstack(level=0)
-        .resample('1B').sum()
-        .replace(0.0, pd.NA)
-        .T
-        .stack(dropna=False)
-    )
 
 
 def bundle(func, instruments):

@@ -4,12 +4,14 @@ import numpy as np
 import pandas as pd
 
 from refactory.base import optimisation, calc_net, calc_cost_sr
-from refactory.utils import align_time, bundle, unstack_for_optimisation
+from refactory.utils import align_time, bundle
 
 
 def calc_forecast_weights_(gross, cost_sr, instrument):
     instruments = gross.index.levels[0]
+
     net_daily = bundle(lambda i: calc_net(gross.loc[i], cost_sr), instruments=instruments)
+
     net_weekly = net_daily.groupby(level=0).resample('W', level=1).sum()
     net_weekly = align_time(net_weekly)
 
@@ -31,14 +33,33 @@ def calc_forecast_weights_(gross, cost_sr, instrument):
     return weights_daily
 
 
+def unstack_for_optimisation(multi_index_df):
+    resampled_df = multi_index_df.groupby(level=0).resample('1B', level=1).sum()
+
+    return (
+        resampled_df
+        .unstack(level=0)
+        .T  # 转置（行列互换）
+        .stack(dropna=False)
+        .replace(0.0, pd.NA)
+    )
+
+
 def calc_instrument_weights(gross_inst, cost_inst):
     instruments = gross_inst.index.levels[0]
+
     gross_inst_ = unstack_for_optimisation(gross_inst)
     cost_inst_ = unstack_for_optimisation(cost_inst)
     cost_sr_inst = pd.Series({i: calc_cost_sr(gross_inst_.loc[i], cost_inst_.loc[i], 1) for i in instruments})
     net_daily = bundle(lambda i: calc_net(gross_inst_.loc[i], cost_sr_inst[i]), instruments=instruments)
-    net = (net_daily.unstack(level=0)
-           .resample('W').sum())
+    net = net_daily.unstack(level=0).resample('W').sum()
+
+    # gross_inst_ = unstack_for_optimisation(gross_inst)
+    # cost_inst_ = unstack_for_optimisation(cost_inst)
+    # cost_sr_inst = pd.Series({i: calc_cost_sr(gross_inst.loc[i], cost_inst.loc[i], 1) for i in instruments})
+    # net_daily = bundle(lambda i: calc_net(gross_inst.loc[i], cost_sr_inst[i]), instruments=instruments)
+    # net = net_daily.unstack(level=0).resample('W').sum()
+
 
     config = {
         'corr_span': 500000,
