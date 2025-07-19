@@ -84,6 +84,8 @@ forecast_inst = m(lambda i: combine_forecast(forecast_rule.loc[i], forecast_weig
 # TODO: buffer操作后的position，会把没上市的品种的权重从na变为0，position的na该如何约定？
 position_inst_raw = m(lambda i: calc_raw_position(forecast_inst[i], vol_scalar.loc[i]))
 position_inst = m(lambda i: calc_position(forecast_inst[i], vol_scalar.loc[i], buffer_size=0.10))
+
+
 gross_inst = m(lambda i: calc_gross_pnl(position_inst.loc[i], price.loc[i], size.loc[i]))
 cost_inst = m(lambda i: calc_cost_actual(position_inst.loc[i], price.loc[i], info.loc[i]))
 
@@ -115,6 +117,9 @@ def calc_instrument_weights(gross_inst, cost_inst, position_inst_raw):
 
 
 portfolio_weights = calc_instrument_weights(gross_inst, cost_inst, position_inst_raw)
+
+
+print(position_inst)
 
 print(portfolio_weights)
 

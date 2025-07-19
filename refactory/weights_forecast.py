@@ -19,14 +19,14 @@ def calc_weights(net_weekly, data_for_reindex, config):
     weights_yearly = add_initial_weight(net_weekly, weight_yearly_raw)
 
     # 把按年的Index ffill成按天的Index
-    data_ffill = data_for_reindex.ffill()
-    data_ffill[data_ffill.isna().any(axis=1)] = 0
-    resampled_weights = weights_yearly.reindex(data_ffill.index, method='ffill')
-    resampled_weights[np.isnan(data_ffill)] = 0.0
+    idx = data_for_reindex.ffill()
+    # idx[idx.isna().any(axis=1)] = 0
+    dailly = weights_yearly.reindex(idx.index, method='ffill')
+    # dailly[np.isnan(idx)] = 0.0
 
-    unsummed_weights = resampled_weights.resample('1B').mean().ewm(span=125).mean()
-    sum_weights = unsummed_weights.sum(axis=1).replace(0.0, 0.0001)
-    weights_daily = unsummed_weights.div(sum_weights, axis=0)
+    smooth_daily = dailly.resample('1B').mean().ewm(span=125).mean()
+    sum_weights = smooth_daily.sum(axis=1).replace(0.0, 0.0001)
+    weights_daily = smooth_daily.div(sum_weights, axis=0)
     return weights_daily
 
 
