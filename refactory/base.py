@@ -48,6 +48,15 @@ def buffer_position(position, vol_scalar, buffer_size=0.10, trade_to_edge=True):
     return buffered
 
 
+def adjust_by_buffer(last, current, top, bottom, trade_to_edge=True):
+    if np.isnan(top) or np.isnan(bottom) or np.isnan(current):
+        return last
+    if trade_to_edge:
+        return min(max(last, bottom), top)  # 如果在buffer内则不调仓，调仓就调到buffer边缘，尽量减少调仓幅度
+    else:
+        return last if (bottom <= last <= top) else current  # 如果在buffer内则不调仓
+
+
 def calc_gross_pnl(position, price, point_size):
     # FIXME 源代码确实是shift 了两次，没看出来为什么
     position = position.shift(1)
@@ -58,15 +67,6 @@ def calc_gross_pnl(position, price, point_size):
 def combine_forecast(forecast, forecast_weights, forecast_div_mult):
     combined_forecast = ((forecast_weights * forecast).sum(axis=1) * forecast_div_mult).clip(20, -20)
     return combined_forecast
-
-
-def adjust_by_buffer(last, current, top, bottom, trade_to_edge=True):
-    if np.isnan(top) or np.isnan(bottom) or np.isnan(current):
-        return last
-    if trade_to_edge:
-        return min(max(last, bottom), top)  # 如果在buffer内则不调仓，调仓就调到buffer边缘，尽量减少调仓幅度
-    else:
-        return last if (bottom <= last <= top) else current  # 如果在buffer内则不调仓
 
 
 def calc_cost_of_fill(price, info, quantity, include_slippage=True):
@@ -135,32 +135,6 @@ def calc_net(gross, cost_sr):
     gross = gross.replace(0.0, np.nan)
     cost_daily = cost_sr * (gross.std() / 16)
     return gross + cost_daily
-
-
-def unstack_for_optimisation(multi_index_df):
-    return (
-        multi_index_df.unstack(level=0)
-        .resample('1B').sum()
-        .replace(0.0, pd.NA)
-        .T
-        .stack(dropna=False)
-    )
-
-
-def stack_instr(data, freq, method):
-    if method == 'sum':
-        resampled = (data.groupby(level=0)
-                     .resample(freq, level=1).sum())
-    elif method == 'last':
-        resampled = (data.groupby(level=0)
-                     .resample(freq, level=1).last())
-    else:
-        return None
-    stacked = (resampled.unstack(level=0)
-               .stack(dropna=False)
-               .droplevel('instrument')
-               .sort_index(ascending=True))
-    return stacked
 
 
 def calc_cost_sr(gross, cost, cost_multiplier=1):

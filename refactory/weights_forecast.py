@@ -3,7 +3,8 @@ from copy import copy
 import numpy as np
 import pandas as pd
 
-from refactory.base import optimisation, stack_instr
+from refactory.base import optimisation
+from refactory.utils import align_time
 
 
 def calc_weights(net_weekly, data_for_reindex, config):
@@ -124,7 +125,9 @@ def assets_with_no_data(corr, std, mean):
 
 
 def calc_div_mult_daily(weights, forecast):
-    forecast_weekly = stack_instr(forecast, 'W', 'last')
+    forecast_weekly = forecast.groupby(level=0).resample('W', level=1).last()
+    forecast_weekly = align_time(forecast_weekly)
+
     end_list = get_end_list(forecast_weekly.index)
     instrument_number = len(forecast.index.get_level_values(0).unique())
     lookback = 250 * instrument_number
