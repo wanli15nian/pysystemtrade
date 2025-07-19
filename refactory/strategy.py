@@ -1,6 +1,6 @@
 import pandas as pd
 
-from refactory.base import calc_gross_pnl, calc_position, combine_forecast, calc_raw_position, calc_cost_sr, \
+from refactory.base import calc_gross_pnl, calc_position, combine_forecast, calc_cost_sr, \
     normalize_cost_sr, calc_net
 from refactory.base import calc_vol_scalar
 from refactory.cost_actual import calc_cost_actual
@@ -37,15 +37,12 @@ size = info['point_size']
 
 price = m(get_price)
 raw_price = m(get_raw_price)
-
-print('get price and info')
+vol_scalar = m(lambda i: calc_vol_scalar(price.loc[i], size.loc[i], capital=1000000, risk_target=risk_target))
 
 # TODO:考虑把rule后缀改为r，用rule容易有歧义，同样instrument后缀改为i
-vol_scalar = m(lambda i: calc_vol_scalar(price.loc[i], size.loc[i], capital=1000000, risk_target=risk_target))
 forecast_rule = m(lambda i: calc_forecasts(price.loc[i]))
 position_rule = m(lambda i: calc_position(forecast_rule.loc[i], vol_scalar.loc[i]))
 gross_rule = m(lambda i: calc_gross_pnl(position_rule.loc[i], price.loc[i], size.loc[i]))
-print('calculate gross for instrument and rule')
 
 # TODO:下面这几行可以整理成一个函数
 turnover_all = estimate_turnover_all(forecast_rule)
@@ -55,17 +52,21 @@ cost_rule = m(lambda i: calc_cost_estimated(price.loc[i], turnover_weighted, vol
 cost_sr_rule = pd.DataFrame({i: calc_cost_sr(gross_rule.loc[i], cost_rule.loc[i], 2) for i in instruments}).transpose()
 cost_sr_rule = normalize_cost_sr(cost_sr_rule, turnover_all)
 
+print('rule level finished')
+
 forecast_weights = m(lambda i: calc_forecast_weights(gross_rule, cost_sr_rule.loc[i], i))
 forecast_div_mult = m(lambda i: calc_div_mult_daily(forecast_weights.loc[i], forecast_rule))
 forecast_inst = m(lambda i: combine_forecast(forecast_rule.loc[i], forecast_weights.loc[i], forecast_div_mult.loc[i]))
-# TODO: buffer操作后的position，会把没上市的品种的权重从na变为0，position的na该如何约定？
-position_inst_raw = m(lambda i: calc_raw_position(forecast_inst[i], vol_scalar.loc[i]))
-position_inst = m(lambda i: calc_position(forecast_inst[i], vol_scalar.loc[i], buffer_size=0.10))
 
+# position_inst_raw = m(lambda i: calc_raw_position(forecast_inst[i], vol_scalar.loc[i]))
+# TODO: buffer操作后的position，会把没上市的品种的权重从na变为0，position的na该如何约定？
+position_inst = m(lambda i: calc_position(forecast_inst[i], vol_scalar.loc[i], buffer_size=0.10))
 gross_inst = m(lambda i: calc_gross_pnl(position_inst.loc[i], price.loc[i], size.loc[i]))
 cost_inst = m(lambda i: calc_cost_actual(position_inst.loc[i], price.loc[i], info.loc[i]))
 cost_sr_inst = pd.Series({i: calc_cost_sr(gross_inst.loc[i], cost_inst.loc[i], 1) for i in instruments})
 net_daily_inst = m(lambda i: calc_net(gross_inst.loc[i], cost_sr_inst[i]))
+
+print('instrument level finished')
 
 portfolio_weights = calc_instrument_weights(net_daily_inst)
 
@@ -76,7 +77,8 @@ portfolio_weights = calc_instrument_weights(net_daily_inst)
 
 print(position_inst)
 print(portfolio_weights)
-print('calculate weightes for portfolio')
+
+print('portfolio level finished')
 
 # --------------------------------------------------------------------------------------------------------------------
 
