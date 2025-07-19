@@ -10,7 +10,6 @@ def calc_cost_actual(position, price, info):
     # FIXME:这里传的应该是raw_price吧？
     all_fills = calc_all_fills(position, price, rolls_per_year)
 
-    # TODO:这段代码可以简化
     all_fills['cost'] = -all_fills.apply(
         lambda row: calc_cost_of_fill(row['price'], info, row['quantity'], row['include_slippage']), axis=1)
     fill_cost = pd.Series(all_fills['cost'].values, index=all_fills['date']).sort_index()
