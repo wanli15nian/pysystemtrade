@@ -166,30 +166,35 @@ def assets_with_no_data(corr, std, mean):
     return compiled.index.to_series()
 
 
-def calc_div_mult_daily(weights, forecast):
-    forecast_weekly = forecast.groupby(level=0).resample('W', level=1).last()
-    forecast_weekly = align_stack(forecast_weekly)
+def calc_rule_div_mult_daily(weights, data):
+    data_weekly = data.groupby(level=0).resample('W', level=1).last()
+    data_weekly = align_stack(data_weekly)
 
-    end_list = get_end_list(forecast_weekly.index)
-    instrument_number = len(forecast.index.get_level_values(0).unique())
-    lookback = 250 * instrument_number
-    min_periods = 20 * instrument_number
+    end_list = get_end_list(data_weekly.index)
+    instrument_number = len(data.index.get_level_values(0).unique())
+
+    config = {
+        'lookback': 250 * instrument_number,
+        'min_periods': 20 * instrument_number
+    }
+
+    multiplier_daily = calc_div_mult_daily(data_weekly, end_list, config, weights)
+    return multiplier_daily
+
+
+def calc_div_mult_daily(data_weekly, end_list, config, weights):
+    lookback = config['lookback']
+    min_periods = config['min_periods']
 
     corr_weekly = pd.Series(
-        [calc_forecast_corr(forecast_weekly, end, lookback, min_periods) for end in end_list],
+        [calc_forecast_corr(data_weekly, end, lookback, min_periods) for end in end_list],
         index=end_list
     )
-    first_corr = pd.Series([np.array([[1.0, 0.99], [0.99, 1.0]])], index=[forecast_weekly.index[0]])
+    first_corr = pd.Series([np.array([[1.0, 0.99], [0.99, 1.0]])], index=[data_weekly.index[0]])
     corr_weekly = pd.concat([first_corr, corr_weekly])
-
-    # corr_weekly = [calc_forecast_corr(forecast_weekly, end, lookback, min_periods) for end in end_list]
-    # first_corr = np.array([[1.0, 0.99], [0.99, 1.0]])
-    # corr_weekly.insert(0, first_corr)
-
     multiplier_yearly = pd.Series(
         [calc_div_mult_yearly(weights, corr_weekly, end) for end in end_list],
         index=end_list)
-
     # multiplier_daily = multiplier_yearly.reindex(weights.index, method="ffill").fillna(1.0).ewm(span=125).mean()
     # FIXME: 因为reindex 问题，加一个bfill
     multiplier_daily = multiplier_yearly.reindex(weights.index, method="ffill").shift(1).bfill().fillna(1.0).ewm(
@@ -248,3 +253,18 @@ def align_stack(df_multi):
             .stack(dropna=False)
             .droplevel('instrument')
             .sort_index(ascending=True))
+
+
+def calc_instrument_div_mult_daily(weights, net_):
+    #FIXME: 没看出来这么做的意义
+    net = (net_.unstack().T
+           .cumsum().ffill()
+           .resample('W').last()
+           .diff())
+    end_list = get_end_list(net.index)
+    config = {
+        'lookback': 25,
+        'min_periods': 20
+    }
+    multiplier_daily = calc_div_mult_daily(net, end_list, config, weights)
+    return multiplier_daily

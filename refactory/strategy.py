@@ -1,15 +1,15 @@
 import pandas as pd
 
 from refactory.base import calc_gross_pnl, calc_position, combine_forecast, calc_cost_sr, \
-    calc_net
+    calc_net, calc_net_
 from refactory.base import calc_vol_scalar
 from refactory.cost_actual import calc_cost_actual
 from refactory.cost_estimated import calc_cost_sr_all
 from refactory.data_source import get_instrument_info, get_price, get_raw_price
 from refactory.forecast import ewmac, rescale_forecast, floor_vol, price_vol
 from refactory.utils import bundle
-from refactory.weights import calc_div_mult_daily, calc_forecast_weights, \
-    calc_instrument_weights
+from refactory.weights import calc_rule_div_mult_daily, calc_forecast_weights, \
+    calc_instrument_weights, calc_instrument_div_mult_daily
 
 # --------------------------------------------------------------------------------------------------------------------
 
@@ -47,7 +47,7 @@ cost_sr_rule = calc_cost_sr_all(forecast_rule, gross_rule, vol_scalar, price, in
 print('rule level finished')
 
 forecast_weights = m(lambda i: calc_forecast_weights(gross_rule, cost_sr_rule.loc[i], i))
-forecast_div_mult = m(lambda i: calc_div_mult_daily(forecast_weights.loc[i], forecast_rule))
+forecast_div_mult = m(lambda i: calc_rule_div_mult_daily(forecast_weights.loc[i], forecast_rule))
 forecast_inst = m(lambda i: combine_forecast(forecast_rule.loc[i], forecast_weights.loc[i], forecast_div_mult.loc[i]))
 # TODO: buffer操作后的position，会把没上市的品种的权重从na变为0，position的na该如何约定？
 position_inst = m(lambda i: calc_position(forecast_inst[i], vol_scalar.loc[i], buffer_size=0.10))
@@ -67,6 +67,9 @@ portfolio_weights = calc_instrument_weights(net_daily_inst)
 
 print(position_inst)
 print(portfolio_weights)
+
+net_ = m(lambda i: calc_net_(gross_inst.loc[i], cost_inst.loc[i]))
+instrument_div_multiplier = calc_instrument_div_mult_daily(portfolio_weights, net_)
 
 print('portfolio level finished')
 

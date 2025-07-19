@@ -155,3 +155,6 @@ def calc_cost_sr(gross, cost, cost_multiplier=1):
 #     cost_sr = calc_cost_sr(gross, cost, cost_multiplier)
 #     cost_sr = cost_sr * (turnover_average / turnover)
 #     return cost_sr
+def calc_net_(gross, cost):
+    net = gross.add(cost, fill_value=0)
+    return net.resample('B').sum()
