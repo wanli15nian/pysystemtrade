@@ -182,6 +182,22 @@ def calc_rule_div_mult_daily(weights, data):
     return multiplier_daily
 
 
+def calc_instrument_div_mult_daily(weights, net_):
+    # FIXME: 没看出来这么做的意义
+    net_weekly = (net_.unstack().T
+                  .cumsum().ffill()
+                  .resample('W').last()
+                  .diff())
+
+    end_list = get_end_list(net_weekly.index)
+    config = {
+        'lookback': 25,
+        'min_periods': 20
+    }
+    multiplier_daily = calc_div_mult_daily(net_weekly, end_list, config, weights)
+    return multiplier_daily
+
+
 def calc_div_mult_daily(data_weekly, end_list, config, weights):
     lookback = config['lookback']
     min_periods = config['min_periods']
@@ -253,18 +269,3 @@ def align_stack(df_multi):
             .stack(dropna=False)
             .droplevel('instrument')
             .sort_index(ascending=True))
-
-
-def calc_instrument_div_mult_daily(weights, net_):
-    #FIXME: 没看出来这么做的意义
-    net = (net_.unstack().T
-           .cumsum().ffill()
-           .resample('W').last()
-           .diff())
-    end_list = get_end_list(net.index)
-    config = {
-        'lookback': 25,
-        'min_periods': 20
-    }
-    multiplier_daily = calc_div_mult_daily(net, end_list, config, weights)
-    return multiplier_daily

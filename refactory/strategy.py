@@ -70,6 +70,7 @@ print(portfolio_weights)
 
 net_ = m(lambda i: calc_net_(gross_inst.loc[i], cost_inst.loc[i]))
 instrument_div_multiplier = calc_instrument_div_mult_daily(portfolio_weights, net_)
+print(instrument_div_multiplier)
 
 print('portfolio level finished')
 
