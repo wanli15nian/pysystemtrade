@@ -1,7 +1,7 @@
 import pandas as pd
 
 from refactory.base import calc_gross, calc_position, combine_forecast, calc_cost_sr, \
-    calc_net, calc_net_
+    calc_net, calc_net_, calc_weight_adjusted_position
 from refactory.base import calc_vol_scalar
 from refactory.cost_actual import calc_cost_actual
 from refactory.cost_estimated import calc_cost_sr_all
@@ -67,6 +67,11 @@ instrument_multiplier = calc_instrument_div_mult_daily(instrument_weights, i_net
 # p_position
 # p_gross
 # p_net
+
+buffered_inst_pos = m(lambda i: calc_weight_adjusted_position(i, instrument_weights,
+                                     i_position.loc[i], instrument_multiplier,
+                                     vol_scalar.loc[i]))
+
 
 print('portfolio level finished')
 

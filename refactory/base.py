@@ -160,3 +160,31 @@ def calc_cost_sr(gross, cost, cost_multiplier=1):
 def calc_net_(gross, cost):
     net = gross.add(cost, fill_value=0)
     return net.resample('B').sum()
+
+
+def calc_weight_adjusted_position(instrument, weights, subsystem_position, div_mult, vol_scalar,
+                                  buffer_size=0.1, trade_to_edge=True):
+    instrument_weight = weights[instrument]
+    position_index = subsystem_position.index
+    weight_adjusted_position = (subsystem_position
+                                * instrument_weight.reindex(position_index, method='ffill')
+                                * div_mult.reindex(position_index, method='ffill'))
+
+    buffer = (vol_scalar.reindex(position_index, method='ffill')
+              * instrument_weight.reindex(position_index, method='ffill')
+              * div_mult.reindex(position_index, method='ffill')
+              * buffer_size)
+
+
+    top = (weight_adjusted_position + buffer).ffill().round()
+    bottom = (weight_adjusted_position - buffer).ffill().round()
+    rounded = weight_adjusted_position.ffill().round()
+
+    last = 0.0
+    buffered_list = []
+    for index in range(len(rounded)):
+        last = adjust_by_buffer(last, rounded.iloc[index], top.iloc[index], bottom.iloc[index], trade_to_edge)
+        buffered_list.append(last)
+    buffered = pd.Series(buffered_list, index=rounded.index)
+
+    return buffered
