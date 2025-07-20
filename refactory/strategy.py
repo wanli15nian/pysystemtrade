@@ -87,3 +87,7 @@ print('portfolio level finished')
 # _rule_cost = cost_rule.loc['US10']['ewmac32']
 # _rule_net = net_rule.loc['US10']['ewmac32']
 # print(_rule_net)
+
+# FIXME: 检查price和raw price是否用错。price的本质不是价格是收益率，涉及到因子计算，波动率计算的用price。
+# FIXME：检查resample日频是否正确。策略可以是日内分钟频率的，需要查一遍，resample成日频的地方对不对，cost都是日频的，那么net应该也是日频的，但是gross应该分为原始的和日频的
+# FIXME：检查各阶段数据对于na和0的定义。比如position的na指的是什么，0指的是什么，如果两者所指一样，就都设为0.
