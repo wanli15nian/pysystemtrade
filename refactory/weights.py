@@ -166,47 +166,44 @@ def assets_with_no_data(corr, std, mean):
     return compiled.index.to_series()
 
 
-def calc_rule_div_mult_daily(weights, data):
-    data_weekly = data.groupby(level=0).resample('W', level=1).last()
+def calc_rule_div_mult_daily(weights, net_daily):
+    data_weekly = net_daily.groupby(level=0).resample('W', level=1).last()
     data_weekly = align_stack(data_weekly)
-
-    end_list = get_end_list(data_weekly.index)
-    instrument_number = len(data.index.get_level_values(0).unique())
-
+    instrument_number = len(net_daily.index.get_level_values(0).unique())
     config = {
         'lookback': 250 * instrument_number,
         'min_periods': 20 * instrument_number
     }
 
+    end_list = get_end_list(data_weekly.index)
     multiplier_daily = calc_div_mult_daily(data_weekly, end_list, config, weights)
     return multiplier_daily
 
 
-def calc_instrument_div_mult_daily(weights, net_):
+def calc_instrument_div_mult_daily(weights, net_daily):
     # FIXME: 没看出来这么做的意义
-    net_weekly = (net_.unstack().T
+    net_weekly = (net_daily.unstack().T
                   .cumsum().ffill()
                   .resample('W').last()
                   .diff())
-
-    end_list = get_end_list(net_weekly.index)
     config = {
         'lookback': 25,
         'min_periods': 20
     }
+    end_list = get_end_list(net_weekly.index)
     multiplier_daily = calc_div_mult_daily(net_weekly, end_list, config, weights)
     return multiplier_daily
 
 
-def calc_div_mult_daily(data_weekly, end_list, config, weights):
+def calc_div_mult_daily(net_weekly, end_list, config, weights):
     lookback = config['lookback']
     min_periods = config['min_periods']
 
     corr_weekly = pd.Series(
-        [calc_forecast_corr(data_weekly, end, lookback, min_periods) for end in end_list],
+        [calc_forecast_corr(net_weekly, end, lookback, min_periods) for end in end_list],
         index=end_list
     )
-    first_corr = pd.Series([np.array([[1.0, 0.99], [0.99, 1.0]])], index=[data_weekly.index[0]])
+    first_corr = pd.Series([np.array([[1.0, 0.99], [0.99, 1.0]])], index=[net_weekly.index[0]])
     corr_weekly = pd.concat([first_corr, corr_weekly])
     multiplier_yearly = pd.Series(
         [calc_div_mult_yearly(weights, corr_weekly, end) for end in end_list],
