@@ -167,16 +167,14 @@ def assets_with_no_data(corr, std, mean):
 
 
 def calc_rule_div_mult_daily(weights, net_daily):
-    data_weekly = net_daily.groupby(level=0).resample('W', level=1).last()
-    data_weekly = align_stack(data_weekly)
+    net_weekly = net_daily.groupby(level=0).resample('W', level=1).last()
+    net_weekly = align_stack(net_weekly)
     instrument_number = len(net_daily.index.get_level_values(0).unique())
     config = {
         'lookback': 250 * instrument_number,
         'min_periods': 20 * instrument_number
     }
-
-    end_list = get_end_list(data_weekly.index)
-    multiplier_daily = calc_div_mult_daily(data_weekly, end_list, config, weights)
+    multiplier_daily = calc_div_mult_daily(net_weekly, config, weights)
     return multiplier_daily
 
 
@@ -190,14 +188,15 @@ def calc_instrument_div_mult_daily(weights, net_daily):
         'lookback': 25,
         'min_periods': 20
     }
-    end_list = get_end_list(net_weekly.index)
-    multiplier_daily = calc_div_mult_daily(net_weekly, end_list, config, weights)
+    multiplier_daily = calc_div_mult_daily(net_weekly, config, weights)
     return multiplier_daily
 
 
-def calc_div_mult_daily(net_weekly, end_list, config, weights):
+def calc_div_mult_daily(net_weekly, config, weights):
     lookback = config['lookback']
     min_periods = config['min_periods']
+
+    end_list = get_end_list(net_weekly.index)
 
     corr_weekly = pd.Series(
         [calc_forecast_corr(net_weekly, end, lookback, min_periods) for end in end_list],
