@@ -180,10 +180,12 @@ def calc_rule_div_mult_daily(weights, net_daily):
 
 def calc_instrument_div_mult_daily(weights, net_daily):
     # FIXME: 没看出来这么做的意义
-    net_weekly = (net_daily.unstack().T
-                  .cumsum().ffill()
-                  .resample('W').last()
-                  .diff())
+    # net_weekly = (net_daily.unstack().T
+    #               .cumsum().ffill()
+    #               .resample('W').last()
+    #               .diff())
+    net_weekly = net_daily.unstack().T.resample('W').sum()
+
     config = {
         'lookback': 25,
         'min_periods': 20
