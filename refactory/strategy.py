@@ -1,6 +1,6 @@
 import pandas as pd
 
-from refactory.base import calc_gross_pnl, calc_position, combine_forecast, calc_cost_sr, \
+from refactory.base import calc_gross, calc_position, combine_forecast, calc_cost_sr, \
     calc_net, calc_net_
 from refactory.base import calc_vol_scalar
 from refactory.cost_actual import calc_cost_actual
@@ -40,7 +40,7 @@ vol_scalar = m(lambda i: calc_vol_scalar(price.loc[i], size.loc[i], capital=1000
 
 r_forecast = m(lambda i: calc_forecasts(price.loc[i]))
 r_position = m(lambda i: calc_position(r_forecast.loc[i], vol_scalar.loc[i]))
-r_gross = m(lambda i: calc_gross_pnl(r_position.loc[i], price.loc[i], size.loc[i]))
+r_gross = m(lambda i: calc_gross(r_position.loc[i], price.loc[i], size.loc[i]))
 r_cost_sr = calc_cost_sr_all(r_forecast, r_gross, vol_scalar, price, info)
 
 print('rule level finished')
@@ -49,10 +49,9 @@ forecast_weights = m(lambda i: calc_forecast_weights(r_gross, r_cost_sr.loc[i], 
 forecast_mult = m(lambda i: calc_rule_div_mult_daily(forecast_weights.loc[i], r_forecast))
 i_forecast = m(lambda i: combine_forecast(r_forecast.loc[i], forecast_weights.loc[i], forecast_mult.loc[i]))
 i_position = m(lambda i: calc_position(i_forecast[i], vol_scalar.loc[i], buffer_size=0.10))
-i_gross = m(lambda i: calc_gross_pnl(i_position.loc[i], price.loc[i], size.loc[i]))
+i_gross = m(lambda i: calc_gross(i_position.loc[i], price.loc[i], size.loc[i]))
 i_cost = m(lambda i: calc_cost_actual(i_position.loc[i], price.loc[i], info.loc[i]))
 i_cost_sr = pd.Series({i: calc_cost_sr(i_gross.loc[i], i_cost.loc[i], 1) for i in instruments})
-i_net = m(lambda i: calc_net(i_gross.loc[i], i_cost_sr[i]))
 
 print('instrument level finished')
 
@@ -61,6 +60,7 @@ print('instrument level finished')
 # subsystem_turnover_ = pd.Series({i: calc_turnover(forecast_inst.loc[i], vol_scalar.loc[i]) for i in instruments})
 
 
+i_net = m(lambda i: calc_net(i_gross.loc[i], i_cost_sr[i]))
 instrument_weights = calc_instrument_weights(i_net)
 i_net2 = m(lambda i: calc_net_(i_gross.loc[i], i_cost.loc[i]))
 instrument_multiplier = calc_instrument_div_mult_daily(instrument_weights, i_net2)
@@ -72,7 +72,6 @@ print('portfolio level finished')
 
 print(instrument_weights)
 print(instrument_multiplier)
-
 
 # --------------------------------------------------------------------------------------------------------------------
 

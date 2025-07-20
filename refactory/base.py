@@ -58,7 +58,7 @@ def adjust_by_buffer(last, current, top, bottom, trade_to_edge=True):
         return last if (bottom <= last <= top) else current  # 如果在buffer内则不调仓
 
 
-def calc_gross_pnl(position, price, point_size):
+def calc_gross(position, price, point_size):
     # FIXME 源代码确实是shift 了两次，没看出来为什么
     position = position.shift(1)
     pnl_in_points = position.mul(price.ffill().diff(), axis=0).fillna(0)
