@@ -38,41 +38,41 @@ price = m(get_price)
 raw_price = m(get_raw_price)
 vol_scalar = m(lambda i: calc_vol_scalar(price.loc[i], size.loc[i], capital=1000000, risk_target=risk_target))
 
-# TODO:考虑把rule后缀改为r，用rule容易有歧义，同样instrument后缀改为i
-forecast_rule = m(lambda i: calc_forecasts(price.loc[i]))
-position_rule = m(lambda i: calc_position(forecast_rule.loc[i], vol_scalar.loc[i]))
-gross_rule = m(lambda i: calc_gross_pnl(position_rule.loc[i], price.loc[i], size.loc[i]))
-cost_sr_rule = calc_cost_sr_all(forecast_rule, gross_rule, vol_scalar, price, info)
+r_forecast = m(lambda i: calc_forecasts(price.loc[i]))
+r_position = m(lambda i: calc_position(r_forecast.loc[i], vol_scalar.loc[i]))
+r_gross = m(lambda i: calc_gross_pnl(r_position.loc[i], price.loc[i], size.loc[i]))
+r_cost_sr = calc_cost_sr_all(r_forecast, r_gross, vol_scalar, price, info)
 
 print('rule level finished')
 
-forecast_weights = m(lambda i: calc_forecast_weights(gross_rule, cost_sr_rule.loc[i], i))
-forecast_div_mult = m(lambda i: calc_rule_div_mult_daily(forecast_weights.loc[i], forecast_rule))
-forecast_inst = m(lambda i: combine_forecast(forecast_rule.loc[i], forecast_weights.loc[i], forecast_div_mult.loc[i]))
-# TODO: buffer操作后的position，会把没上市的品种的权重从na变为0，position的na该如何约定？
-position_inst = m(lambda i: calc_position(forecast_inst[i], vol_scalar.loc[i], buffer_size=0.10))
-gross_inst = m(lambda i: calc_gross_pnl(position_inst.loc[i], price.loc[i], size.loc[i]))
-cost_inst = m(lambda i: calc_cost_actual(position_inst.loc[i], price.loc[i], info.loc[i]))
-cost_sr_inst = pd.Series({i: calc_cost_sr(gross_inst.loc[i], cost_inst.loc[i], 1) for i in instruments})
-net_daily_inst = m(lambda i: calc_net(gross_inst.loc[i], cost_sr_inst[i]))
+forecast_weights = m(lambda i: calc_forecast_weights(r_gross, r_cost_sr.loc[i], i))
+forecast_mult = m(lambda i: calc_rule_div_mult_daily(forecast_weights.loc[i], r_forecast))
+i_forecast = m(lambda i: combine_forecast(r_forecast.loc[i], forecast_weights.loc[i], forecast_mult.loc[i]))
+i_position = m(lambda i: calc_position(i_forecast[i], vol_scalar.loc[i], buffer_size=0.10))
+i_gross = m(lambda i: calc_gross_pnl(i_position.loc[i], price.loc[i], size.loc[i]))
+i_cost = m(lambda i: calc_cost_actual(i_position.loc[i], price.loc[i], info.loc[i]))
+i_cost_sr = pd.Series({i: calc_cost_sr(i_gross.loc[i], i_cost.loc[i], 1) for i in instruments})
+i_net = m(lambda i: calc_net(i_gross.loc[i], i_cost_sr[i]))
 
 print('instrument level finished')
-
-portfolio_weights = calc_instrument_weights(net_daily_inst)
 
 # 以下为意义不明变量
 # net_inst = calc_net_pnl(gross_inst, cost_inst)
 # subsystem_turnover_ = pd.Series({i: calc_turnover(forecast_inst.loc[i], vol_scalar.loc[i]) for i in instruments})
 
 
-print(position_inst)
-print(portfolio_weights)
-
-net_ = m(lambda i: calc_net_(gross_inst.loc[i], cost_inst.loc[i]))
-instrument_div_multiplier = calc_instrument_div_mult_daily(portfolio_weights, net_)
-print(instrument_div_multiplier)
+instrument_weights = calc_instrument_weights(i_net)
+i_net2 = m(lambda i: calc_net_(i_gross.loc[i], i_cost.loc[i]))
+instrument_multiplier = calc_instrument_div_mult_daily(instrument_weights, i_net2)
+# p_position
+# p_gross
+# p_net
 
 print('portfolio level finished')
+
+print(instrument_weights)
+print(instrument_multiplier)
+
 
 # --------------------------------------------------------------------------------------------------------------------
 

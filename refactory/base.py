@@ -33,6 +33,7 @@ def calc_raw_position(forecast, vol_scalar, forecast_scaling=10):
 
 
 def buffer_position(position, vol_scalar, buffer_size=0.10, trade_to_edge=True):
+    # TODO: buffer操作后的position，会把没上市的品种的权重从na变为0，和原始的position不一致。position的na该如何约定？
     # vol_scalar 的另一种理解是Avg pos of the subsystem level，就是说position 可以在avg pos的10% 区间内浮动
     buffer = vol_scalar * buffer_size
     top = (position + buffer).ffill().round()
@@ -145,6 +146,7 @@ def calc_cost_sr(gross, cost, cost_multiplier=1):
     cost_sr_daily = 16 * costs_daily / vol_daily
     cost_sr = cost_sr_daily * cost_multiplier
     return cost_sr
+
 
 # def calc_net_pnl(gross_pnl, daily_costs):
 #     raw_net = gross_pnl.add(daily_costs, fill_value=0)
