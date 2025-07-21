@@ -3,7 +3,7 @@ from copy import copy
 import numpy as np
 import pandas as pd
 
-from refactory.base import optimisation, calc_net
+from refactory.core import optimisation, calc_net
 
 
 def calc_forecast_weights(gross_inst, cost_sr, instrument):

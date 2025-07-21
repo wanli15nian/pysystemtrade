@@ -2,7 +2,7 @@ import datetime
 
 import pandas as pd
 
-from refactory.base import calc_cost_of_fill
+from refactory.core import calc_cost_of_fill
 
 
 def calc_cost_actual(position, price, info):
