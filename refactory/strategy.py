@@ -67,10 +67,18 @@ instrument_multiplier = calc_instrument_div_mult_daily(instrument_weights, i_net
 # p_position
 # p_gross
 # p_net
-
+capital = 1000000
 buffered_inst_pos = m(lambda i: calc_weight_adjusted_position(i, instrument_weights,
                                      i_position.loc[i], instrument_multiplier,
                                      vol_scalar.loc[i]))
+portfolio_gross = m(lambda i: calc_gross(buffered_inst_pos.loc[i], price.loc[i], size.loc[i]))
+portfolio_gross_perc = portfolio_gross.unstack().sum() * 100 / capital
+portfolio_cost = m(lambda i: calc_cost_actual(buffered_inst_pos.loc[i], price.loc[i], info.loc[i]))
+portfolio_cost_perc = portfolio_cost.unstack().sum() * 100 / capital
+portfolio_net = portfolio_gross_perc.add(portfolio_cost_perc, fill_value=0.0)
+# portfolio_net = m(lambda i: calc_net_(portfolio_gross.loc[i], portfolio_cost.loc[i]))
+# portfolio_net_ = portfolio_net.unstack().sum()
+
 
 
 print('portfolio level finished')
