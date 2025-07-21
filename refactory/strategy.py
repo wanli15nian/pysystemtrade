@@ -7,6 +7,8 @@ from refactory.cost_actual import calc_cost_actual
 from refactory.cost_estimated import calc_cost_sr_all
 from refactory.data_source import get_instrument_info, get_price, get_raw_price
 from refactory.forecast import ewmac, rescale_forecast, floor_vol, price_vol
+from refactory.stats import gaintolossratio, profitfactor, min, max, mean, median, std, skew, avg_losses, avg_gains, \
+    ann_mean, ann_vol, sharpe, avg_drawdown, worst_drawdown, calmar, avg_return_to_drawdown
 from refactory.utils import bundle
 from refactory.weights import calc_rule_div_mult_daily, calc_forecast_weights, \
     calc_instrument_weights, calc_instrument_div_mult_daily
@@ -79,8 +81,52 @@ portfolio_net = portfolio_gross_perc.add(portfolio_cost_perc, fill_value=0.0)
 # portfolio_net = m(lambda i: calc_net_(portfolio_gross.loc[i], portfolio_cost.loc[i]))
 # portfolio_net_ = portfolio_net.unstack().sum()
 
+def portfolio_stat(net):
+    stats_list = [
+        "min",
+        "max",
+        "median",
+        "mean",
+        "std",
+        "skew",
+        "ann_mean",
+        "ann_std",
+        "sharpe",
+        # "sortino",
+        "avg_drawdown",
+        # "time_in_drawdown",
+        "calmar",
+        "avg_return_to_drawdown",
+        "avg_loss",
+        "avg_gain",
+        "gaintolossratio",
+        "profitfactor",
+        # "hitrate",
+        # "t_stat",
+        # "p_value",
+    ]
+    function_dict = {
+        "min": min,
+        "max": max,
+        "median": median,
+        "mean": mean,
+        "std": std,
+        "skew": skew,
+        "ann_mean": ann_mean,
+        "ann_std": ann_vol,
+        "sharpe": sharpe,
+        "avg_drawdown": avg_drawdown,
+        "calmar": calmar,
+        "avg_return_to_drawdown": avg_return_to_drawdown,
+        "avg_loss": avg_losses,
+        "avg_gain": avg_gains,
+        "gaintolossratio": gaintolossratio,
+        "profitfactor": profitfactor,
+    }
+    results = {stat: function_dict[stat](net) for stat in stats_list}
+    return results
 
-
+portfolio_stat = portfolio_stat(portfolio_net)
 print('portfolio level finished')
 
 print(instrument_weights)
