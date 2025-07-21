@@ -1,4 +1,5 @@
 import pandas as pd
+import quantstats as qs
 
 from refactory.core import calc_gross, calc_position, combine_forecast, calc_cost_sr, \
     calc_net, calc_net_, calc_weight_adjusted_position
@@ -8,11 +9,10 @@ from refactory.cost_estimated import calc_cost_sr_all
 from refactory.data_source import get_instrument_info, get_price, get_raw_price
 from refactory.forecast import ewmac, rescale_forecast, floor_vol, price_vol
 from refactory.stats import gaintolossratio, profitfactor, min, max, mean, median, std, skew, avg_losses, avg_gains, \
-    ann_mean, ann_vol, sharpe, avg_drawdown, worst_drawdown, calmar, avg_return_to_drawdown
+    ann_mean, ann_vol, sharpe, avg_drawdown, calmar, avg_return_to_drawdown
 from refactory.utils import bundle
 from refactory.weights import calc_rule_div_mult_daily, calc_forecast_weights, \
     calc_instrument_weights, calc_instrument_div_mult_daily
-import quantstats as qs
 
 # --------------------------------------------------------------------------------------------------------------------
 
@@ -72,13 +72,15 @@ instrument_multiplier = calc_instrument_div_mult_daily(instrument_weights, i_net
 # p_net
 capital = 1000000
 buffered_inst_pos = m(lambda i: calc_weight_adjusted_position(i, instrument_weights,
-                                     i_position.loc[i], instrument_multiplier,
-                                     vol_scalar.loc[i]))
+                                                              i_position.loc[i], instrument_multiplier,
+                                                              vol_scalar.loc[i]))
 portfolio_gross = m(lambda i: calc_gross(buffered_inst_pos.loc[i], price.loc[i], size.loc[i]))
-portfolio_gross_perc = portfolio_gross.unstack().sum() * 100 / capital
+portfolio_gross_perc = portfolio_gross.unstack().sum() / capital
 portfolio_cost = m(lambda i: calc_cost_actual(buffered_inst_pos.loc[i], price.loc[i], info.loc[i]))
-portfolio_cost_perc = portfolio_cost.unstack().sum() * 100 / capital
+portfolio_cost_perc = portfolio_cost.unstack().sum() / capital
 portfolio_net = portfolio_gross_perc.add(portfolio_cost_perc, fill_value=0.0)
+
+
 # portfolio_net = m(lambda i: calc_net_(portfolio_gross.loc[i], portfolio_cost.loc[i]))
 # portfolio_net_ = portfolio_net.unstack().sum()
 
@@ -127,12 +129,15 @@ def portfolio_stat(net):
     results = {stat: function_dict[stat](net) for stat in stats_list}
     return results
 
+
 portfolio_stat = portfolio_stat(portfolio_net)
-qs.reports.html(portfolio_net, output='performance_portfolio.html', title='portfolio')
+print(portfolio_net)
 print('portfolio level finished')
 
-print(instrument_weights)
-print(instrument_multiplier)
+qs.reports.html(portfolio_net, output='performance_portfolio.html', title='portfolio')
+
+# print(instrument_weights)
+# print(instrument_multiplier)
 
 # --------------------------------------------------------------------------------------------------------------------
 

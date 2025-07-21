@@ -16,7 +16,7 @@ def price_vol(price, span=35, min_periods=10, vol_abs_min=0.0000000001):
 
 
 def floor_vol(vol, floor_min_quant=0.05, floor_min_periods=100, floor_days=500):
-    vol_min = vol.rolling(min_periods=floor_min_periods, window=floor_days).quantile(q=floor_min_quant)
+    vol_min = vol.rolling(min_periods=floor_min_periods, window=floor_days).quantile(floor_min_quant)
     vol_min.iloc[0] = 0.0
     vol_min.ffill(inplace=True)
     return np.maximum(vol, vol_min)
