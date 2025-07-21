@@ -2,7 +2,6 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import minimize
 
-
 # FIXME:原始价格序列中空值表示当天无交易？在最开始把价格序列ffill可能不行？ 后面算波动率时填充的价格会影响波动率计算，其他的呢？
 def calc_vol_scalar(price, point_size, capital=1000000, risk_target=0.16):
     '''
@@ -60,7 +59,7 @@ def adjust_by_buffer(last, current, top, bottom, trade_to_edge=True):
 
 def calc_gross(position, price, point_size):
     # FIXME 源代码确实是shift 了两次，没看出来为什么
-    position = position.shift(1)
+    position = position.shift(2)
     pnl_in_points = position.mul(price.ffill().diff(), axis=0).fillna(0)
     return pnl_in_points * point_size
 
@@ -189,3 +188,5 @@ def calc_weight_adjusted_position(instrument, weights, forecast, div_mult, vol_s
     buffered = pd.Series(buffered_list, index=rounded.index)
 
     return buffered
+
+

@@ -84,6 +84,7 @@ portfolio_net = portfolio_gross_perc.add(portfolio_cost_perc, fill_value=0.0)
 # portfolio_net = m(lambda i: calc_net_(portfolio_gross.loc[i], portfolio_cost.loc[i]))
 # portfolio_net_ = portfolio_net.unstack().sum()
 
+
 def portfolio_stat(net):
     stats_list = [
         "min",
