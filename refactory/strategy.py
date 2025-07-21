@@ -72,7 +72,7 @@ instrument_multiplier = calc_instrument_div_mult_daily(instrument_weights, i_net
 # p_net
 capital = 1000000
 buffered_inst_pos = m(lambda i: calc_weight_adjusted_position(i, instrument_weights,
-                                                              i_position.loc[i], instrument_multiplier,
+                                                              i_forecast.loc[i], instrument_multiplier,
                                                               vol_scalar.loc[i]))
 portfolio_gross = m(lambda i: calc_gross(buffered_inst_pos.loc[i], price.loc[i], size.loc[i]))
 portfolio_gross_perc = portfolio_gross.unstack().sum() / capital

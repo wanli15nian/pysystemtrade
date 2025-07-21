@@ -162,8 +162,9 @@ def calc_net_(gross, cost):
     return net.resample('B').sum()
 
 
-def calc_weight_adjusted_position(instrument, weights, subsystem_position, div_mult, vol_scalar,
+def calc_weight_adjusted_position(instrument, weights, forecast, div_mult, vol_scalar,
                                   buffer_size=0.1, trade_to_edge=True):
+    subsystem_position = calc_raw_position(forecast, vol_scalar)
     instrument_weight = weights[instrument]
     position_index = subsystem_position.index
     weight_adjusted_position = (subsystem_position
