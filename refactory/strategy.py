@@ -12,6 +12,7 @@ from refactory.stats import gaintolossratio, profitfactor, min, max, mean, media
 from refactory.utils import bundle
 from refactory.weights import calc_rule_div_mult_daily, calc_forecast_weights, \
     calc_instrument_weights, calc_instrument_div_mult_daily
+import quantstats as qs
 
 # --------------------------------------------------------------------------------------------------------------------
 
@@ -127,6 +128,7 @@ def portfolio_stat(net):
     return results
 
 portfolio_stat = portfolio_stat(portfolio_net)
+qs.reports.html(portfolio_net, output='performance_portfolio.html', title='portfolio')
 print('portfolio level finished')
 
 print(instrument_weights)
