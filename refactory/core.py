@@ -6,13 +6,13 @@ from scipy.optimize import minimize
 def calc_vol_scalar(price, point_size, capital=1000000, risk_target=0.16):
     '''
     根据设置的risk target 计算出的单一品种的标准仓位，即forecast为均值10时的仓位，单位是手。
-    整体账户每天能接受的cash vol为 capital * risk_target
     每个contract能提供的cash vol为pnl_vol * point_size
+    算每个合约的cash vol 方法为长期和短期的weighted average std
     '''
     # TODO: price有空值的时候,会导致空值前后的价格无用，有问题。但ffill会导致0出现，降低实际波动率。应该dropna再计算波动率？
     pnl_vol = calc_mixed_volatility(price.diff(), slow_vol_years=10)
-    risk_target = risk_target / (256 ** 0.5)
-    vol_scalar = (capital * risk_target) / (pnl_vol * point_size)
+    daily_risk_target = risk_target / (256 ** 0.5)
+    vol_scalar = (capital * daily_risk_target) / (pnl_vol * point_size)
     return vol_scalar
 
 
@@ -23,11 +23,12 @@ def calc_position(forecast, vol_scalar, buffer_size=0):
             position_raw = position_raw.apply(lambda x: buffer_position(x, vol_scalar, buffer_size))
         else:
             position_raw = buffer_position(position_raw, vol_scalar, buffer_size)
-    position = position_raw.shift(1)
+    position = position_raw.shift(1)  # 当天的价格只能算出第二天的Position
     return position
 
 
 def calc_raw_position(forecast, vol_scalar, forecast_scaling=10):
+    # FIXME: 为什么除以10，forecast 的平均值并不是10，假设forecast 和10 差很多， 那岂不是永远达不到target position
     return forecast.mul(vol_scalar, axis=0) / forecast_scaling
 
 
@@ -59,7 +60,7 @@ def adjust_by_buffer(last, current, top, bottom, trade_to_edge=True):
 
 def calc_gross(position, price, point_size):
     # FIXME 源代码确实是shift 了两次，没看出来为什么
-    position = position.shift(2)
+    position = position.shift(1)
     pnl_in_points = position.mul(price.ffill().diff(), axis=0).fillna(0)
     return pnl_in_points * point_size
 
@@ -91,6 +92,7 @@ def calc_commission(price, quantity, info):
 
 def calc_slippage(quantity, info):
     # 交易滑点，现在只考虑一个点，以后可以加上参数控制滑几个点
+    # 滑点目前当成一个Constant, 前提 1.高流动性市场 2.小规模交易
     slippage = info['spread_cost']
     point_size = info['point_size']
     return abs(quantity) * point_size * slippage

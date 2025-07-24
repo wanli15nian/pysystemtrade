@@ -74,7 +74,7 @@ capital = 1000000
 buffered_inst_pos = m(lambda i: calc_weight_adjusted_position(i, instrument_weights,
                                                               i_forecast.loc[i], instrument_multiplier,
                                                               vol_scalar.loc[i]))
-portfolio_gross = m(lambda i: calc_gross(buffered_inst_pos.loc[i], price.loc[i], size.loc[i]))
+portfolio_gross = m(lambda i: calc_gross(buffered_inst_pos.loc[i], raw_price.loc[i], size.loc[i]))
 portfolio_gross_perc = portfolio_gross.unstack().sum() / capital
 portfolio_cost = m(lambda i: calc_cost_actual(buffered_inst_pos.loc[i], price.loc[i], info.loc[i]))
 portfolio_cost_perc = portfolio_cost.unstack().sum() / capital

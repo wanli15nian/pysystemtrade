@@ -52,14 +52,15 @@ def get_cost_sr_annual(turnover, price, info):
 
 
 def calc_cost_sr_per(price, info):
-    # TODO：这个应该不能只用当前最近一年的，是滚动计算的吧？是因为估算就简单处理一下？
+    # 计算每次交易会损失多少Sharpe
+    #FIXME：这个应该不能只用当前最近一年的，是滚动计算的吧？是因为估算就简单处理一下？
     point_size = info['point_size']
     average_price = price[price.index[-1] - pd.DateOffset(years=1):].mean()  # 过去一年的均价
-    average_cost = calc_cost_of_fill(average_price, info, 1)
+    average_cost = calc_cost_of_fill(average_price, info, 1)  # 单次交易费用
 
     vol = calc_mixed_volatility(price.diff(), slow_vol_years=10)
     average_vol_daily = vol[price.index[-1] - pd.DateOffset(years=1):].mean()  # 过去一年的平均波动率
-    average_vol = average_vol_daily * 16 * point_size
+    average_vol = average_vol_daily * 16 * point_size  # Annualised vol for 1 unit traded
 
     cost_sr_per = average_cost / average_vol
     return cost_sr_per
