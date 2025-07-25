@@ -69,8 +69,10 @@ def calc_weights_yearly(net_weekly, config):
 
 
 def to_daily_weights(weights_yearly, idx_daily):
-    dailly = weights_yearly.reindex(idx_daily, method='ffill')
-    smooth_daily = dailly.resample('1B').mean().ewm(span=125).mean()
+    daily = weights_yearly.reindex(idx_daily, method='ffill')
+    smooth_daily = daily.resample('1B').mean().ewm(span=125).mean()
+
+    # 这两行的意义在于假设weights 加起来不到一，那就进行normalise 操作
     sum_daily = smooth_daily.sum(axis=1).replace(0.0, 0.0001)
     weights_daily = smooth_daily.div(sum_daily, axis=0)
     return weights_daily
@@ -87,12 +89,7 @@ def calc_weight_yearly(pnl, fit_end, config, floor=True):
     equalise_vol = config['equalise_vol']
     all_assets = pnl.columns.to_series()
 
-    raw_corr = pnl.ewm(span=corr_span, min_periods=corr_min_periods, ignore_na=True).corr(pairwise=True)
-    corr_matrix_values = raw_corr[raw_corr.index.get_level_values(0) <= fit_end].tail(len(pnl.columns)).values
-    if floor:
-        corr_matrix_values[corr_matrix_values < 0.0] = 0.0
-        np.fill_diagonal(corr_matrix_values, 1.0)
-    corr_array = np.clip(corr_matrix_values, a_min=0, a_max=None)
+    corr_array = calc_corr(pnl,fit_end, lookback=corr_span, periods=corr_min_periods)
     corr_unshrunk = pd.DataFrame(corr_array, index=all_assets, columns=all_assets)
 
     # 计算标准差和均值
@@ -202,7 +199,7 @@ def calc_div_mult_daily(net_weekly, config, weights):
     end_list = get_end_list(net_weekly.index)
 
     corr_weekly = pd.Series(
-        [calc_forecast_corr(net_weekly, end, lookback, min_periods) for end in end_list],
+        [calc_corr(net_weekly, end, lookback, min_periods) for end in end_list],
         index=end_list
     )
     first_corr = pd.Series([np.array([[1.0, 0.99], [0.99, 1.0]])], index=[net_weekly.index[0]])
@@ -225,11 +222,14 @@ def calc_forecast_corr_multi(forecast_, lookback=250, periods=20):
     return corr_weekly
 
 
-def calc_forecast_corr(forecast, fit_end, lookback=250, periods=20):
-    corr_weekly = forecast.ewm(span=lookback, min_periods=periods, ignore_na=True).corr(pairwise=True)
-    corr_matrix_values = corr_weekly[corr_weekly.index.get_level_values(0) <= fit_end].tail(
-        len(forecast.columns)).values
-    corr = np.clip(corr_matrix_values, a_min=0, a_max=None)
+def calc_corr(data, fit_end, lookback=250, periods=20, floor=True):
+
+    # FIXME: 看看能不能和calculate weight 里面算corr 的部分共用
+    corr_weekly = data.ewm(span=lookback, min_periods=periods, ignore_na=True).corr(pairwise=True)
+    corr = corr_weekly[corr_weekly.index.get_level_values(0) <= fit_end].tail(
+        len(data.columns)).values
+    if floor:
+        corr = np.clip(corr, a_min=0, a_max=None)
     return corr
 
 
