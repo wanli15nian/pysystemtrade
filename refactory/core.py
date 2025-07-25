@@ -54,10 +54,14 @@ def buffer_position(position, vol_scalar, buffer_size=0.10, trade_to_edge=True):
 
 
 def adjust_by_buffer(last, current, top, bottom, trade_to_edge=True):
+    # FIXME: 当trade_to_edge 为True, 那新的Position只有三个选择，last, top, bottom?
     if np.isnan(top) or np.isnan(bottom) or np.isnan(current):
         return last
-    if trade_to_edge:
-        return min(max(last, bottom), top)  # 如果在buffer内则不调仓，调仓就调到buffer边缘，尽量减少调仓幅度
+    if last > top:
+        return top if trade_to_edge else current
+    elif last < bottom:
+        return bottom if trade_to_edge else current
+
     else:
         return last if (bottom <= last <= top) else current  # 如果在buffer内则不调仓
 
