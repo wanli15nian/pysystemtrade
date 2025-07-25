@@ -9,11 +9,12 @@ def estimate_turnover_all(forecast_all):
 
 def calc_annual_turnover(forecast, forecast_scaling=10.0):
     # 其实turnover应该是和position相关的，只是系统假设position和forecast成绝对正比
+    # Turnover 在这里的定义是risk 的 turnover, forecast 本质上是risk 的 代表
     # FIXME:如果forecast是分钟频率的，turnover会少算很多
     # FIXME: 所以为什么不直接用Position 来算turnover
     forecast = forecast.resample("1B").last()
-    proportion = forecast / forecast_scaling
-    turnover_daily = proportion.diff().abs().mean()  # Average change in risk exposure
+    proportion = forecast / forecast_scaling   # Forecast 的平均值在10，除以10 后得出normalised risk exposure, i.e. 1 unit of risk is 160k
+    turnover_daily = proportion.diff().abs().mean()  # Average change in risk exposure, 而turnover的定义也是change in risk exposure
     turnover_annual = turnover_daily * 256
     return turnover_annual
 

@@ -46,6 +46,8 @@ def get_cost_sr_annual(turnover, price, info):
     cost_sr_per = calc_cost_sr_per(price, info)
     rolls_per_year = int(info['rolls_per_year'])
     holding_cost = rolls_per_year * 2.0 * cost_sr_per
+
+    # FIXME: 并不合理，如果turnover是按risk 次数理解，而cost_sr_per 是按具体交易手数理解，那结果没有意义
     transaction_cost = turnover * cost_sr_per
     cost_sr_annual = transaction_cost + holding_cost
     return cost_sr_annual

@@ -10,6 +10,8 @@ def calc_vol_scalar(price, point_size, capital=1000000, risk_target=0.16):
     算每个合约的cash vol 方法为长期和短期的weighted average std
     '''
     # TODO: price有空值的时候,会导致空值前后的价格无用，有问题。但ffill会导致0出现，降低实际波动率。应该dropna再计算波动率？
+    # FIXME: 如果Vol 很低的话，本金可能没法覆盖Target position, 所以后续需要添加限制
+    # FIXME: 这里假设全程都是1000000的资金，可我们应该随着NAV变化而更改资金量，所以target_position也应该随之变化
     pnl_vol = calc_mixed_volatility(price.diff(), slow_vol_years=10)
     daily_risk_target = risk_target / (256 ** 0.5)
     vol_scalar = (capital * daily_risk_target) / (pnl_vol * point_size)
@@ -28,7 +30,9 @@ def calc_position(forecast, vol_scalar, buffer_size=0):
 
 
 def calc_raw_position(forecast, vol_scalar, forecast_scaling=10):
-    # FIXME: 为什么除以10，forecast 的平均值并不是10，假设forecast 和10 差很多， 那岂不是永远达不到target position
+    # forecast 的abs 平均值就是在10左右，因为scale 过
+    # forecast 为10的时候，take full risk budget. 也就是fast ewm - slow ewm 为正且Significant
+    # Forecast 高的时候，也就是说More confident, 所以可以超出target level, i.e. target 不是定死的
     return forecast.mul(vol_scalar, axis=0) / forecast_scaling
 
 
@@ -59,7 +63,7 @@ def adjust_by_buffer(last, current, top, bottom, trade_to_edge=True):
 
 
 def calc_gross(position, price, point_size):
-    # FIXME 源代码确实是shift 了两次，没看出来为什么
+    # FIXME 源代码确实是shift 了两次，没看出来为什么，其实考虑到calc_position 里面的shift, 这已经是shift第二次了
     position = position.shift(1)
     pnl_in_points = position.mul(price.ffill().diff(), axis=0).fillna(0)
     return pnl_in_points * point_size
