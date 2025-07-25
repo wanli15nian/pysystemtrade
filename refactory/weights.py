@@ -207,10 +207,11 @@ def calc_div_mult_daily(data, config, weights):
     multiplier_yearly = pd.Series(
         [calc_div_mult_yearly(weights, corr_weekly, end) for end in end_list],
         index=end_list)
-    # multiplier_daily = multiplier_yearly.reindex(weights.index, method="ffill").fillna(1.0).ewm(span=125).mean()
-    # FIXME: 因为reindex 问题，加一个bfill
-    multiplier_daily = multiplier_yearly.reindex(weights.index, method="ffill").shift(1).bfill().fillna(1.0).ewm(
-        span=125).mean()
+    multiplier_yearly = pd.concat([pd.Series(1.0, index=[data.index[0]]), multiplier_yearly])
+    multiplier_daily = (multiplier_yearly
+                        .reindex(weights.index, method="ffill")
+                        .fillna(1.0).ewm(span=125)
+                        .mean())
     return multiplier_daily
 
 
