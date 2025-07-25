@@ -14,8 +14,11 @@ def calc_cost_sr_all(forecast_rule, gross_rule, vol_scalar, price, info):
     cost_rule = bundle(lambda i: calc_cost_estimated(price.loc[i], turnover_weighted, vol_scalar.loc[i], info.loc[i]),
                        instruments=instruments)
 
+    # FIXME: calc_cost_estimated 内部其实就算过cost_sr, 这里又算了一遍，应该可以简化
     cost_sr_rule = pd.DataFrame(
         {i: calc_cost_sr(gross_rule.loc[i], cost_rule.loc[i], 2) for i in instruments}).transpose()
+
+    # FIXME: 完全没看明白这里的用意
     turnover_average = turnover_all.mean(axis=0)
     return cost_sr_rule * (turnover_average / turnover_all)
 
@@ -29,14 +32,19 @@ def estimate_daily_cost(price, turnover, vol_scalar, info):
     # 计算年夏普成本
     cost_sr_annual = get_cost_sr_annual(turnover, price, info)
     vol_annual = calc_mixed_volatility(price.diff(), slow_vol_years=10) * 16
+
+    # FIXME： 没看明白这里乘 vol_scalar的用意
     cost_annual = (-cost_sr_annual * vol_annual * vol_scalar).ffill()
     # 计算日成本
+    # FIXME: 这个就很诡异, vol_scalar和vol_annual 都是从price 算出来的，这里来回的reindex 得出了跟一开始一样的结果, 结果似乎只是把cost_annual 也shift(1) 而已
     vol_scalar = vol_scalar.shift(1)
     cost_annual = (cost_annual.reindex(vol_scalar.index)
                    [~vol_scalar.isna()]
                    .reindex(price.index, method='ffill'))
     interval_as_year = cost_annual.index.to_series().diff().dt.total_seconds() / (365.25 * 24 * 60 * 60)
     point_size = info['point_size']
+
+    #FIXME: 这么做就会导致周一的cost 是其他时候的数倍，合理吗? 因为周一距上一个交易日的间隔时间长
     cost_daily = cost_annual * interval_as_year * point_size
     return cost_daily
 

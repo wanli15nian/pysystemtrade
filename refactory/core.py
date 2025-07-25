@@ -148,6 +148,8 @@ def calc_cost_sr(gross, cost, cost_multiplier=1):
     gross.replace(0.0, pd.NA, inplace=True)
     vol_daily = gross.std()
     costs_daily = cost.mean()
+
+    # FIXME: 这里的vol 为什么用的是gross.std(), 而其他时候都是return 的mixed std
     cost_sr_daily = 16 * costs_daily / vol_daily
     cost_sr = cost_sr_daily * cost_multiplier
     return cost_sr
