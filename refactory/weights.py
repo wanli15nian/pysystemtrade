@@ -96,9 +96,9 @@ def calc_weight_yearly(pnl, fit_end, config, floor=True):
     corr_unshrunk = pd.DataFrame(corr_array, index=all_assets, columns=all_assets)
 
     # 计算标准差和均值
-    ewm = pnl.ewm(span=multiple_span, min_periods=multiple_min_periods)
-    std_daily = ewm.std().asof(fit_end)
-    mean_daily = ewm.mean().asof(fit_end)
+    multiple_ewm = pnl.ewm(span=multiple_span, min_periods=multiple_min_periods)
+    std_daily = multiple_ewm.std().asof(fit_end)
+    mean_daily = multiple_ewm.mean().asof(fit_end)
 
     # 年化处理
     std = std_daily * ((365.25 / 7.0) ** 0.5)
@@ -136,12 +136,13 @@ def shrink_mean_to_average(mean, std, shrinkage_sr, sr_target):
 def shrink_corr_to_average(raw_corr, shrinkage_corr=1.0):
     raw_corr_ = copy(np.array(raw_corr))
     size = len(raw_corr_)
+
     np.fill_diagonal(raw_corr_, np.nan)
 
     if np.all(np.isnan(raw_corr_)):
         return np.nan
-    average_corr = np.nanmean(raw_corr_)
 
+    average_corr = np.nanmean(raw_corr_)
     dummy_matrix = np.full((size, size), average_corr)
     np.fill_diagonal(dummy_matrix, 1.0)
 
@@ -264,6 +265,6 @@ def get_end_list(daily_index):
 
 def align_stack(df_multi):
     return (df_multi.unstack(level=0)
-            .stack(dropna=False)
+            .stack(future_stack=True)
             .droplevel('instrument')
             .sort_index(ascending=True))

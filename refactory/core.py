@@ -138,6 +138,9 @@ def calc_mixed_volatility(data, days=35, min_periods=10, slow_vol_years=20,
 
 def calc_net(gross, cost_sr):
     # TODO:cost_sr是daily的，那么gross也必须是daily的，检查一下
+
+    # 这里的cost_daily 其实就是calc_cost_sr 里面的costs_daily 然后adjust for turnover 和cost_multiplier
+    # FIXME: 是否可以简化这些步骤
     gross = gross.resample("1B").last()
     gross = gross.replace(0.0, np.nan)
     cost_daily = cost_sr * (gross.std() / 16)
