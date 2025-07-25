@@ -89,7 +89,7 @@ def calc_weight_yearly(pnl, fit_end, config, floor=True):
     equalise_vol = config['equalise_vol']
     all_assets = pnl.columns.to_series()
 
-    corr_array = calc_corr(pnl,fit_end, lookback=corr_span, periods=corr_min_periods)
+    corr_array = calc_corr(pnl, fit_end, lookback=corr_span, periods=corr_min_periods)
     corr_unshrunk = pd.DataFrame(corr_array, index=all_assets, columns=all_assets)
 
     # 计算标准差和均值
@@ -164,15 +164,15 @@ def assets_with_no_data(corr, std, mean):
     return compiled.index.to_series()
 
 
-def calc_rule_div_mult_daily(weights, net_daily):
-    net_weekly = net_daily.groupby(level=0).resample('W', level=1).last()
-    net_weekly = align_stack(net_weekly)
-    instrument_number = len(net_daily.index.get_level_values(0).unique())
+def calc_rule_div_mult_daily(weights, forecast_daily):
+    forecast_weekly = forecast_daily.groupby(level=0).resample('W', level=1).last()
+    forecast_weekly = align_stack(forecast_weekly)
+    instrument_number = len(forecast_daily.index.get_level_values(0).unique())
     config = {
         'lookback': 250 * instrument_number,
         'min_periods': 20 * instrument_number
     }
-    multiplier_daily = calc_div_mult_daily(net_weekly, config, weights)
+    multiplier_daily = calc_div_mult_daily(forecast_weekly, config, weights)
     return multiplier_daily
 
 
@@ -192,17 +192,17 @@ def calc_instrument_div_mult_daily(weights, net_daily):
     return multiplier_daily
 
 
-def calc_div_mult_daily(net_weekly, config, weights):
+def calc_div_mult_daily(data, config, weights):
     lookback = config['lookback']
     min_periods = config['min_periods']
 
-    end_list = get_end_list(net_weekly.index)
+    end_list = get_end_list(data.index)
 
     corr_weekly = pd.Series(
-        [calc_corr(net_weekly, end, lookback, min_periods) for end in end_list],
+        [calc_corr(data, end, lookback, min_periods) for end in end_list],
         index=end_list
     )
-    first_corr = pd.Series([np.array([[1.0, 0.99], [0.99, 1.0]])], index=[net_weekly.index[0]])
+    first_corr = pd.Series([np.array([[1.0, 0.99], [0.99, 1.0]])], index=[data.index[0]])
     corr_weekly = pd.concat([first_corr, corr_weekly])
     multiplier_yearly = pd.Series(
         [calc_div_mult_yearly(weights, corr_weekly, end) for end in end_list],
@@ -223,8 +223,6 @@ def calc_forecast_corr_multi(forecast_, lookback=250, periods=20):
 
 
 def calc_corr(data, fit_end, lookback=250, periods=20, floor=True):
-
-    # FIXME: 看看能不能和calculate weight 里面算corr 的部分共用
     corr_weekly = data.ewm(span=lookback, min_periods=periods, ignore_na=True).corr(pairwise=True)
     corr = corr_weekly[corr_weekly.index.get_level_values(0) <= fit_end].tail(
         len(data.columns)).values
@@ -240,12 +238,12 @@ def calc_div_mult_yearly(weights_daily, corr_weekly, end, dm_max=2.5):
     if len(corr_matrix) == 0:
         return 1.0
     # weights = np.array(weights_daily[weights_daily.index <= end].iloc[-1])
-    filtered = weights_daily[weights_daily.index <= end]
-    if filtered.empty:
+    weights_before_end = weights_daily[weights_daily.index <= end]
+    if weights_before_end.empty:
         div_mult = 1.0
     else:
-        weights = np.array(filtered.iloc[-1])
-        risk = np.sqrt(weights.dot(corr_matrix).dot(weights))
+        weights = np.array(weights_before_end.iloc[-1])
+        risk = np.sqrt(weights.dot(corr_matrix).dot(weights.T))  # 如果相关性高, risk 会接近1 （高），所以div_mult 小
         risk = 1.0 if (np.isnan(risk) or risk < 1e-7) else risk
         div_mult = min(1.0 / risk, dm_max)
     return div_mult
