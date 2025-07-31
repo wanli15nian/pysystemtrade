@@ -52,7 +52,6 @@ def buffer_position(position, vol_scalar, buffer_size=0.10, trade_to_edge=True):
 
 
 def adjust_by_buffer(last, current, top, bottom, trade_to_edge=True):
-    # FIXME: 当trade_to_edge 为True, 那新的Position只有三个选择，last, top, bottom?
     if np.isnan(top) or np.isnan(bottom) or np.isnan(current):
         return last
     if last > top:
@@ -64,8 +63,6 @@ def adjust_by_buffer(last, current, top, bottom, trade_to_edge=True):
 
 
 def calc_gross(position, price, point_size):
-    # FIXME 源代码确实是shift 了两次，没看出来为什么，其实考虑到calc_position 里面的shift, 这已经是shift第二次了
-    # 这里不应该shift
     # position = position.shift(1)
     pnl_in_points = position.mul(price.ffill().diff(), axis=0).fillna(0)
     return pnl_in_points * point_size
