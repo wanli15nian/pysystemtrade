@@ -30,8 +30,8 @@ def calc_cost_estimated(price, turnover, vol_scalar, info):
 
 def estimate_daily_cost(price, turnover, vol_scalar, info):
     # 计算年夏普成本
-    cost_sr_annual = get_cost_sr_annual(turnover, price, info)
     vol_annual = calc_mixed_volatility(price.diff(), slow_vol_years=10) * 16
+    cost_sr_annual = get_cost_sr_annual(turnover, price, info, vol_annual)
     cost_annual = (-cost_sr_annual * vol_annual * vol_scalar).ffill().shift(1)  # vol_scalar 是一手的波动率
     # 计算日成本
     interval_as_year = cost_annual.index.to_series().diff().dt.total_seconds() / (365.25 * 24 * 60 * 60)
@@ -42,29 +42,26 @@ def estimate_daily_cost(price, turnover, vol_scalar, info):
     return cost_daily
 
 
-def get_cost_sr_annual(turnover, price, info):
+def get_cost_sr_annual(turnover, price, info, vol):
     # 总成本 = 移仓换月成本 + 交易成本，都是以SR计算的。
-    cost_sr_per = calc_cost_sr_per(price, info)
+    cost_sr_per = calc_cost_sr_per(price, info, vol)
     rolls_per_year = int(info['rolls_per_year'])
     holding_cost = rolls_per_year * 2.0 * cost_sr_per
 
-    # FIXME: 并不合理，如果turnover是按risk 次数理解，而cost_sr_per 是按具体交易手数理解，那结果没有意义
     # 跟手没关系，1手和10手没有区别。10手average cost 变成10倍，vol_annual也10倍，所以比值相同
     transaction_cost = turnover * cost_sr_per
     cost_sr_annual = transaction_cost + holding_cost
     return cost_sr_annual
 
 
-def calc_cost_sr_per(price, info):
+def calc_cost_sr_per(price, info, vol_annual):
     # 计算每次一手交易会损失多少Sharpe
     #FIXME：这个应该不能只用当前最近一年的，是滚动计算的吧？是因为估算就简单处理一下？
     point_size = info['point_size']
     average_price = price[price.index[-1] - pd.DateOffset(years=1):].mean()  # 过去一年的均价
     average_cost = calc_cost_of_fill(average_price, info, 1)  # 单次交易费用
 
-    vol = calc_mixed_volatility(price.diff(), slow_vol_years=10)
-    vol_daily = vol[price.index[-1] - pd.DateOffset(years=1):].mean()  # 过去一年的平均波动率
-    vol_annual = vol_daily * 16 * point_size  # Annualised vol for 1 unit traded
+    vol_annual = vol_annual[price.index[-1] - pd.DateOffset(years=1):].mean() * point_size  # 过去一年的平均波动率
 
     cost_sr_per = average_cost / vol_annual
     return cost_sr_per
