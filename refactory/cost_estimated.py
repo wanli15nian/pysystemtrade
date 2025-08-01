@@ -32,13 +32,8 @@ def estimate_daily_cost(price, turnover, vol_scalar, info):
     # 计算年夏普成本
     cost_sr_annual = get_cost_sr_annual(turnover, price, info)
     vol_annual = calc_mixed_volatility(price.diff(), slow_vol_years=10) * 16
-    cost_annual = (-cost_sr_annual * vol_annual * vol_scalar).ffill()  # vol_scalar 是一手的波动率
+    cost_annual = (-cost_sr_annual * vol_annual * vol_scalar).ffill().shift(1)  # vol_scalar 是一手的波动率
     # 计算日成本
-    # FIXME: 这个就很诡异, vol_scalar和vol_annual 都是从price 算出来的，这里来回的reindex 得出了跟一开始一样的结果, 结果似乎只是把cost_annual 也shift(1) 而已
-    vol_scalar = vol_scalar.shift(1)
-    cost_annual = (cost_annual.reindex(vol_scalar.index)
-                   [~vol_scalar.isna()]
-                   .reindex(price.index, method='ffill'))
     interval_as_year = cost_annual.index.to_series().diff().dt.total_seconds() / (365.25 * 24 * 60 * 60)
     point_size = info['point_size']
 

@@ -18,6 +18,7 @@ from refactory.weights import calc_rule_div_mult_daily, calc_forecast_weights, \
 
 
 risk_target = 0.16
+capital = 1000000
 instruments = ["CORN", "SOFR", "SP500_micro", 'US10']
 
 
@@ -39,7 +40,7 @@ size = info['point_size']
 
 price = m(get_price)
 raw_price = m(get_raw_price)
-vol_scalar = m(lambda i: calc_vol_scalar(price.loc[i], size.loc[i], capital=1000000, risk_target=risk_target))
+vol_scalar = m(lambda i: calc_vol_scalar(price.loc[i], size.loc[i], capital=capital, risk_target=risk_target))
 
 r_forecast = m(lambda i: calc_forecasts(price.loc[i]))
 r_position = m(lambda i: calc_position(r_forecast.loc[i], vol_scalar.loc[i]))
@@ -70,7 +71,6 @@ instrument_multiplier = calc_instrument_div_mult_daily(instrument_weights, i_net
 # p_position
 # p_gross
 # p_net
-capital = 1000000
 buffered_inst_pos = m(lambda i: calc_weight_adjusted_position(i, instrument_weights,
                                                               i_forecast.loc[i], instrument_multiplier,
                                                               vol_scalar.loc[i]))
