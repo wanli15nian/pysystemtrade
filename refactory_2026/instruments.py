@@ -3,7 +3,8 @@
 The numbers a backtest needs for each instrument are spread across three files
 in data/csvconfig, and one of them is not stored at all but derived:
 
-    point_size, currency, per_block, percentage, per_trade  <- instrumentconfig.csv
+    point_size, currency, commission_per_block,             <- instrumentconfig.csv
+    commission_percentage, commission_per_trade
     spread_cost                                             <- spreadcosts.csv
     rolls_per_year                                          <- len(HoldRollCycle)
                                                                from rollconfig.csv
@@ -12,13 +13,16 @@ This module does that join once, validates the result, and returns a DataFrame
 indexed by instrument code. Nothing else reads csvconfig.
 
 Columns returned:
-    point_size      a price difference of 1.0 is worth this much currency
-    currency        currency the contract settles in
-    per_block       commission per contract
-    percentage      commission as a fraction of traded value
-    per_trade       flat commission per order
-    spread_cost     half-spread, in price points
-    rolls_per_year  hold-cycle rolls per year
+    point_size             a price difference of 1.0 is worth this much currency
+    currency               currency the contract settles in
+    commission_per_block   commission per contract traded
+    commission_percentage  commission as a fraction of traded value, not a percent
+    commission_per_trade   flat commission per order, whatever its size
+    spread_cost            half-spread, in price points
+    rolls_per_year         hold-cycle rolls per year
+
+The three commission columns are alternative charging structures, not charges to
+be added up: a broker's commission for a fill is the largest of the three.
 
 Rows come back in the order requested, never sorted, so that downstream code
 cannot come to depend on alphabetical ordering.
@@ -34,9 +38,9 @@ CONFIG_DIR = config.DATA_DIR / "csvconfig"
 
 NUMERIC_COLUMNS = [
     "point_size",
-    "per_block",
-    "percentage",
-    "per_trade",
+    "commission_per_block",
+    "commission_percentage",
+    "commission_per_trade",
     "spread_cost",
     "rolls_per_year",
 ]
@@ -61,9 +65,9 @@ def _instrument_columns() -> pd.DataFrame:
     columns = {
         "Pointsize": "point_size",
         "Currency": "currency",
-        "PerBlock": "per_block",
-        "Percentage": "percentage",
-        "PerTrade": "per_trade",
+        "PerBlock": "commission_per_block",
+        "Percentage": "commission_percentage",
+        "PerTrade": "commission_per_trade",
     }
     return _read_config("instrumentconfig.csv")[list(columns)].rename(columns=columns)
 

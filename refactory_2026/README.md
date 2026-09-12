@@ -67,8 +67,14 @@ conversion. Rows are returned in the order requested, never sorted, so nothing
 downstream can come to rely on alphabetical order.
 
 `load_instrument_config()` returns a DataFrame indexed by instrument code, with
-columns `point_size`, `currency`, `per_block`, `percentage`, `per_trade`,
-`spread_cost`, `rolls_per_year`.
+columns `point_size`, `currency`, `commission_per_block`,
+`commission_percentage`, `commission_per_trade`, `spread_cost`,
+`rolls_per_year`.
+
+The commission columns carry the `commission_` prefix because the names in the
+source file (`PerBlock`, `Percentage`, `PerTrade`) do not say what they charge
+for. They are alternative charging structures rather than charges to be summed:
+the commission on a fill is the largest of the three.
 
 ## Data
 
