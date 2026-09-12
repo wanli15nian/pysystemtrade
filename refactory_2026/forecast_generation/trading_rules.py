@@ -1,8 +1,8 @@
 """Trading rules, and the variations of them this build trades.
 
-A rule is pure maths: prices and volatility in, a raw signal out. It knows
-nothing about scaling, capping, capital or its own name, so it can be tested
-against a hand-built series with no files involved.
+A trading rule is pure maths: prices and volatility in, a raw signal out. It
+knows nothing about scaling, capping, capital or its own name, so it can be
+tested against a hand-built series with no files involved.
 
 Volatility is passed in, never fetched. A rule that fetched its own volatility
 could disagree with the volatility used to size positions, which is the mistake

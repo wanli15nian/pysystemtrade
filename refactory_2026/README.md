@@ -44,8 +44,19 @@ import. It exists so that reading a setting can never start a backtest, which is
 what happened in the old build, where the settings sat at the top of the module
 that ran the whole pipeline.
 
-Holds the data directory, the instrument list, capital, the risk target, and the
-annualisation constant. Paths resolve relative to the file, so the code behaves
+Holds the data directory, the instrument list, capital, the risk target, the
+annualisation constant, and the forecast convention
+(`AVERAGE_ABS_FORECAST`, `MAX_ABS_FORECAST`).
+
+The test for whether a constant belongs here is whether **more than one stage has
+to agree on it**. The forecast average of 10 qualifies: forecast generation
+scales signals to it and position sizing divides by it, so a change in one place
+alone would silently misprice every position. An estimator's own parameters do
+not qualify — the 35-day volatility span and the 500 observations needed for a
+forecast scalar live beside the code that uses them, where their reasoning is
+documented. That keeps this file a short list of shared agreements rather than a
+catalogue of every parameter in the system, which is what makes pysystemtrade's
+`defaults.yaml` hard to reason about. Paths resolve relative to the file, so the code behaves
 the same from any working directory. Anything belonging to one stage alone stays
 with that stage, so this file is not allowed to become a list of every parameter
 in the system.
@@ -149,9 +160,9 @@ flatter a variance estimate, which is worse.
 ### `forecast_generation/`
 
 One forecast per trading rule, on the convention that 10 means hold the average
-position and 20 means twice it. `rules.py` holds the rule functions and the
-parameter grids; `forecasts.py` holds the scaling and capping every rule passes
-through. Output is `{code: DataFrame}` with rule names as columns.
+position and 20 means twice it. `trading_rules.py` holds the rule functions and
+the parameter grids; `forecasts.py` holds the scaling and capping every rule
+passes through. Output is `{code: DataFrame}` with rule names as columns.
 
 Volatility is passed into a rule, never fetched by it, so a rule cannot diverge
 from the volatility used to size positions. Rule names are derived from

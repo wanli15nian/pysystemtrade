@@ -11,12 +11,12 @@ weighted and added together later.
 
 | File | Contains | You touch it when |
 |---|---|---|
-| `rules.py` | The rule functions, the `Rule` record, and the parameter grids | Adding or changing what you trade |
+| `trading_rules.py` | The rule functions, the `Rule` record, and the parameter grids | Adding or changing what you trade |
 | `forecasts.py` | Scalar estimation, capping, assembling the output | Almost never |
 
 The split is by what changes together. Adding a carry rule means a new function
-and a new grid, both in `rules.py`; the machinery that turns any raw signal into
-a forecast does not move.
+and a new grid, both in `trading_rules.py`; the machinery that turns any raw
+signal into a forecast does not move.
 
 ## Inputs and outputs
 
@@ -90,6 +90,14 @@ whole purpose of the step.
 
 The scalar uses an expanding window of the signal's own history and needs **500
 observations**, about two years.
+
+The 10 and the 20 are `config.AVERAGE_ABS_FORECAST` and
+`config.MAX_ABS_FORECAST`, not local constants, because other stages must agree
+on them: position sizing divides a forecast by the average to get contracts, and
+the combined forecast is capped at the same maximum. Were the scaling target
+changed here alone, every position would be wrong by a constant factor with
+nothing raising an error. The 500-observation requirement stays local, since only
+this module uses it.
 
 ### 2. Capping
 

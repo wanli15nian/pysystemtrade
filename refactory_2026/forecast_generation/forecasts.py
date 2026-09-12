@@ -55,14 +55,12 @@ import pandas as pd
 
 from refactory_2026 import config
 from refactory_2026.data_cleaning.daily_prices import adjusted_price
-from refactory_2026.forecast_generation.rules import DEFAULT_RULES, Rule
+from refactory_2026.forecast_generation.trading_rules import DEFAULT_RULES, Rule
 from refactory_2026.volatility import volatility_of_prices
 
-# What the average absolute forecast should come out as.
-TARGET_ABS_FORECAST = 10.0
-
-# Ceiling on a single rule's conviction, as a multiple of the target.
-FORECAST_CAP = 20.0
+# The average and the cap come from config, because forecast weighting and
+# position sizing have to agree with this stage about what a forecast of 10
+# means. The 500 observations below are nobody else's business.
 
 # Observations required before a scalar is estimated at all.
 MIN_OBSERVATIONS_FOR_SCALAR = 500
@@ -77,14 +75,14 @@ def forecast_scalar(raw: pd.Series) -> pd.Series:
     """
     average_abs = raw.abs().expanding(min_periods=MIN_OBSERVATIONS_FOR_SCALAR).mean()
 
-    return TARGET_ABS_FORECAST / average_abs
+    return config.AVERAGE_ABS_FORECAST / average_abs
 
 
 def scaled_forecast(raw: pd.Series) -> pd.Series:
     """A raw signal, scaled to the forecast convention and capped."""
     scaled = raw * forecast_scalar(raw)
 
-    return scaled.clip(lower=-FORECAST_CAP, upper=FORECAST_CAP)
+    return scaled.clip(lower=-config.MAX_ABS_FORECAST, upper=config.MAX_ABS_FORECAST)
 
 
 def forecasts_from(
