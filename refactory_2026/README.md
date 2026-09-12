@@ -20,8 +20,8 @@ Being built one stage at a time. Only the first stage is started.
 | Stage | What it does | State |
 |---|---|---|
 | 0 | Config and data | done |
-| 1 | Returns and volatility | not started |
-| 2 | Forecasts per rule | not started |
+| 1 | Returns and volatility | done |
+| 2 | Forecasts per rule | done |
 | 3 | Accounting at rule level | not started |
 | 4 | Forecast weights and FDM | not started |
 | 5 | Position sizing | not started |
@@ -122,6 +122,46 @@ those include genuine product-specific holidays such as SOFR's silence on
 Thanksgiving 1997, not only feed failures. Inventing a NaN row for each would
 assert a distinction the data does not support, so the gaps are reported by
 `gaps_by_year` instead.
+
+### `volatility.py`
+
+How much an instrument moves in a day, in price points. Points rather than
+percent because the adjusted series goes negative, so a percentage return would
+be meaningless: US10 starts at −36.4.
+
+It sits outside both stages that use it, because two stages use it. Forecasts
+divide by volatility to make signals comparable — raw ewmac32 averages 1.46 for
+US10 and 40.66 for SP500_micro, but 3.41 and 3.38 after dividing. Position sizing
+divides by it to decide how many contracts carry a normal amount of risk: one
+US10 contract swings about $433 a day against SOFR's $180, so the same risk is
+23 contracts of one and 56 of the other. Were it owned by either stage, the other
+would need its own copy, and two copies drifting apart is finding C3.
+
+The estimator matches the reference default: an EWMA standard deviation over 35
+days, blended 70/30 with a 10-year EWMA of itself. The blend stops position sizes
+exploding when recent volatility collapses.
+
+One accepted consequence of dropping holiday rows: differencing can span a
+holiday, so about one day in 26 is a two or three day change, which overstates
+volatility very slightly. Correcting it would mean discarding observations to
+flatter a variance estimate, which is worse.
+
+### `forecast_generation/`
+
+One forecast per trading rule, on the convention that 10 means hold the average
+position and 20 means twice it. `rules.py` holds the rule functions and the
+parameter grids; `forecasts.py` holds the scaling and capping every rule passes
+through. Output is `{code: DataFrame}` with rule names as columns.
+
+Volatility is passed into a rule, never fetched by it, so a rule cannot diverge
+from the volatility used to size positions. Rule names are derived from
+parameters (`ewmac_8_32`), never typed, because the name is the key a forecast
+weight later attaches to.
+
+Forecast scalars need 500 observations and are **not** backfilled, so forecasts
+start about two years into each instrument's history. pysystemtrade backfills and
+calls it "SLIGHTLY CHEATING" in its own source; we take the shorter history
+instead. See [`forecast_generation/README.md`](forecast_generation/README.md).
 
 ## Data
 
