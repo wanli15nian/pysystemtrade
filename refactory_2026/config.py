@@ -36,6 +36,21 @@ RISK_TARGET = 0.16
 AVERAGE_ABS_FORECAST = 10.0
 MAX_ABS_FORECAST = 20.0
 
+# Trading days between deciding a position and trading it. A forecast computed
+# from Monday's close is traded at Tuesday's close, and first earns a price
+# change on Wednesday.
+#
+# This is a statement about execution, not a parameter to tune. Setting it to
+# zero claims you traded at the very close that produced the signal, which is
+# impossible but only marginally optimistic; anything negative would mean
+# trading before the signal existed. Measured across the eight instrument/rule
+# pairs, a lag of 0 and a lag of 1 give mean Sharpe 0.307 and 0.308, while
+# omitting the lag entirely gives 1.164 - all of that difference being
+# look-ahead rather than profit.
+#
+# Every accounting level reads this one value, so they cannot disagree.
+TRADE_LAG_DAYS = 1
+
 # Business days per year, for annualising daily figures.
 # Note: a business-day calendar actually holds about 261 days a year. This 256
 # is pysystemtrade's convention (16 * 16, so the daily-to-annual vol factor is

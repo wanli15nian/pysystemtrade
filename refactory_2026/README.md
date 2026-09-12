@@ -22,7 +22,7 @@ Being built one stage at a time. Only the first stage is started.
 | 0 | Config and data | done |
 | 1 | Returns and volatility | done |
 | 2 | Forecasts per rule | done |
-| 3 | Accounting at rule level | not started |
+| 3 | Accounting at rule level | done |
 | 4 | Forecast weights and FDM | not started |
 | 5 | Position sizing | not started |
 | 6 | Accounting at subsystem level | not started |
@@ -173,6 +173,37 @@ Forecast scalars need 500 observations and are **not** backfilled, so forecasts
 start about two years into each instrument's history. pysystemtrade backfills and
 calls it "SLIGHTLY CHEATING" in its own source; we take the shorter history
 instead. See [`forecast_generation/README.md`](forecast_generation/README.md).
+
+### `position_sizing.py`
+
+Turns a forecast into a number of contracts. Two steps, both shared by more than
+one stage, which is why they sit here rather than inside either: the *average
+position* is how many contracts represent a normal amount of risk, and the
+*position* is that average scaled by how strong the forecast is.
+
+At a 16% annual risk target on $1m, a normal position risks $10,000 a day. One
+US10 contract swings about $433 a day and one SOFR contract about $180, so the
+same risk is 23 contracts of one and 56 of the other. Sizing this way is what
+makes a bond future and an equity future comparable.
+
+### `accounting/`
+
+What a position earned and what it cost, in dollars per day. One component
+called at three levels — rule, subsystem, portfolio — differing only in which
+position is handed in. It never learns which level it serves: accounting
+measures a position, it never decides one.
+
+`timing.py` is the only file in the codebase that shifts anything. A forecast
+labelled Monday comes from Monday's close and cannot earn Monday's price move;
+pairing them inflates mean Sharpe from 0.31 to 1.16, and nothing errors when you
+do it. `accounting.py` holds the cost model and `account()`, which takes the
+*decision* and applies the lag itself so a caller cannot express a different
+convention. `rule_level.py` is stage 3: the first caller, producing what each
+rule earned on each instrument alone.
+
+Everything is in dollars — no Sharpe ratios in the pipeline. See
+[`accounting/README.md`](accounting/README.md) for the cost model, the roll
+treatment, and the assumptions with the direction each errs in.
 
 ## Data
 
