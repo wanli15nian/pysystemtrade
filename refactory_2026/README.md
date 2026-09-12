@@ -19,7 +19,7 @@ Being built one stage at a time. Only the first stage is started.
 
 | Stage | What it does | State |
 |---|---|---|
-| 0 | Config and data | in progress |
+| 0 | Config and data | done |
 | 1 | Returns and volatility | not started |
 | 2 | Forecasts per rule | not started |
 | 3 | Accounting at rule level | not started |
@@ -85,6 +85,44 @@ source file (`PerBlock`, `Percentage`, `PerTrade`) do not say what they charge
 for. They are alternative charging structures rather than charges to be summed:
 the commission on a fill is the largest of the three.
 
+### `data_cleaning/`
+
+Turns the price files into one closing price per trading day. The only place
+that reads price files, and the only place that changes frequency.
+
+`daily_prices.py` holds the rule and the loaders. A trading day is the window
+`(23:00 on the previous day, 23:00 today]`, and its close is the last print
+inside it. The boundary matters because these sessions run past midnight: on
+Monday 2018-09-03 the prints at 23:15, 23:30 and 23:45 are the opening of
+*Tuesday's* session, so taking the last print of the calendar date would use a
+Tuesday price as Monday's close. pysystemtrade's own `resample("1B").last()`
+does exactly that, and additionally folds Sunday prints backward into Friday,
+overwriting 91 Friday closes for US10.
+
+The close is the last print in the window rather than the 23:00 print
+specifically. A 23:00 print supplies it about 95% of the time; requiring one
+would blank roughly 500 real trading days per instrument, mostly in 2020 to
+2022 where the feed changes shape and days end at 19:00, 21:00 or 22:00.
+
+Sessions dated at a weekend are dropped. They come from prints stamped exactly
+23:00 on a Sunday, which open Monday's session; Monday always has its own later
+prints here, so no close is lost. Sunday prints from 23:15 onward already fall
+in Monday's window and are kept.
+
+`daily_prices.py` also exposes the two loaders, `adjusted_price(code)` and
+`current_contract_price(code)`. `cleaning_report.py` prints what cleaning
+discarded and is imported by nothing in the pipeline. See
+[`data_cleaning/README.md`](data_cleaning/README.md) for the detail.
+
+Only days with prices appear in the output. Missing weekdays are left out, not
+inserted as NaN, because this data cannot tell a market holiday from a hole in
+the feed. Around 247 of each instrument's weekday gaps are days when nothing
+traded anywhere, while 27 to 139 are days when the other instruments did trade;
+those include genuine product-specific holidays such as SOFR's silence on
+Thanksgiving 1997, not only feed failures. Inventing a NaN row for each would
+assert a distinction the data does not support, so the gaps are reported by
+`gaps_by_year` instead.
+
 ## Data
 
 `data/` holds only what this build needs: the four instruments above, plus all
@@ -115,10 +153,15 @@ Facts about these files that shape the code:
 
 Decided once, recorded here, and not to be re-decided per file.
 
-1. **Business-day close is the canonical frequency.** Exactly one function
-   changes frequency, and it lives in the price module. Nothing else resamples.
-2. **NaN means not tradeable that day.** Blank rows are dropped when loaded;
-   after that a NaN stays a NaN. No filling with zero in the data layer.
+1. **One close per trading day is the canonical frequency.** Exactly one
+   function collapses prints to days, `daily_prices.daily_close`. Nothing else
+   resamples, and a trading day is a session window, never a calendar date.
+2. **A date in a price series is a day that traded.** Blank prints are dropped
+   on load, and weekdays without prices are absent rather than NaN. So a
+   cleaned price series contains no missing values at all, and no stage may
+   fill one with zero. Anything counting rows is counting real observations,
+   but the rows are not a regular calendar: instruments must be aligned
+   explicitly when they are combined, never assumed to share an index.
 3. **Two price types, deliberately awkward to confuse.** Adjusted price for
    returns, volatility and P&L. Raw price for money amounts. Separate functions,
    different names, so a mix-up is visible where it is called.
