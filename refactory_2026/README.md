@@ -67,9 +67,18 @@ conversion. Rows are returned in the order requested, never sorted, so nothing
 downstream can come to rely on alphabetical order.
 
 `load_instrument_config()` returns a DataFrame indexed by instrument code, with
-columns `point_size`, `currency`, `commission_per_block`,
-`commission_percentage`, `commission_per_trade`, `spread_cost`,
+columns `currency_per_point`, `currency`, `commission_per_block`,
+`commission_percentage`, `commission_per_trade`, `spread_cost_points`,
 `rolls_per_year`.
+
+Two columns carry their unit in the name because the source names hide it and
+neither value is money on its own. `Pointsize` became `currency_per_point`: it is
+a conversion factor, not the size of a price increment, and writing it as
+`X_per_Y` makes a units error visible where it is used. `SpreadCost` became
+`spread_cost_points`: the word cost implies currency, but crossing the spread on
+one US10 contract is 0.008 *points*, which is $8 only after multiplying by
+`currency_per_point`. Getting that wrong is a 1000x error the old name would not
+have warned about.
 
 The commission columns carry the `commission_` prefix because the names in the
 source file (`PerBlock`, `Percentage`, `PerTrade`) do not say what they charge
@@ -115,7 +124,9 @@ Decided once, recorded here, and not to be re-decided per file.
    different names, so a mix-up is visible where it is called.
 4. **Index contract:** timezone-naive `DatetimeIndex`, sorted, unique, named
    `date`, checked on load.
-5. **Units:** `point_size` converts a price difference into currency.
+5. **Units belong in the name** wherever a number is not what it appears to be.
+   `currency_per_point` converts a price difference into currency;
+   `spread_cost_points` is in price points, not money.
 6. **Timing lives in one place.** When positions arrive, a single function will
    turn a decision series into the series that is held (for P&L) and the series
    that is traded (for costs), with the lag as one parameter. No other module
